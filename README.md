@@ -33,24 +33,18 @@ Source code and optimizations have been made as per the reasoning given in PDF. 
 
 <p align="center">
 <img src="images/antenna-profile0.png?raw=true" width="800" alt="Log scan #1">
-<\p>
-
 
 
 
 <p align="center">
 <img src="images/antenna-profile1.png?raw=true" width="800" alt="Log scan #2">
-<\p>
-
 
 
 
 <p align="center">
 <img src="images/antenna-profile2.png?raw=true" width="800" alt="Log scan #3">
-<\p>
 
 
 
 <p align="center">
 <img src="images/bs3_lin.png?raw=true" width="800" alt="Linear plot with focus on MS #5">
-<\p>
