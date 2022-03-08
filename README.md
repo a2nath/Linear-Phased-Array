@@ -31,19 +31,26 @@ Source code and optimizations have been made as per the reasoning given in PDF. 
 
 
 
-![Log scan #1](images/antenna-profile0.png)
+<p align="center">
+<img src="images/antenna-profile0.png?raw=true" width="800" alt="Log scan #1">
+<\p>
 
 
 
 
-![Log scan #2](images/antenna-profile1.png)
+<p align="center">
+<img src="images/antenna-profile1.png?raw=true" width="800" alt="Log scan #2">
+<\p>
 
 
 
 
-![Log scan #3](images/antenna-profile2.png)
+<p align="center">
+<img src="images/antenna-profile2.png?raw=true" width="800" alt="Log scan #3">
+<\p>
 
 
 
-
-![Linear plot with focus on MS #5](images/bs3_lin.png)
+<p align="center">
+<img src="images/bs3_lin.png?raw=true" width="800" alt="Linear plot with focus on MS #5">
+<\p>
