@@ -5,63 +5,125 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
+#include <set>
 
 #include "project.h"
 #include "matplotlibcpp.h"
+#include <cmath>
+#include <queue>
+
+#define CPRACTICE
+//#define NODUPLICATES
+
+/* in case of errors, check this */
+std::string sim_error = "";
+Random randomgen;
+
 
 using namespace std;
 namespace plt = matplotlibcpp;
 
 vector<Cow> cows;
+vector<Station> stations;
 const auto& station_cords = SEATING_LOCATION;
 
-class Solution {
-public:
-    vector<int> twoSum(vector<int> nums, int target) {
+/* plot the charts */
+void plot(const vector<Placements>& input, string title = "", bool hold = false)
+{
 
-        unordered_map<int, int> m;
-        int index1, index2;
-        int diff;
+//#ifndef _DEBUG
+    /* plot only */
+    vector<int> locx, locy;
+    for (auto& loc : input)
+    {
+        locx.emplace_back(loc.x);
+        locy.emplace_back(loc.y);
+    }
 
-        for (int i = 0; i < nums.size(); ++i)
+    //if (hold) plt::hold(true);
+
+    plt::scatter(locx, locy, { {"color", "green"}, {"size", "20"} });
+    //plt::
+    if (title.size()) plt::title(title);
+    plt::legend();
+    plt::show();
+//#endif
+}
+
+
+
+unordered_map<int, double> Cow::dBm2watts_lut;
+vector<vector<double>> alpha_lut(SCAN_ALPHA_LUT.size(), vector<double>(SCAN_ALPHA_LUT[0].size()));
+
+void setup()
+{
+    /* setup the system */
+    for (int i = 0; i < COW_COUNT; ++i)
+    {
+        vector<Polar_Coordinates> polar_data(SEATING_LOCATION.size());
+        unsigned idx = 0;
+        for (auto& mstation : SEATING_LOCATION)
         {
-            diff = target - nums[i];
-
-
-            //if (m[nums[i]] > 0)
-            //{
-            //    index1 = m[nums[i]] - 1;
-            //    index2 = i;
-            //    break;
-            //}
-            if (m[nums[i]] > 0)
-            {
-                index1 = m[nums[i]] - 1;
-                index2 = i;
-                break;
-            }
-
-            m[diff] = i + 1;
+            auto diffx = mstation.x - COW_LOCATION[i].x;
+            auto diffy = mstation.y - COW_LOCATION[i].y;
+            polar_data[idx++] = cart2pol(diffx, diffy);
         }
 
+        cows.emplace_back(Cow(i, polar_data, BS_ANTENNA_ASSIGNMENTS[i]));  // initialize cow instance
 
-
-        return vector<int>{index1, index2};
     }
-};
 
-#include <unordered_set>
+    for (unsigned i = 0; i < SEATING_LOCATION.size(); ++i)
+    {
+        stations.emplace_back(i, cows);
+    }
 
-/* Setup the environment */
-vector<vector<int>> NODE_SELECTION = {
-    {2, 13, 11},
-    {8, 15, 05},
-    {1, 14, 06},
-    {7, 04, 10},
-    {9, 03, 12}
-};
+    for (int power = MIN_POWER_dBm; power <= MAX_POWER_dBm; ++power)
+    {
+        Cow::dBm2watts_lut.emplace(power, dBm2watts(power));
+    }
 
-void run()
+    unsigned i = 0, j = 0;
+    for (auto& alpha_list : SCAN_ALPHA_LUT)
+    {
+        j = 0;
+        for (auto& alpha : alpha_list)
+        {
+            alpha_lut[i][j++] = deg2rad(alpha);
+        }
+        ++i;
+    }
+
+
+}
+
+
+/*
+sinr_timeslot
+--------------------------------------------------------
+STA      SLOT0   SLOT1   SLOT2   SLOT3   SLOT4   SLOT5
+--------------------------------------------------------
+1
+--------------------------------------------------------
+2
+--------------------------------------------------------
+3
+--------------------------------------------------------
+4
+--------------------------------------------------------
+5
+--------------------------------------------------------
+6
+--------------------------------------------------------
+7
+--------------------------------------------------------
+..
+..
+
+*/
+
+vector<telemetry_t> run()
 {
     /*
         for power1 = -30:30
@@ -108,7 +170,7 @@ void run()
 % %                     display(['all hit p1:' num2str(power1) ' p2:' num2str(power2) ' p3:' num2str(power3)])
 % %                      (idx) = max(ptable(7:9));
 %                     breakflag = 1;
-%                     powers = [power1 power2 power3];
+%                     cowpowers = [power1 power2 power3];
 
 %                     break;
 %                 end
@@ -124,256 +186,121 @@ void run()
     end
     */
 
-    double matrix;                                // array matrix
-    double thermal_noise = log2lin(thermal_n_db);
+    double thermal_noise = dBm2watts(thermal_n_db);
     const int slots = ceil(station_cords.size() / COW_COUNT);
+    const unsigned power_range = MAX_POWER_dBm - MIN_POWER_dBm + 1;
 
-
-    vector<vector<vector<unordered_map<int, vector<double>>>>> sinrtable(MAX_POWER_dBm - MIN_POWER_dBm,
-        vector<vector<unordered_map<int, vector<double>>>>(MAX_POWER_dBm - MIN_POWER_dBm,
-            vector<unordered_map<int, vector<double>>>(MAX_POWER_dBm - MIN_POWER_dBm)));
-
-    vector<double> txpower_in_linear;
-    for (int power = MIN_POWER_dBm; power <= MAX_POWER_dBm; ++power)
-    {
-        txpower_in_linear.emplace_back(dBm2watts(power));
-    }
-
-    vector<vector<double>> alpha_lut(SCAN_ALPHA_LUT.size(), vector<double>(SCAN_ALPHA_LUT[0].size()));
-    unsigned i = 0, j = 0;
-    for (auto& alpha_list : SCAN_ALPHA_LUT)
-    {
-        j = 0;
-        for (auto& alpha : alpha_list)
-        {
-            alpha_lut[i][j++] = deg2rad(alpha);
-        }
-        ++i;
-    }
-
-    int power_range = txpower_in_linear.size();
-
-
-    //unordered_set<int> stations;
-    //int i = 0;
-    //for (auto& station : station_cords) { stations.insert(i++); }
-    //
-    //long unsigned iter = 0;
-    //unordered_map<int, int> power_it;
-    //int cow_it = 0;
-    //
-    //while (iter < power_range ^ cows.size())
-    //{
-    //    int cow_it = 0;
-    //    while (cow_it < cows.size())
-    //    {
-    //        cows[cow_it].setpower(txpower_in_linear[power_it[cow_it]]);
-    //        ++cow_it;
-    //    }
-    //
-    //    ++power_it[cow_it];
-    //
-    //    if (power_it[cow_it] == txpower_in_linear.size())
-    //    {
-    //
-    //    }
-    //
-    //    if (iter % txpower_in_linear.size() == 0)
-    //    {
-    //        ++cow_it;
-    //        cows[]
-    //
-    //            cow_it = cow_it % cows.size();
-    //        ++iter;
-    //    }
-    //}
     using slot_t = unsigned;
     using cow_t = unsigned;
-    unordered_map<cow_t, int> iters;
+    using sta_t = unsigned;
+    auto& nodes = SEATING_LOCATION;
 
 
+    double SINR_CUT_OFF_VALID = log2lin(24); // dBm;
+    unordered_set<SimulationHelper, SimulationHelper::combo_hash> combocheck;
 
     /* run the simulation */
-    for (int slot = 0; slot < slots; ++slot)
+    SimulationHelper simparams(cows);
+    vector<unsigned> bindings;
+    PerfMon perf(simparams, bindings);
+
+    int served = 0;
+    vector<telemetry_t> sinr_list;
+    unordered_map<sta_t, unordered_map<slot_t, cow_t>> station_binding;
+
+
+
+    while (served < stations.size())
     {
-        unordered_map<cow_t, const vector<double>&> hmatrix;
+            /* setup the cows first such that the simulation is set with alphas and TX powers */
 
-        /* retrive the coefficients from base stations after antenna reconfig (alpha change) */
-        for (unsigned cow_it = 0; cow_it < cows.size(); ++cow_it)
-        {
-            cows[cow_it].update(alpha_lut[slot][cows[cow_it].sid()]);
-        }
+                //#ifdef NODUPLICATES
+             /* retrive the coefficients from base stations after antenna reconfig (alpha change) */
+            simparams.setalpha();
 
-       /* only change the antenna power and recalculate the Rx signal power + get SINR */
-        double max_sta1_received_signal = 0,
-            max_sta2_received_signal = 0,
-            max_sta3_received_signal = 0;
-
-        //int iter;
-        //
-        //unordered_map<int, vector<double>&> powers;
-        //
-        //for (int cow_it = 0; cow_it < cows.size(); ++cow_it)
-        //{
-        //    powers[cow_it] = txpower_in_linear;
-        //}
-        //
-        //while (iter != power_range ^ cows.size())
-        //{
-        //    for (int power_idx = 0; power_idx < txpower_in_linear.size(); ++power_idx)
-        //    {
-        //        //for (int cow_it = 0; cow_it < cows.size(); ++cow_it)
-        //        //{
-        //
-        //        cows[0].setpower(iter % power_range);// txpower_in_linear[(power_idx + cow_it) % txpower_in_linear.size()]);
-        //        cows[0].setpower((iter / power_range) % power_range);// txpower_in_linear[(power_idx + cow_it) % txpower_in_linear.size()]);
-        //        cows[0].setpower((iter / power_range / power_range) % power_range);// txpower_in_linear[(power_idx + cow_it) % txpower_in_linear.size()]);
-        //        //}
-        //
-        //    }
-        //}
-
-
-        unordered_map<cow_t, vector<double>> sinrtable;
-
-        for (iters[0] = 0; iters[0] < txpower_in_linear.size(); ++iters[0])
-        {
-            for (iters[1] = 0; iters[1] < txpower_in_linear.size(); ++iters[1])
+            for (int slot = 0; slot < simparams.timeslot; ++slot)
             {
-                for (iters[2] = 0; iters[2] < txpower_in_linear.size(); ++iters[2])
+                /* only change the antenna power and recalculate the Rx signal power + get SINR */
+
+                simparams.setpower(); // random power in the range [-30, 30]
+
+
+                bindings = simparams.getbindings();
+
+                /* check sinr for each receiving stations */
+                for (unsigned bs_id = 0; bs_id < bindings.size(); ++bs_id)
                 {
-                    double& power0 = txpower_in_linear[iters[0]];
-                    double& power1 = txpower_in_linear[iters[1]];
-                    double& power2 = txpower_in_linear[iters[2]];
-                    vector<double> powers(cows.size());
+                    auto staid = bindings[bs_id];
 
+                    /* setup the stations with the COW bindings to calculate RX signal and interference */
 
-                    //for (iters[0] = 0; iters[0] < txpower_in_linear.size(); ++iters[0])
-                    //{
-                    //    for (int cow_it = 0; cow_it < cows.size(); ++cow_it)
-                    //    {
-                    //        cows[cow_it].setpower(txpower_in_linear[cow_it]);
-                    //    }
-                    //}
+                    auto& station = stations[staid];
+                    station.setRX(bs_id);
 
-                    auto& nodes = NODE_SELECTION[slot];
-
-
-                    for (int cow_it = 0; cow_it < cows.size(); ++cow_it)
+                    auto& sinr = station.getSINR();
+                    if (sinr >= SINR_CUT_OFF_VALID)// && station_served[sta_id] == false) // check this settings
                     {
-                        vector<double> rx_signals(nodes.size(), 0.00);
-
-                        cows[cow_it].setpower(txpower_in_linear[iters[cow_it]]);
-
-                        /* precalculate power x hmatrix coefficient */
-                        for (int sta_id = 0; sta_id < nodes.size(); ++sta_id)
-                        {
-                            cows[cow_it].get_signal_level(nodes[sta_id], rx_signals[sta_id]);
-                        }
-
-                        /* calcalate the sinr and choose best one */
-                        auto& bs_sinr_list = sinrtable[cow_it];
-                        for (int sta_id = 0; sta_id < nodes.size(); ++sta_id)
-                        {
-                            bs_sinr_list.emplace_back(thermal_noise);
-                            for (int sta_offset = sta_id; sta_offset < nodes.size(); ++sta_offset)
-                            {
-                                bs_sinr_list.back() += rx_signals[(sta_offset + 1) % cows.size()];
-                            }
-                            bs_sinr_list.back() = rx_signals[sta_id] / bs_sinr_list.back();
-                        }
+                        perf.update(sinr);
+                        ++served;
                     }
 
+                } //end of cow_id
+            } //end of sta_id
+    } //end of sta_id
 
-                    /*
-                    sinr[0].emplace_back(rx_signals[0][0] /
-                        (rx_signals[0][1] + rx_signals[0][2] + thermal_noise));
+    vector<bool> ms_served(nodes.size(), false);
 
-                    sinr[0].emplace_back(rx_signals[0][1] /
-                        (rx_signals[0][0] + rx_signals[0][2] + thermal_noise));
+    queue<telemetry_t> qlist;
+    int slot = 0;
 
-                    sinr[0].emplace_back(rx_signals[0][2] /
-                        (rx_signals[0][0] + rx_signals[0][1] + thermal_noise));
+    while (sinr_list.size() < nodes.size())
+    {
+        vector<bool> bs_served(cows.size(), false);
 
-                    sinr[1].emplace_back(rx_signals[1][0] /
-                        (rx_signals[1][1] + rx_signals[1][2] + thermal_noise));
+        ++slot;
+        for (auto data_list : sinr_helper) //list of same sinr
+        {
+            for (int i = 0; i < data_list.second.size(); ++i);
+            {
+                //qlist.push(data_list.second[i]);
+            }
 
-                    sinr[1].emplace_back(rx_signals[1][1] /
-                        (rx_signals[1][0] + rx_signals[1][2] + thermal_noise));
+            while (qlist.size())
+            {
+                auto& data = qlist.front();
 
-                    sinr[1].emplace_back(rx_signals[1][2] /
-                        (rx_signals[1][0] + rx_signals[1][1] + thermal_noise));
+                if (ms_served[data.sta_id] == false || bs_served[data.cow_id] == false)
+                {
+                    sinr_list.emplace_back(data);
 
-                    sinr[2].emplace_back(rx_signals[2][0] /
-                        (rx_signals[2][1] + rx_signals[2][2] + thermal_noise));
+                    if (sinr_list.size() == nodes.size())
+                        return sinr_list;
 
-                    sinr[2].emplace_back(rx_signals[2][1] /
-                        (rx_signals[2][0] + rx_signals[2][2] + thermal_noise));
-
-                    sinr[2].emplace_back(rx_signals[2][2] /
-                        (rx_signals[2][0] + rx_signals[2][1] + thermal_noise));
-                        */
-
+                    ms_served[data.sta_id] = true;
+                    bs_served[data.cow_id] = true;
+                    qlist.pop();
+                }
+                else if (ms_served[data.sta_id] == false || bs_served[data.cow_id] == true)
+                {
+                    qlist.push(data);
                 }
             }
         }
-
     }
+
+    return sinr_list;
 }
+
 
 int main(int argc, char** argv, char** envp)
 {
-    //for (char** env = envp; *env != 0; env++)
-    //{
-    //    char* thisEnv = *env;
-    //    printf("%s\n", thisEnv);
-    //}
-    //PyImport_ImportModule("numpy");
-    //PyObject* numpy = PyImport_ImportModule("numpy.core._multiarray_umath");
-    //if (numpy == nullptr)
-    //    throw runtime_error("Numpy not found");
+    /* setup the simulation runtime parameters */
+    setup();
 
-    /* setup the system */
-    for (int i = 0; i < COW_COUNT; ++i)
-    {
-        vector<Polar_Coordinates> polar_data(SEATING_LOCATION.size());
-        unsigned idx = 0;
-        for (auto& mstation : SEATING_LOCATION)
-        {
-            auto diffx = mstation.x - COW_LOCATION[i].x;
-            auto diffy = mstation.y - COW_LOCATION[i].y;
-            polar_data[idx++] = cart2pol(diffx, diffy);
-        }
-
-        cows.emplace_back(Cow(i, polar_data, BS_ANTENNA_ASSIGNMENTS[i]));  // initialize cow instance
-
-    }
-
-    /* plot only */
-    vector<int> seatx, seaty;
-    for (auto& seat : SEATING_LOCATION)
-    {
-        seatx.emplace_back(seat.x);
-        seaty.emplace_back(seat.y);
-    }
-
-
-    plt::scatter(seatx, seaty);
-    plt::title("Seating plan");
-    plt::legend();
-    plt::show();
-
+    /* run the simulation and get the SNR table */
     run();
+
+    plot(SEATING_LOCATION);
+
     return 0;
 }
-
-// Run program: Ctrl + F5 or Debug > Start Without Debugging menu
-// Debug program: F5 or Debug > Start Debugging menu
-
-// Tips for Getting Started:
-//   1. Use the Solution Explorer window to add/manage files
-//   2. Use the Team Explorer window to connect to source control
-//   3. Use the Output window to see build output and other messages
-//   4. Use the Error List window to view errors
-//   5. Go to Project > Add New Item to create new code files, or Project > Add Existing Item to add existing code files to the project
-//   6. In the future, to open this project again, go to File > Open > Project and select the .sln file
