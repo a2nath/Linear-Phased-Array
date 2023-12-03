@@ -1,6 +1,6 @@
 #pragma once
 #include <vector>
-#include "coordinates.h"
+#include "../coordinates.h"
 
 #define INIT_TEST
 
@@ -16,36 +16,45 @@ namespace init_test_case
         const double   height = 200;         //antenna height in meters
         const double   ms_Grx = -2;          // dBi
         const double   system_noise = 5;     // System noise in dB;
+        const unsigned mobile_stations = 15; // number of handdset
         const unsigned base_stations = 3;    // number of base stations
 
-        const std::vector<Placements> NODE_LOCATIONS = // seating of all mobile stations in meters
+        const std::vector<double> BS_THETAC_DEG = { 75, 90, 105 };    // degrees
+
+        const std::vector<Placements> COW_LOCATION =    // in meters
+        {
+            {250, 200}, {500, 180}, {750, 200}
+        };
+
+        const std::vector<Placements> NODE_LOCATIONS =  // in meters
         {
             {250, 500}, {350, 500}, {450, 500}, {550, 500}, {650, 500}, {750, 500},
             {250, 600}, {350, 600}, {450, 600}, {550, 600}, {650, 600}, {750, 600},
                               {450, 325}, {500, 325}, {550, 325}
         };
+
+        const std::vector<int> BS_ANTENNA_COUNTS = { 5, 3, 5 };        // number of antenna allocation for each BS
+
     }
 
     namespace Antenna_Array
     {
-        const int MIN_POWER_dBm = -30;
-        const int MAX_POWER_dBm = +30;
-        const int MIN_SCANANGLE_deg = -90;
-        const int MAX_SCANANGLE_deg = +90;
+        const int MIN_POWER_dBm = -30;       // dBm
+        const int MAX_POWER_dBm = +30;       // dBm
+        const int MIN_SCANANGLE_deg = -90;   // degrees
+        const int MAX_SCANANGLE_deg = +90;   // degrees
 
-        const std::vector<int> BS_ANTENNA_ASSIGNMENTS = { 5, 3, 5 };        // number of antenna allocation for each BS
-        const std::vector<double> BS_PLACEMENT_THETAC = { 75, 90, 105 };    // degrees
-        const std::vector<double> BS_ANTENNA_SPACING = { .3, .4, .3 };      // meters
-        const std::pair<double, double> ANTENNA_DIMS = { 20e-2, 40e-2 }; // meters
-        
-                                                                         // dBm
+        const std::vector<double>       ANTENNA_SPACING = { .3, .4, .3 }; // meters
+        const std::pair<double, double> ANTENNA_DIMS    = { .2, .4 };     // meters
+
         const std::vector<std::vector<double>> COW_POWER_LUT = {
-            {+10.0, +65.0, +35.0},
-            {-10.0, -65.0, -35.0},
-            {-75.0, -40.0, +75.0},
-            {+40.0, +65.0, -40.0},
-            {+40.0, -65.0, -40.0}
+            {+30.0, +30.0, +30.0},
+            {+30.0, +30.0, +30.0},
+            {+30.0, +30.0, +30.0},
+            {-30.0, +30.0, -30.0},
+            {-30.0, +30.0, -30.0}
         };
+
         // degrees
         const std::vector<std::vector<double>> SCAN_ALPHA_LUT = {
             {+10.0, +65.0, +35.0},
@@ -53,13 +62,6 @@ namespace init_test_case
             {-75.0, -40.0, +75.0},
             {+40.0, +65.0, -40.0},
             {+40.0, -65.0, -40.0}
-        };
-
-        const std::vector<Placements> COW_LOCATION =
-        {
-            {250, 200},
-            {500, 180},
-            {750, 200}
         };
 
         /* Setup the environment */

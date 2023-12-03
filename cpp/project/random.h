@@ -37,12 +37,18 @@ public:
         return dist(mersenne_engine);
     }
 
-    Random(unsigned _seed) : seed(_seed), mersenne_engine(rnd_device)
+    const unsigned& getSeed() const
+    {
+        return seed;
+    }
+
+    Random(unsigned _seed) : seed(_seed), mersenne_engine(rnd_device())
     {
         mersenne_engine.seed(seed);
     }
 
-    Random() : seed(mersenne_engine.default_seed), mersenne_engine(rnd_device)
+    Random() : seed(rand()), mersenne_engine(rnd_device())
     {
+        mersenne_engine.seed(seed);
     }
 };

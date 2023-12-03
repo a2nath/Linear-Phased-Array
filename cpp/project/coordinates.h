@@ -24,8 +24,8 @@ struct Dimensions
     Dimensions() : x(0), y(0) {}
 };
 
-template<class T>
-struct Coordinates : public Dimensions<T>
+template<class Type>
+struct Coordinates : public Dimensions<Type>
 {
     Coordinates& operator-(Coordinates& a)
     {
@@ -51,8 +51,8 @@ struct Coordinates : public Dimensions<T>
         return temp;
     }
 
-    Coordinates(T _x, T _y) : Dimensions(_x, _y) {}
-    Coordinates() : Dimensions() {}
+    Coordinates(Type _x, Type _y) : Dimensions<Type>(_x, _y) {}
+    Coordinates() {}
 };
 using Placements = Coordinates<unsigned>;
 

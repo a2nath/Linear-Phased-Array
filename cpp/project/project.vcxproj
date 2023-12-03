@@ -24,6 +24,7 @@
     <ProjectGuid>{f0fcce7e-702b-45d6-8568-170910d82f78}</ProjectGuid>
     <RootNamespace>project</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>PhaseArray</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -145,8 +146,14 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common.h" />
+    <ClInclude Include="coordinates.h" />
+    <ClInclude Include="matplot.h" />
     <ClInclude Include="matplotlibcpp.h" />
+    <ClInclude Include="network.h" />
     <ClInclude Include="project.h" />
+    <ClInclude Include="random.h" />
+    <ClInclude Include="station.h" />
+    <ClInclude Include="test\Init_test_case.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

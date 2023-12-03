@@ -1,135 +1,114 @@
 #pragma once
 #include "common.h"
 #include "network.h"
-
-#ifdef RAND
 #include "random.h"
-#endif
 
+using namespace network_package;
 
 class Cow
 {
-#ifdef RAND
-    Random randengine;
-#endif
-    const int station_id;
+//#ifdef RAND
+//    Random randengine;
+//#endif
+    const unsigned station_id;
 
-    double min_power_dbm;
-    double max_power_dbm;
-    double min_scanangle_deg;
-    double max_scanangle_deg;
-
+    double min_power_watt;
+    double max_power_watt;
+    double min_scanangle_rad;
+    double max_scanangle_rad;
     AAntenna antenna;
-    double& power;
     Placements& location;
 
-
+    const std::vector<double>& powerlevels;
+    unsigned power_idx;
 public:
-    static std::unordered_map<int, double> power_list_dBm2W;
-
-
     /* set Gtx power in linear */
-    const int set_rand_power()
+    void setRandPower()
     {
-        auto dist = randomgen.uni.getdist(min_power_dbm, max_power_dbm);
-        int power = randomgen.generate(dist);
-        return setpower(power);
+        //auto dist = randengine.uni.getdist(min_power_watt, max_power_watt);
+        //double output = randengine.generate(dist);
+        //antenna.setPower(output);
+        //return output;
     }
 
     /* set Gtx power in linear */
-    const int setpower(int input_power)
+    void setPower(double& input_power)
     {
-        power = power_list_dBm2W[input_power];
-        return input_power;
+        antenna.setPower(input_power);
     }
 
     /* return Gtx power in linear */
-    const double& getxpower() const
+    const double& getxPower() const
     {
-        return power;
+        return antenna.getPower();
     }
+
+    const double& getAlpha() const
+    {
+        return antenna.getAlpha();
+    }
+
+    const Placements& getPosition() const
+    {
+        return location;
+    }
+
     const int& sid() const
     {
         return station_id;
     }
 
     /* update the parameters of the Base Station and get channel state to each station */
-    const double antenna_rand_update()
+    void antennaRandUpdate()
     {
-        auto dist = randomgen.uni.getdist(min_scanangle_deg, max_scanangle_deg);
-        int alpha = randomgen.generate(dist);
-        return antenna_update(alpha);
+        //auto dist = randengine.uni.getdist(min_scanangle_rad, max_scanangle_rad);
+        //int alpha = randengine.generate(dist);
+        //return antennaUpdate(alpha);
     }
 
     /* update the parameters of the Base Station and get channel state to each station */
-    const double antenna_update(double alpha)
+    void antennaUpdate(double alpha)
     {
         antenna.update(alpha);
-        return alpha;
-    }
-
-    const double& get_alpha() const
-    {
-        return antenna.alpha;
-    }
-
-    const Placements& get_position() const
-    {
-        return location;
     }
 
     /* set the signal level in Watts (linear): second parameter */
-    inline void get_signal_level(unsigned node_id, double& signal_level_lin) const
+    inline void getSignalLevel(unsigned node_id, double& signal_level_lin) const
     {
-        signal_level_lin = antenna.hmatrix[node_id] * power;
+        signal_level_lin = antenna.coeff(node_id) * antenna.getPower();
     }
 
 
     //antennadim dim_meters, double theta, double spacing, int antenna_count,
-    Cow(unsigned id,
-        antennadim dim_meters,
-        double theta_deg,
-        double spacing,
-        unsigned antenna_count,
-        const std::vector<Polar_Coordinates>& polar_data,
-
-        double minpower_dbm,
-        double maxpower_dbm,
-        double minscanangle_deg,
-        double maxscanangle_deg
-    ) :
-#ifdef RAND
-        randengine(engine),
-#endif
+    Cow(unsigned& id,
+        const Input* parameters,
+        const std::vector<double>& powerlist,
+        const std::vector<Polar_Coordinates>& polar_data
+        ) :
+//#ifdef RAND
+//        randengine(),
+//#endif
         station_id(id),
-        antenna(id, dim_meters, theta_deg, spacing, antenna_count, polar_data),
-        power(antenna.power),
+        min_power_watt(parameters->bs_Ptx_min),
+        max_power_watt(parameters->bs_Ptx_max),
+        min_scanangle_rad(parameters->bs_scan_min),
+        max_scanangle_rad(parameters->bs_scan_max),
+        antenna(id, parameters, polar_data),
         location(base_station_pos[id]),
-        min_power_dbm(minpower_dbm),
-        max_power_dbm(maxpower_dbm),
-        min_scanangle_deg(minscanangle_deg),
-        max_scanangle_deg(maxscanangle_deg)
+        powerlevels(powerlist),
+        power_idx(0)
     {
         /* update channel */
     }
 };
 
-class MainCow : public Cow
-{
-
-};
-
-class SideCow : public Cow
-{
-
-};
 
 class Station
 {
-    int station_id;
+    unsigned station_id;
     const std::vector<Cow>& cow_data; // cow that's associated to this station at any given timeslot
+    const double& tnf_watt;           // thermal noise floor
     double sinr;
-    double noise;
 public:
 
     const unsigned& sid() const
@@ -137,14 +116,15 @@ public:
         return station_id;
     }
 
+    /* get signal power in watts */
     inline double get_rx_signal_power(unsigned cow_id)
     {
         double power;
-        cow_data[cow_id].get_signal_level(station_id, power);
+        cow_data[cow_id].getSignalLevel(station_id, power);
         return power;
     }
 
-    double setRX(unsigned bs_id)
+    void setRX(unsigned bs_id)
     {
         double signal = get_rx_signal_power(bs_id);
 
@@ -158,20 +138,20 @@ public:
             }
         }
 
-        sinr = signal / (interference + dBm2watts(noise));
+        sinr = signal / (interference + tnf_watt);
     }
 
-    /* get SINR in linear by passing signal and inteference/noise in Watts */
+    /* get SINR in linear by passing signal and inteference/noise in dB */
     const double& getSINR() const
     {
-        return sinr;
+        return lin2dB(sinr);
     }
 
-    Station(unsigned id, std::vector<Cow>& cows) :
+    Station(unsigned id, std::vector<Cow>& cows, const double& noise) :
         station_id(id),
         cow_data(cows),
-        sinr(0),
-        noise(sys->NF_dB)
+        tnf_watt(noise),
+        sinr(0)
     {
         /* update the stations */
     }

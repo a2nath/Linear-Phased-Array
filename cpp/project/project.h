@@ -1,297 +1,157 @@
 #pragma once
-#include "common.h"
 #include <unordered_set>
 #include <vector>
 #include <cassert>
+#include "common.h"
+#include "network.h"
+#include "station.h"
+#include "random.h"
 
-const double frequency = 1900e6;   // center frequency
-const double bandwidth = 20e6;     // channel bandwidth
-const double SymbRate = 3.84e6;    // symbol rate
-const double BlocksPerSymb = 768;  // blocks per symbol
-const double lambda = C / frequency;
-const double height = 200;         //antenna height in meters
-const double ms_Grx = -2;// dBi
+/* tests */
+#include "test/Init_test_case.h"
 
-const int MIN_POWER_dBm = -30;
-const int MAX_POWER_dBm = +30;
-const int MIN_SCANANGLE_deg = -90;
-const int MAX_SCANANGLE_deg = +90;
-
-const std::pair<double, double> ANTENNA_DIMS = { 20e-2, 40e-2 }; // meters
-
-const double system_noise = 5; // System noise in dB;
-const double thermal_n_db = -174 + round(10 * log10(bandwidth)) + system_noise;  // Thermal noise floor in dBm
-
-using Placements = Coordinates<unsigned>;
-
+using namespace network_package;
 using cow_id_distribution = std::uniform_int_distribution<int>;
-extern Random randomgen;
 
+/* simulation system parameters */
+extern network_package::Input* sys;
 
-const std::vector<std::vector<double>> SCAN_ALPHA_LUT = {        // degrees
-    {+10.0, +65.0, +35.0},
-    {-10.0, -65.0, -35.0},
-    {-75.0, -40.0, +75.0},
-    {+40.0, +65.0, -40.0},
-    {+40.0, -65.0, -40.0}
-};
-
-const std::vector<Placements> SEATING_LOCATION = // seating of all mobile stations in meters
+struct SimulationHelper
 {
-    {250, 500}, {350, 500}, {450, 500}, {550, 500}, {650, 500}, {750, 500},
-    {250, 600}, {350, 600}, {450, 600}, {550, 600}, {650, 600}, {750, 600},
-                      {450, 325}, {500, 325}, {550, 325}
-};
+    std::vector<Cow>& cows;
+    unsigned cow_count;
+    std::vector<std::vector<double>>& powers;       // TX power level from base station in integer dBm
+    std::vector<std::vector<double>>& alphas;       // Antenna array directions in integer rads
 
-const std::vector<Placements> COW_LOCATION =
-{
-    {250, 200},
-    {500, 180},
-    {750, 200}
-};
+    std::vector<unsigned> cow2sta; // Base stations bindings across timeslots
 
-/* Setup the environment */
-std::vector<unsigned> NODE_SELECTION = {
-    2, 13, 11,
-    8, 15, 05,
-    1, 14, 06,
-    7, 04, 10,
-    9, 03, 12
-};
+    unsigned timeslot;            // timeslot in the schedule
+    unsigned timeslots;           // total timeslots
+    unsigned nodes_rem;
 
-const int COW_COUNT = 3;
-const int BS_ANTENNA_ASSIGNMENTS[COW_COUNT] = { 5, 3, 5 };        // number of antenna allocation for each BS
-const double BS_PLACEMENT_THETAC[COW_COUNT] = { 75, 90, 105 };    // degrees
-const double BS_ANTENNA_SPACING[COW_COUNT] = { .3, .4, .3 };      // meters
-
-//const unsigned TIMESLOTS = 5;
-
-class AntennaSystem // think of this as multiple antennas each with the following
-{
-    const Dimension dims;
-    std::vector<double> Gtx;
-    int panel_count;
-public:
-    const Dimension size() const { return dims; }
-    const std::vector<double>& getgain() const { return Gtx; }
-    const int count() const { return panel_count; }
-    void setgain(double gain) { Gtx.emplace_back(panel_count * gain); }
-    AntennaSystem(double Lx, double Ly, double _count) : dims(Lx, Ly), panel_count(_count) {}
-};
-
-// Array of Antenna
-class AAntenna
-{
-    friend class Cow;
-    //static unordered_map<int, vector<Polar_Coordinates>> station_logistical_data; // seating location polar data relative to base station location
-    const int antenna_id;
-    const double ms_Grx_lin;
-    //std::vector<double> theta_list_minus_thetaC_list; // list of angles in relation to the other stations
-    AntennaSystem antennas;
-    int count;                             // number of panels
-    double power;                          // array power
-    double theta_c;                        // array orientation
-    double spacing;                        // array spacing
-    double alpha;                          // array direction
-    std::vector<double> phee_minus_alpha_list;
-    std::vector<double> pathloss_list;
-    std::vector<double> hmatrix;  // hmatrix from BS pov
-
-
-public:
-    /* update the antenna array from updated power and scan angle */
-    void update(double alpha)//, std::vector<double>& hmatrix_output)
+    const std::vector<Cow>& getCows() const // this is for performance monitor
     {
-        auto antenna_count = antennas.count();
-        auto& antgain_factor = antennas.getgain();
+        return cows;
+    }
 
-        /* update the antenna gain Gtx */
-        for (unsigned idx = 0; idx < phee_minus_alpha_list.size(); ++idx)
+    /* gets called to get BS to MS bindings for a single timeslot. Output size: #bs */
+    std::vector<unsigned> getBindings()
+    {
+        std::vector<unsigned> bindings;
+
+        for (unsigned b = cow_count * timeslot; b < cow_count * timeslot + std::min(nodes_rem, cow_count); ++b)
         {
-            double phee = (phee_minus_alpha_list[idx] + alpha) / 2;
+            bindings.emplace_back(cow2sta[b]);
+        }
 
-            double sin_term = antenna_count * sin(phee);
-            double gain_factor_antenna_system = antgain_factor[idx]; // xN antennas already
+        nodes_rem -= bindings.size();
 
-            if (sin_term != 0)
-                gain_factor_antenna_system *= pow(sin(antenna_count * phee) / sin_term, 2);
+        return bindings;
+    }
 
-            /* update the channel matrix */
-            hmatrix[idx] = ms_Grx_lin * gain_factor_antenna_system / pathloss_list[idx];
+    /* set antenna array power level in each timeslot */
+    void setPower()
+    {
+        for (int c = 0; c < cows.size(); ++c)
+        {
+#ifdef INIT_TEST
+            cows[c].setPower(powers[timeslot][c]);
+#else
+            cows[c].setRandPower();
+#endif
         }
     }
 
-    const std::vector<double>& getmatrix() const
+    /* set antenna array directivity before starting each simulation */
+    void setAlpha()
     {
-        return hmatrix;
-    }
-
-    AAntenna(int id, int antenna_count, const std::vector<Polar_Coordinates>& polar_sta_data) :
-        antenna_id(id), ms_Grx_lin(log2lin(ms_Grx)),
-        antennas(AntennaSystem(ANTENNA_DIMS.first, ANTENNA_DIMS.second, antenna_count)),
-        theta_c(deg2rad(BS_PLACEMENT_THETAC[id])), spacing(BS_ANTENNA_SPACING[id]),
-        hmatrix(polar_sta_data.size(), 0.0)
-    {
-        double phee_temp = (2 * M_PIl * spacing / lambda);
-        double pl_temp_meters = 4 * M_PIl / lambda;
-        auto& size = antennas.size();
-
-        for (auto& station_data : polar_sta_data)
+        for (int c = 0; c < cows.size(); ++c)
         {
-            double theta_minus_thetaC = station_data.theta - theta_c;
-            double m = (M_PIl * size.x * sin(theta_minus_thetaC)) / lambda;
-            double singleant_gain = (10 * size.x * size.y / pow(lambda, 2)) * pow((1 + cos(theta_minus_thetaC)) / 2, 2);
-
-            if (m != 0)
-            {
-                singleant_gain *= pow(sin(m) / m, 2);
-            }
-
-            antennas.setgain(singleant_gain);
-            phee_minus_alpha_list.emplace_back(phee_temp * sin(theta_minus_thetaC));
-            pathloss_list.emplace_back(pow(pl_temp_meters * station_data.hype, 2));
+#ifdef INIT_TEST
+            cows[c].antennaUpdate(alphas[timeslot][c]);
+#else
+            cows[c].antennaRandUpdate();
+#endif
         }
     }
-};
 
+    //bool operator==(const SimulationHelper& other_combo) const
+    //{
+    //    auto& thispower = this->powers;
+    //    auto& powers = other_combo.powers;
+    //    for (int i = 0; i < this->powers.size(); ++i)
+    //    {
+    //        if (thispower[i] != powers[i])
+    //            return false;
+    //    }
+    //
+    //    auto& thisalphas = this->alphas;
+    //    auto& alphas = other_combo.alphas;
+    //    for (int i = 0; i < this->alphas.size(); ++i)
+    //    {
+    //        if (thisalphas[i] != alphas[i])
+    //            return false;
+    //    }
+    //
+    //    return true;
+    //}
+    //struct combo_hash
+    //{
+    //    unsigned timeslot;
+    //    std::size_t operator()(const SimulationHelper& combo) const {
+    //        auto a = std::hash<int>()(combo.powers[timeslot][0]);
+    //        auto b = std::hash<int>()(combo.powers[timeslot][1]);
+    //        auto c = std::hash<int>()(combo.powers[timeslot][2]);
+    //        auto d = std::hash<int>()(combo.alphas[timeslot][0]);
+    //        auto e = std::hash<int>()(combo.alphas[timeslot][1]);
+    //        auto f = std::hash<int>()(combo.alphas[timeslot][2]);
+    //
+    //        return a ^ b ^ c ^ d ^ e ^ f;
+    //    }
+    //    //combo_hash(unsigned _timeslot) : timeslot(_timeslot) {}
+    //};
 
-class Cow
-{
-    const int station_id;
-    AAntenna antenna;
-    double& power;
-    Placements location;
-public:
-    static std::unordered_map<int, double> dBm2watts_lut;
-    //static unordered_map<double, double> deg2rad_lut;
-
-    /* set Gtx power in linear */
-    const int setpower(int input_power = rand(MIN_POWER_dBm, MAX_POWER_dBm))
+    SimulationHelper(std::vector<Cow>& c) :
+        cows(c),
+        cow_count(sys->base_stations),
+        powers(sys->ant.array_power_wtts),
+        alphas(sys->ant.array_scan_angle),
+        timeslot(0),
+        timeslots(std::ceil(sys->mobile_stations / cow_count)),
+        nodes_rem(sys->mobile_stations)
     {
-        power = dBm2watts_lut[input_power];
-        return input_power;
-    }
+        cow2sta.resize(nodes_rem);
 
-    /* return Gtx power in linear */
-    const double& getxpower() const
-    {
-        return power;
-    }
-    const int& sid() const
-    {
-        return station_id;
-    }
-
-    /* update the parameters of the Base Station and get channel state to each station */
-    const int antenna_update(int alpha = rand(MIN_SCANANGLE_deg, MAX_SCANANGLE_deg))
-    {
-        antenna.update(deg2rad(alpha));
-        return alpha;
-        //return antenna.getmatrix();
-    }
-
-    const double& get_alpha() const
-    {
-        return antenna.alpha;
-    }
-
-    const Placements& get_position() const
-    {
-        return location;
-    }
-
-    /* set the signal level in Watts (linear): second parameter */
-    inline void get_signal_level(unsigned node_id, double& signal_level_lin) const
-    {
-        signal_level_lin = antenna.hmatrix[node_id] * power;
-    }
-
-    Cow(unsigned id, const std::vector<Polar_Coordinates>& polar_data, int antenna_count) :
-        station_id(id),
-        antenna(station_id, antenna_count, polar_data),
-        power(antenna.power),
-        location(COW_LOCATION[station_id])
-    {
-        /* update channel */
-    }
-};
-
-class MainCow : public Cow
-{
-
-};
-
-class SideCow : public Cow
-{
-
-};
-
-class Station
-{
-    int station_id;
-    const std::vector<Cow>& cow_data; // cow that's associated to this station at any given timeslot
-    double sinr;
-public:
-
-    const unsigned& sid() const
-    {
-        return station_id;
-    }
-
-    inline double get_rx_signal_power(unsigned cow_id)
-    {
-        double power;
-        cow_data[cow_id].get_signal_level(station_id, power);
-        return power;
-    }
-
-    double setRX(unsigned bs_id)
-    {
-        double signal = get_rx_signal_power(bs_id);
-
-        double interference = 0;
-
-        for (unsigned b = 0; b < cow_data.size(); ++b)
+#ifdef INIT_TEST /* use this test case to cross-reference the output and thus, the functionality */
+        for (unsigned i = 0; i < cow2sta.size(); ++i)
         {
-            if (cow_data[b].sid() != bs_id)
-            {
-                interference += get_rx_signal_power(b);
-            }
+            cow2sta[i] = init_test_case::Antenna_Array::BS_STAID_SELECTION[i];
         }
+#else
+        /* randomize the sequence with unique node IDs */
+        do {
+            cow_id_distribution dist{ 1, cows.size() };
+            generate(cow2sta.begin(), cow2sta.end(), [&]() { return randomgen.generate(dist); });
 
-        sinr = signal / (interference + dBm2watts(thermal_n_db));
+        } while (std::unordered_set<unsigned>(cow2sta.begin(), cow2sta.end()).size() != cow2sta.size());
+#endif
     }
-
-    /* get SINR in linear by passing signal and inteference/noise in Watts */
-    const double& getSINR() const
-    {
-        return sinr;
-    }
-
-    Station(unsigned id, std::vector<Cow>& cows) :
-        station_id(id),
-        cow_data(cows),
-        sinr(0)
-    {
-        /* update the stations */
-    }
-
 };
 
 struct telemetry_t
 {
-    int power;
-    double alpha;
-    Placements pos;
-    unsigned cow_id;
-    unsigned timeslot;
-    int sta_id;
+    const double power;
+    const double alpha;
+    const Placements pos;
+    const unsigned cow_id;
+    const unsigned timeslot;
+    const unsigned sta_id;
     double sinr;
     telemetry_t(const Cow& cow, const unsigned& timeslot, const unsigned& sta, double& _sinr)
         :
-        power(cow.getxpower()),
-        alpha(cow.get_alpha()),
-        pos(cow.get_position()),
+        power(cow.getxPower()),
+        alpha(cow.getAlpha()),
+        pos(cow.getPosition()),
         cow_id(cow.sid()),
         timeslot(timeslot),
         sta_id(sta),
@@ -307,126 +167,19 @@ struct telemetry_t
         sinr(0) {}
 };
 
-struct SimulationHelper
-{
-    std::vector<Cow>& cows;
-    unsigned cow_count;
-
-    std::vector<int> powers;       // TX power level from base station in integer dBm
-    std::vector<int> alphas;       // Antenna array directions in integer rads
-
-    std::vector<unsigned> cow2sta; // Base stations bindings across timeslots
-
-    unsigned timeslot;            // timeslot in the schedule
-    unsigned nodes_rem;
-
-    const std::vector<Cow>& getcows() const // this is for performance monitor
-    {
-        return cows;
-    }
-
-    /* gets called to get BS to MS bindings for a single timeslot. Output size: #bs */
-    std::vector<unsigned> getbindings()
-    {
-        std::vector<unsigned> bindings;
-
-        for (unsigned b = cow_count * timeslot; b < cow_count * timeslot + min(nodes_rem, cow_count); ++b)
-        {
-            bindings.emplace_back(cow2sta[b]);
-        }
-
-        ++timeslot;
-        nodes_rem -= bindings.size();
-
-        return bindings;
-    }
-
-    /* set antenna array power level in each timeslot */
-    void setpower()
-    {
-        for (int c = 0; c < cows.size(); ++c)
-        {
-            double power = cows[c].setpower();
-            powers[c] = power;
-        }
-    }
-
-    /* set antenna array directivity before starting each simulation */
-    void setalpha()
-    {
-        for (int c = 0; c < cows.size(); ++c)
-        {
-            double alpha = cows[c].antenna_update();
-            alphas[c] = alpha;
-        }
-    }
-
-    bool operator==(const SimulationHelper& other_combo) const
-    {
-        auto& thispower = this->powers;
-        auto& powers = other_combo.powers;
-        for (int i = 0; i < this->powers.size(); ++i)
-        {
-            if (thispower[i] != powers[i])
-                return false;
-        }
-
-        auto& thisalphas = this->alphas;
-        auto& alphas = other_combo.alphas;
-        for (int i = 0; i < this->alphas.size(); ++i)
-        {
-            if (thisalphas[i] != alphas[i])
-                return false;
-        }
-
-        return true;
-    }
-    struct combo_hash
-    {
-        std::size_t operator()(const SimulationHelper& combo) const {
-            auto a = std::hash<int>()(combo.powers[0]);
-            auto b = std::hash<int>()(combo.powers[1]);
-            auto c = std::hash<int>()(combo.powers[2]);
-            auto d = std::hash<int>()(combo.alphas[0]);
-            auto e = std::hash<int>()(combo.alphas[1]);
-            auto f = std::hash<int>()(combo.alphas[2]);
-
-            return a ^ b ^ c ^ d ^ e ^ f;
-        }
-    };
-
-    SimulationHelper(std::vector<Cow>& c) :
-        cows(c),
-        cow_count(c.size()),
-        powers(c.size()),
-        alphas(c.size()),
-        cow2sta(NODE_SELECTION.size()),
-        timeslot(0),
-        nodes_rem(NODE_SELECTION.size())
-    {
-        /* randomize the sequence withi unique numbers */
-        do {
-            cow_id_distribution dist{ 1, cows.size() };
-            generate(cow2sta.begin(), cow2sta.end(), [&]() { return randomgen.generate(dist); });
-
-        } while (std::unordered_set<unsigned>(cow2sta.begin(), cow2sta.end()).size() != cow2sta.size());
-
-        timeslot = std::ceil(NODE_SELECTION.size() / cow_count);
-    }
-};
-
 /* performance logging and analysis latter */
 struct PerfMon
 {
     const SimulationHelper& params;
     const std::vector<unsigned>& bindings;
+    std::vector<telemetry_t> output;
 
     /* keep track of sinr and note the configurations and bindings in decreasing order of SINR */
     std::map<double, std::vector<telemetry_t>, std::greater<double>> sinrlist;
 
     void update(double sinr)
     {
-        auto& cows = params.getcows();
+        auto& cows = params.getCows();
         for (unsigned c = 0; c < params.cow_count; ++c)
         {
             sinrlist[sinr].emplace_back(telemetry_t(cows[c], params.timeslot, bindings[c++], sinr));
@@ -438,3 +191,162 @@ struct PerfMon
         bindings(cowbindings)
     {}
 };
+
+
+/* antenna power info info */
+int get_base_station_power(std::vector<std::vector<double>>& powertable)
+{
+#ifdef INIT_TEST
+    /* change this to reading XML/JSON input file */
+    unsigned i = 0, j = 0;
+    auto& LUT = init_test_case::Antenna_Array::COW_POWER_LUT;
+
+    powertable.resize(LUT.size());
+    for (auto& powerlist : LUT)
+    {
+        j = 0;
+        powertable[i].resize(LUT[0].size());
+        for (auto& power : powerlist)
+        {
+            powertable[i][j++] = dBm2watt(power);
+        }
+        ++i;
+    }
+
+#else
+    /* read the JSON file [filename] */*/
+
+#endif
+    return 0;
+}
+
+/* antenna array direction info */
+int get_base_station_scan_alpha(std::vector<std::vector<double>>& alphatable)
+{
+#ifdef INIT_TEST
+    /* change this to reading XML/JSON input file */
+    unsigned i = 0, j = 0;
+    auto& LUT = init_test_case::Antenna_Array::SCAN_ALPHA_LUT;
+
+    alphatable.resize(LUT.size());
+    for (auto& alpha_list : LUT)
+    {
+        j = 0;
+        alphatable[i].resize(LUT[0].size());
+        for (auto& alpha : alpha_list)
+        {
+            alphatable[i][j++] = deg2rad(alpha);
+        }
+        ++i;
+    }
+
+#else
+    /* read the JSON file [filename] */*/
+
+#endif
+    return 0;
+}
+
+int get_parameters(std::string filename)
+{
+#ifdef INIT_TEST
+    auto& frequency     = init_test_case::Network_System::frequency;
+    auto& bandwidth     = init_test_case::Network_System::bandwidth;
+    auto& SymbRate      = init_test_case::Network_System::SymbRate;
+    auto& BlocskPerSymb = init_test_case::Network_System::BlocksPerSymb;
+    auto& height        = init_test_case::Network_System::height;
+    auto& bs_Ptx_min    = init_test_case::Antenna_Array::MIN_POWER_dBm;
+    auto& bs_Ptx_max    = init_test_case::Antenna_Array::MAX_POWER_dBm;
+    auto& ms_Grx        = init_test_case::Network_System::ms_Grx;
+    auto& bs_scan_min   = init_test_case::Antenna_Array::MIN_SCANANGLE_deg;
+    auto& bs_scan_max   = init_test_case::Antenna_Array::MAX_SCANANGLE_deg;
+    auto& system_noise  = init_test_case::Network_System::system_noise;
+    auto& ms_count      = init_test_case::Network_System::mobile_stations;
+    auto& bs_count      = init_test_case::Network_System::base_stations;
+#else
+
+#endif
+    sys = new Input(
+        frequency,
+        bandwidth,
+        SymbRate,
+        BlocskPerSymb,
+        height,
+        bs_Ptx_min,
+        bs_Ptx_max,
+        ms_Grx,
+        bs_scan_min,
+        bs_scan_max,
+        system_noise,
+        ms_count,
+        bs_count
+    );
+
+    return 0;
+}
+
+template<class U, class V>
+inline int getData(const std::vector<U>& input, std::vector<V>& output, std::string filename = "")
+{
+#ifdef INIT_TEST
+    for (auto& data : input)
+    {
+        output.emplace_back(data);
+    }
+#else
+    /* read the JSON file [filename] */
+#endif
+    return 0;
+}
+
+/* phase array antenna count per base station */
+int get_allocation_per_bs(std::vector<unsigned>& counts)
+{
+    return getData(init_test_case::Network_System::BS_ANTENNA_COUNTS, counts);
+}
+
+/* get base station location info */
+int get_base_station_cords(std::vector<Placements>& station_position)
+{
+    return getData(init_test_case::Network_System::COW_LOCATION, station_position);
+}
+
+/* get mobile station location info */
+int get_mobile_station_cords(std::vector<Placements>& station_position)
+{
+    return getData(init_test_case::Network_System::NODE_LOCATIONS, station_position);
+}
+
+/* this defines the thetaC term in the calculation or where the BS is facing */
+int get_base_station_orientation(std::vector<double>& antenna_dir)
+{
+#ifdef INIT_TEST
+    for (auto& data : init_test_case::Network_System::BS_THETAC_DEG)
+    {
+        antenna_dir.emplace_back(deg2rad(data));
+    }
+#else
+    /* read the JSON file [filename] */
+#endif
+    return 0;
+}
+
+int get_base_station_antspace(std::vector<double>& antenna_spacing)
+{
+    return getData(init_test_case::Antenna_Array::ANTENNA_SPACING, antenna_spacing);
+}
+
+/* get the size of the antenna in [meters] where antennadim is Dimension<double> */
+int get_base_station_anntena_dims(antennadim& dim)
+{
+#ifdef INIT_TEST
+    /* change this to reading XML/JSON input file */
+    auto& data = init_test_case::Antenna_Array::ANTENNA_DIMS;
+    dim.x = data.first;
+    dim.y = data.second;
+#else
+    /* read the JSON file [filename] */*/
+
+#endif
+    return 0;
+}
