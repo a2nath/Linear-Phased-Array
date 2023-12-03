@@ -18,6 +18,21 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="project\calc.h" />
+    <ClInclude Include="project\common.h" />
+    <ClInclude Include="project\coordinates.h" />
+    <ClInclude Include="project\matplot.h" />
+    <ClInclude Include="project\matplotlibcpp.h" />
+    <ClInclude Include="project\network.h" />
+    <ClInclude Include="project\project.h" />
+    <ClInclude Include="project\random.h" />
+    <ClInclude Include="project\station.h" />
+    <ClInclude Include="project\test\Init_test_case.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="project\project.cpp" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
@@ -141,20 +156,6 @@
       <AdditionalLibraryDirectories>C:\Program Files (x86)\Microsoft Visual Studio\Shared\Python39_64\libs</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <ClCompile Include="project.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="common.h" />
-    <ClInclude Include="coordinates.h" />
-    <ClInclude Include="matplot.h" />
-    <ClInclude Include="matplotlibcpp.h" />
-    <ClInclude Include="network.h" />
-    <ClInclude Include="project.h" />
-    <ClInclude Include="random.h" />
-    <ClInclude Include="station.h" />
-    <ClInclude Include="test\Init_test_case.h" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
