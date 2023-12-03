@@ -1,5 +1,6 @@
 #pragma once
 #include <cmath>
+#include <cstring>
 
 template<class Width>
 struct Dimensions
@@ -43,9 +44,9 @@ struct Coordinates : public Dimensions<Type>
             temp.y -= a.y;
         }
 
-        if (sim_error)
+        if (sim_error.size())
         {
-            throw std::runtime_error(sim_error + ", errno " + strerror(errno));
+            throw std::runtime_error(sim_error + ", errno " + std::strerror(errno));
         }
 
         return temp;
