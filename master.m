@@ -41,6 +41,7 @@ cow.antspace = struct('b1',Space(1),'b2',Space(2),'b3',Space(3));
 cow.antpower = struct('b1',0,'b2',0,'b3',0); % default 0 dbm.
 cow.oriented = struct('b1',deg2rad(NORTHEAST),'b2',deg2rad(NORTH),'b3',deg2rad(NORTHWEST)); % default 90 degrees.
 cow.location = struct('b1',CENTERBS-OFF+HEIGHT*i,'b2',CENTERBS+180i,'b3',CENTERBS+OFF+HEIGHT*i);
+cow.size     = length(fieldnames(cow.antcount));
 
 display(['Timeslot#     ' 'MS Served      ' 'Pxi chosen     ' 'alphai chosen      ' 'SINR at each MS']);
 for t = 1:TSLOTS
