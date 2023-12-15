@@ -125,12 +125,12 @@ struct SimulationHelper
 #ifdef INIT_TEST /* use this test case to cross-reference the output and thus, the functionality */
         for (unsigned i = 0; i < cow2sta.size(); ++i)
         {
-            cow2sta[i] = init_test_case::Antenna_Array::BS_STAID_SELECTION[i];
+            cow2sta[i] = init_test_case::Antenna_Array::BS_STAID_SELECTION[i] - 1; // zero-indexed
         }
 #else
         /* randomize the sequence with unique node IDs */
         do {
-            cow_id_distribution dist{ 1, cows.size() };
+            cow_id_distribution dist{ 0, cows.size() -1 };
             generate(cow2sta.begin(), cow2sta.end(), [&]() { return randomgen.generate(dist); });
 
         } while (std::unordered_set<unsigned>(cow2sta.begin(), cow2sta.end()).size() != cow2sta.size());
