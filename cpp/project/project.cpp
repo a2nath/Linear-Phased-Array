@@ -99,67 +99,6 @@ STA      SLOT0   SLOT1   SLOT2   SLOT3   SLOT4   SLOT5
 
 void run(PerfMon*& perf)
 {
-    /*
-        for power1 = -30:30
-        p1 = 10^((power1-30)/10);
-        for power2 = -30:30
-            p2 = 10^((power2-30)/10);
-            for power3 = -30:30
-                p3 = 10^((power3-30)/10);
-
-                ptable = [p1*table(1,1) / addrms([p2*table(1,2) p3*table(1,3) THER])
-                    p2*table(1,2) / addrms([p1*table(1,1) p3*table(1,3) THER])
-                    p3*table(1,3) / addrms([p2*table(1,2) p1*table(1,1) THER])
-                    p1*table(2,1) / addrms([p2*table(2,2) p3*table(2,3) THER])
-                    p2*table(2,2) / addrms([p1*table(2,1) p3*table(2,3) THER])
-                    p3*table(2,3) / addrms([p2*table(2,2) p1*table(2,1) THER])
-                    p1*table(3,1) / addrms([p2*table(3,2) p3*table(3,3) THER])
-                    p2*table(3,2) / addrms([p1*table(3,1) p3*table(3,3) THER])
-                    p3*table(3,3) / addrms([p2*table(3,2) p1*table(3,1) THER])];
-
-                maxvec(1,idx) = power1;
-                maxvec(2,idx) = power2;
-                maxvec(3,idx) = power3;
-                maxvec(4,idx) = max(ptable(1:3));
-                maxvec(5,idx) = max(ptable(4:6));
-                maxvec(6,idx) = max(ptable(7:9));
-                idx = idx + 1;
-
-%                 if ( ptable(1) >= cutofflinear || ptable(2) >= cutofflinear || ptable(3) >= cutofflinear )
-%                     display('hit')
-%                 else
-%
-%                     continue;
-%                 end
-%
-%
-%                 if ( ptable(4) >= cutofflinear || ptable(5) >= cutofflinear || ptable(6) >= cutofflinear )
-%                     display('hit')
-%                 else
-%
-%                     continue;
-%                 end
-%
-%                 if ptable(7) >= cutofflinear || ptable(8) >= cutofflinear || ptable(9) >= cutofflinear
-% %                     display(['all hit p1:' num2str(power1) ' p2:' num2str(power2) ' p3:' num2str(power3)])
-% %                      (idx) = max(ptable(7:9));
-%                     breakflag = 1;
-%                     cowpowers = [power1 power2 power3];
-
-%                     break;
-%                 end
-
-            end
-%             if(breakflag == 1)
-%                 break;
-%             end
-        end
-%         if(breakflag == 1)
-%             break;
-%         end
-    end
-    */
-
     using slot_t = unsigned;
     using cow_t = unsigned;
     using sta_t = unsigned;
@@ -178,40 +117,41 @@ void run(PerfMon*& perf)
 
     while (served < sys->mobile_stations)
     {
-            /* setup the cows first such that the simulation is set with alphas and TX powers */
-            for (int slot = 0; slot < simparams.timeslots; ++slot)
+        simparams.timeslot = 0;
+        /* setup the cows first such that the simulation is set with alphas and TX powers */
+        for (int slot = 0; slot < simparams.timeslots; ++slot)
+        {
+            /* retrive the coefficients from base stations after antenna reconfig (alpha change) */
+
+            select_stations = simparams.getBindings();
+
+            /* change the antenna power and recalculate the Rx signal power + get SINR */
+            simparams.setPower(); // random power in the range [-30, 30]
+
+            /* change the scan angle of the base stations as per the bindings */
+            simparams.setAlpha();
+
+            /* check sinr for each receiving stations */
+            for (unsigned bs_id = 0; bs_id < select_stations.size(); ++bs_id)
             {
-                /* retrive the coefficients from base stations after antenna reconfig (alpha change) */
+                /* setup the stations with the COW bindings to calculate RX signal and interference */
+                auto& station_id = select_stations[bs_id];
 
-                select_stations = simparams.getBindings();
+                auto& station = stations[station_id];
+                station.setRX(bs_id);
 
-                /* change the antenna power and recalculate the Rx signal power + get SINR */
-                simparams.setPower(); // random power in the range [-30, 30]
-
-                /* change the scan angle of the base stations as per the bindings */
-                simparams.setAlpha();
-
-                /* check sinr for each receiving stations */
-                for (unsigned bs_id = 0; bs_id < select_stations.size(); ++bs_id)
+                auto sinr = station.getSINR();
+                if (sinr >= SINR_CUT_OFF_VALID) // check this settings
                 {
-                    /* setup the stations with the COW bindings to calculate RX signal and interference */
-                    auto& station_id = select_stations[bs_id];
+                    perf->update(sinr);
+                    ++served;
+                }
 
-                    auto& station = stations[station_id];
-                    station.setRX(bs_id);
+            } //end of cow_id
 
-                    auto sinr = station.getSINR();
-                    if (sinr >= SINR_CUT_OFF_VALID) // check this settings
-                    {
-                        perf->update(sinr);
-                        ++served;
-                    }
+            ++simparams.timeslot; // increment the timeslot to get the next parameters
 
-                } //end of cow_id
-
-                ++simparams.timeslot; // increment the timeslot to get the next parameters
-
-            } //end of sta_id
+        } //end of sta_id
     } //end of sta_id
 }
 
