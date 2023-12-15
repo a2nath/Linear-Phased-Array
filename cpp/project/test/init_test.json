@@ -1,0 +1,29 @@
+// simulation parameters for the system simulation
+{
+  "frequency": 1900e6, // center frequency
+  "bandwidth": 20e6, // channel bandwidth in Mz
+  "SymbRate": 3.84e6, // symbol rate
+  "BlocksPerSymb": 768, // blocks per symbol
+  "height": 200, //antenna height in meters
+  "ms_Grx": -2, // dBi
+  "system_noise": 5, // System noise in dB;
+  "mobile_stations": 15, // number of handdset
+  "base_stations": 3, // number of base stations
+  "base_station_theta_c": [ 75, 90, 105 ], // direction they are facing
+  "base_station_location": [
+    [ 250, 200 ], [ 500, 180 ], [ 750, 200 ]
+  ],
+  "mobile_station_location": [
+            [250, 500], [350, 500], [450, 500], [550, 500], [650, 500], [750, 500],
+            [250, 600], [350, 600], [450, 600], [550, 600], [650, 600], [750, 600],
+                              [450, 325], [500, 325], [550, 325]
+  ],
+  "base_station_antenna_counts": [ 5, 3, 5 ], // antenna panels per station
+  "base_station_power_range_dBm": [ -30, 30 ], // power range of the antenna
+  "base_station_scan_angle_range_deg": [ -90, 90 ], // scan angle range of the antenna
+  "antenna_spacing": [ 3E-1, 4E-1, 3E-1 ], // spacing between antenna panels
+  "antenna_dims": [ 2E-1, 4E-1 ] // size of the antenna
+}
+
+
+
