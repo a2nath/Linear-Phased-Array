@@ -53,7 +53,7 @@ public:
         return location;
     }
 
-    const int& sid() const
+    const unsigned& sid() const
     {
         return station_id;
     }
@@ -134,7 +134,8 @@ public:
         {
             if (cow_data[b].sid() != bs_id)
             {
-                interference += get_rx_signal_power(b);
+                auto power = get_rx_signal_power(b);
+                interference += power;
             }
         }
 
@@ -142,7 +143,7 @@ public:
     }
 
     /* get SINR in linear by passing signal and inteference/noise in dB */
-    const double& getSINR() const
+    const double getSINR() const
     {
         return lin2dB(sinr);
     }
