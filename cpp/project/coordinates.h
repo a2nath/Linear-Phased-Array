@@ -35,18 +35,12 @@ struct Coordinates : public Dimensions<Type>
         if ((long double)temp.x - (long double)a.x < 0
             || (long double)temp.y - (long double)a.y < 0)
         {
-            sim_error = "Tried to subtract too much from coordinates data structure leading to less than zero";
-            temp = 0;
+            throw std::runtime_error("Tried to subtract too much from coordinates data structure leading to less than zero");
         }
         else
         {
             temp.x -= a.x;
             temp.y -= a.y;
-        }
-
-        if (sim_error.size())
-        {
-            throw std::runtime_error(sim_error + ", errno " + std::strerror(errno));
         }
 
         return temp;
