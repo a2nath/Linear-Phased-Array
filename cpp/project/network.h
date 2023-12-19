@@ -14,6 +14,9 @@ namespace network_package
     using antennadim = Dimensions<double>;
     std::vector<Placements>             mobile_station_pos;  // SEATING_LOCATION
     std::vector<Placements>             base_station_pos;    // COW_LOCATION
+    std::vector<std::vector<unsigned>>  station_ids_lut;
+    std::vector<unsigned>               station_ids;
+
 
     constexpr double INIT_SCAN_ANGLE = 0;
     constexpr double INIT_POWER_DBM = 0;
@@ -72,12 +75,14 @@ namespace network_package
 
         struct Antenna
         {
-            std::vector<std::vector<double>>    array_power_wtts;    // antenna array power level [W]
-            std::vector<std::vector<double>>    array_scan_angle;    // antenna scan angle in timeslots/BS in [rads]
-            std::vector<unsigned>               antcount_per_base;   // antenna allocation per bs array
-            std::vector<double>                 antenna_orientation; // antenna orientation in its placement in [rads]
-            std::vector<double>                 antenna_spacing;     // antenna spacing in an array in [meters]
-            antennadim                          antenna_dim_mtrs;    // antenna dims in [meters]
+            std::vector<std::vector<double>>    array_power_wtts_lut;  // antenna array power level lookup table [W]
+            std::vector<std::vector<double>>    array_scan_angle_lut;  // antenna scan angle in timeslots/BS lookup table [rads]
+            std::vector<double>                 array_power_wtts;      // antenna array power level [W]
+            std::vector<double>                 array_scan_angle;      // antenna scan angle in timeslots/BS [rads]
+            std::vector<unsigned>               antcount_per_base;     // antenna allocation per bs array
+            std::vector<double>                 antenna_orientation;   // antenna orientation in its placement in [rads]
+            std::vector<double>                 antenna_spacing;       // antenna spacing in an array in [meters]
+            antennadim                          antenna_dim_mtrs;      // antenna dims in [meters]
         };
         Antenna ant;
 
