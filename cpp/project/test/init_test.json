@@ -21,9 +21,27 @@
   "base_station_antenna_counts": [ 5, 3, 5 ], // antenna panels per station
   "base_station_power_range_dBm": [ -30, 30 ], // power range of the antenna
   "base_station_scan_angle_range_deg": [ -90, 90 ], // scan angle range of the antenna
-  "antenna_spacing": [ 3E-1, 4E-1, 3E-1 ], // spacing between antenna panels
-  "antenna_dims": [ 2E-1, 4E-1 ] // size of the antenna
+  "antenna_spacing": [ 3e-1, 4e-1, 3e-1 ], // spacing between antenna panels
+  "antenna_dims": [ 2e-1, 4e-1 ], // size of the antenna
+  "base_station_power_dBm_lut": [ // suggested power numbers accross timeslots
+    [ 30.0, 30.0, 30.0 ],
+    [ 30.0, 30.0, 30.0 ],
+    [ 30.0, 30.0, 30.0 ],
+    [ -30.0, 30.0, -30.0 ],
+    [ -30.0, 30.0, -30.0 ]
+  ],
+  "base_station_scan_alpha_deg_lut": [ // suggested scan angles accross timeslots
+    [ 10.0, 65.0, 35.0 ],
+    [ -10.0, -65.0, -35.0 ],
+    [ -75.0, -40.0, 75.0 ],
+    [ 40.0, 65.0, -40.0 ],
+    [ 40.0, -65.0, -40.0 ]
+  ],
+  "base_to_mobile_station_id_selection_lut": [ // suggested stations accross timeslots
+    [ 2, 13, 11 ],
+    [ 8, 15, 5 ],
+    [ 1, 14, 6 ],
+    [ 7, 4, 10 ],
+    [ 9, 3, 12 ]
+  ]
 }
-
-
-
