@@ -1,6 +1,6 @@
 #pragma once
 #include <vector>
-#include "common.h"
+#include "coordinates.h"
 #include "matplotlibcpp.h"
 
 /* plot the charts */
