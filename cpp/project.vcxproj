@@ -24,7 +24,6 @@
     <ClInclude Include="project\coordinates.h" />
     <ClInclude Include="project\args.h" />
     <ClInclude Include="project\matplot.h" />
-    <ClInclude Include="project\matplotlibcpp.h" />
     <ClInclude Include="project\network.h" />
     <ClInclude Include="project\project.h" />
     <ClInclude Include="project\random.h" />
@@ -94,7 +93,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <TargetName>model</TargetName>
-    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\..\..\bin</OutDir>
+    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\..\..\bin\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>

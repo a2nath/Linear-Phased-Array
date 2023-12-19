@@ -21,9 +21,6 @@
     <ClInclude Include="project\matplot.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="project\matplotlibcpp.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="project\network.h">
       <Filter>Header Files</Filter>
     </ClInclude>
