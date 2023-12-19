@@ -36,17 +36,17 @@
     <ClInclude Include="project\station.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="project\calc.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="project\common.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="project\coordinates.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="project\test\Init_test_case.h">
-      <Filter>test</Filter>
+    <ClInclude Include="inc\argparse\argparse.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="project\args.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
