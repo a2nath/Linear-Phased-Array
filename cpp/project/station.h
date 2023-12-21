@@ -7,9 +7,6 @@ using namespace network_package;
 
 class Cow
 {
-//#ifdef RAND
-//    Random randengine;
-//#endif
     const unsigned station_id;
 
     double min_power_watt;
@@ -19,17 +16,9 @@ class Cow
     AAntenna antenna;
     Placements& location;
 
-    const std::vector<double>& powerlevels;
-    unsigned power_idx;
+	const std::vector<double>& power_list;
+	unsigned power_idx;
 public:
-    /* set Gtx power in linear */
-    void setRandPower()
-    {
-        //auto dist = randengine.uni.getdist(min_power_watt, max_power_watt);
-        //double output = randengine.generate(dist);
-        //antenna.setPower(output);
-        //return output;
-    }
 
     /* set Gtx power in linear */
     void setPower(double& input_power)
@@ -59,14 +48,6 @@ public:
     }
 
     /* update the parameters of the Base Station and get channel state to each station */
-    void antennaRandUpdate()
-    {
-        //auto dist = randengine.uni.getdist(min_scanangle_rad, max_scanangle_rad);
-        //int alpha = randengine.generate(dist);
-        //return antennaUpdate(alpha);
-    }
-
-    /* update the parameters of the Base Station and get channel state to each station */
     void antennaUpdate(double alpha)
     {
         antenna.update(alpha);
@@ -85,9 +66,6 @@ public:
         const std::vector<double>& powerlist,
         const std::vector<Polar_Coordinates>& polar_data
         ) :
-//#ifdef RAND
-//        randengine(),
-//#endif
         station_id(id),
         min_power_watt(parameters->bs_Ptx_min),
         max_power_watt(parameters->bs_Ptx_max),
@@ -95,7 +73,7 @@ public:
         max_scanangle_rad(parameters->bs_scan_max),
         antenna(id, parameters, polar_data),
         location(base_station_pos[id]),
-        powerlevels(powerlist),
+        power_list(powerlist),
         power_idx(0)
     {
         /* update channel */
