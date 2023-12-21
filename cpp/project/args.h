@@ -12,18 +12,6 @@
 
 using namespace network_package;
 
-/* get a list of config files in json format */
-void get_tests(std::optional<std::string>& directory, std::vector<std::string>& test_list)
-{
-    std::string path(directory.value());
-    std::string ext(".json");
-    for (auto& p : std::filesystem::recursive_directory_iterator(path))
-    {
-        if (p.path().extension().compare(ext) == 0) // if that extension
-            test_list.emplace_back(p.path().string());
-    }
-}
-
 class ProgramConfig
 {
 protected:
@@ -37,15 +25,13 @@ protected:
     /* antenna power info info */
     int get_power_lut(const std::vector<std::vector<double>>& input, std::vector<std::vector<double>>& powertable)
     {
-        auto& list = input;
+        powertable.resize(input.size(), std::vector<double>(input[0].size()));
 
-        powertable.resize(list.size(), std::vector<double>(list[0].size()));
-
-        for (unsigned i = 0; i < list.size(); ++i)
+        for (unsigned i = 0; i < input.size(); ++i)
         {
-            for (unsigned j = 0; j < list[i].size(); ++j)
+            for (unsigned j = 0; j < input[i].size(); ++j)
             {
-                powertable[i][j] = dBm2watt(list[i][j]);
+                powertable[i][j] = dBm2watt(input[i][j]);
             }
         }
 
@@ -55,15 +41,15 @@ protected:
     /* antenna array direction info */
     int get_scan_angle_lut(const std::vector<std::vector<double>>& input, std::vector<std::vector<double>>& alphatable)
     {
-        auto& list = input;
 
-        alphatable.resize(list.size(), std::vector<double>(list[0].size()));
 
-        for (unsigned i = 0; i < list.size(); ++i)
+        alphatable.resize(input.size(), std::vector<double>(input[0].size()));
+
+        for (unsigned i = 0; i < input.size(); ++i)
         {
-            for (unsigned j = 0; j < list[i].size(); ++j)
+            for (unsigned j = 0; j < input[i].size(); ++j)
             {
-                alphatable[i][j] = deg2rad(list[i][j]);
+                alphatable[i][j] = deg2rad(input[i][j]);
             }
         }
 
@@ -90,7 +76,11 @@ protected:
     /* get list of tx power for each base station in a timeslot */
     int get_power_list(const std::vector<double>& input, std::vector<double>& output_power)
     {
-        return getData(input, output_power);
+        for (unsigned i = 0; i < input.size(); ++i)
+        {
+            output_power.emplace_back(dBm2watt(input[i]));
+        }
+        return 0;
     }
 
     /* get list of scan angle for each base station in a timeslot */
@@ -212,10 +202,17 @@ public:
 };
 
 class Default;
+std::filesystem::path operator+(const std::filesystem::path dir, const std::filesystem::path& name)
+{
+    return dir.string() + '/' + name.string();
+}
 
 /* argparse for C++17 */
 struct MyArgs : public argparse::Args, public ProgramConfig {
-    std::optional<bool>& defaults                             = kwarg("d,default", "Use defaults from the program without any input file");
+
+    std::vector<std::string> json_files;
+
+    //std::optional<bool>& defaults                             = kwarg("d,default", "Use defaults from the program without any input file");
     std::optional<std::string>& input_dir                     = kwarg("i,input_dir", "Input directory of the test files");
     std::optional<std::string>& output_dir                    = kwarg("o,output_dir", "Output directory to put results in");
     std::optional<std::string>& json_file                     = kwarg("f,test,test_file", "Input parameter file to run in .json format");
@@ -244,10 +241,96 @@ struct MyArgs : public argparse::Args, public ProgramConfig {
     std::optional<std::vector<std::vector<unsigned>>>& ms_selection_lut     = kwarg("ms_selection_lut", "Mobile station id selection lookup table");
 
 
+    /* get a list of config files in json format */
+    int get_tests(const std::string& directory)
+    {
+        std::string path(directory);
+        std::string ext(".json");
+        for (auto& p : std::filesystem::recursive_directory_iterator(path))
+        {
+            if (p.path().extension().compare(ext) == 0) // if that extension
+                json_files.emplace_back(p.path().string());
+        }
+        return json_files.size();
+    }
+
+    bool isFile(std::string& path)
+    {
+        bool answer = false;
+
+        const std::string& dir = input_dir != std::nullopt && isDir(input_dir.value()) ? input_dir.value() : getcwd();
+        std::filesystem::path filename(path);
+
+        if (filename.parent_path().string().size() == 0) // just a filename so append input dir
+        {
+            answer = std::filesystem::is_regular_file(dir + filename.filename());
+            path = dir + filename.filename().string();   // filename has input dir as well
+        }
+        else
+        {
+            answer = std::filesystem::is_regular_file(path);
+        }
+
+        json_files.emplace_back(path);
+
+        return answer;
+    }
+
+    bool isDir(std::filesystem::path path)
+    {
+
+        bool answer = std::filesystem::is_directory(path);
+
+        if (!answer)
+            std::cout << "WARNING: " << "input directory is not valid" << std::endl;
+
+        return answer;
+    }
+
     /* check if default values to be used from the hardcoded file */
     bool isDefault()
     {
-        return defaults != std::nullopt && defaults == true;
+        bool answer = !(
+            /* check if the path is correct and whether there are valid tests to add, if file is not separately specified */
+               (input_dir != std::nullopt && json_file == std::nullopt && isDir(input_dir.value()) && get_tests(input_dir.value()) > 0)
+
+            /* check if the ouput dir is valid */
+            || (output_dir != std::nullopt && isDir(output_dir.value()))
+
+            /* check if the file is valid and whether it can be added to the list with or without the input dir */
+            || (json_file != std::nullopt && isFile(json_file.value()))
+
+            /* check the rest of the parameters if they are defined */
+            || frequency != std::nullopt
+            || bandwidth != std::nullopt
+            || symrate != std::nullopt
+            || blockspersym != std::nullopt
+            || antenna_height != std::nullopt
+            || gain_gtrx != std::nullopt
+            || system_noise != std::nullopt
+            || mobile_stations_count != std::nullopt
+            || base_stations_count != std::nullopt
+            || bs_theta_c != std::nullopt
+            || base_stations_loc != std::nullopt
+            || mobile_stations_loc != std::nullopt
+            || bs_antenna_counts != std::nullopt
+            || power_range != std::nullopt
+            || scan_angle_range != std::nullopt
+            || antenna_spacing != std::nullopt
+            || antenna_dims != std::nullopt
+            || bs_tx_power_dBm != std::nullopt
+            || bs_tx_power_dBm_lut != std::nullopt
+            || bs_scan_alpha_deg != std::nullopt
+            || bs_scan_alpha_deg_lut != std::nullopt
+            || ms_selection != std::nullopt
+            || ms_selection_lut != std::nullopt
+            );
+
+        /* add at least one so that test can start */
+        if (json_files.empty())
+            json_files.emplace_back("");
+
+        return answer;
     }
 
     void interprete()
@@ -348,7 +431,7 @@ struct MyArgs : public argparse::Args, public ProgramConfig {
         get_base_station_cords(param<std::vector<Placements>>("base_station_location"), base_station_pos);
         get_mobile_station_cords(param<std::vector<Placements>>("mobile_station_location"), mobile_station_pos);
 
-        if (data.find("mobile_station_location") != data.end())
+        if (data.find("base_station_power_dBm") != data.end())
             get_power_list(param<std::vector<double>>("base_station_power_dBm"), args->ant.array_power_wtts);
 
         if (data.find("base_station_power_dBm_lut") != data.end())
