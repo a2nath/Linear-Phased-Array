@@ -8,7 +8,7 @@
 #include <set>
 #include <queue>
 #include "project.h"
-#include "matplot.h"
+//#include "matplot.h"
 
 using namespace std;
 
@@ -18,48 +18,50 @@ string sim_error = "";
 vector<Cow> cows;
 vector<Station> stations;
 
-network_package::Input* sys;
+Input* args = nullptr;
+PerfMon* perfmonitor = nullptr;
+string jason_file = "";
 
 vector<double> power_list;          // in watts
 vector<vector<double>> alphatable;  // scan angle
-string input_file;
 vector<vector<Polar_Coordinates>> polar_data;
 
-void setup()
+void setup(string config_file = "")
 {
-    /* fill containers with test info */
-    get_parameters(input_file);
-    get_mobile_station_cords(mobile_station_pos);
-    get_base_station_cords(base_station_pos);
-    get_base_station_power(sys->ant.array_power_wtts);
-    get_base_station_scan_alpha(sys->ant.array_scan_angle);
-    get_allocation_per_bs(sys->ant.antcount_per_base);
-    get_base_station_orientation(sys->ant.antenna_orientation);
-    get_base_station_antspace(sys->ant.antenna_spacing);
-    get_base_station_anntena_dims(sys->ant.antenna_dim_mtrs);
 
-    for (unsigned power = sys->bs_Ptx_min; power <= sys->bs_Ptx_max; ++power)
+    /* if the program is called using a test file or a directory of .json files */
+    if (config_file.size())
+    {
+        /* populate a container with args data */
+        JasonHelper config(config_file);
+
+        /* take the same args from above and set the program config */
+        config.parse_data(args);
+    }
+
+
+    for (unsigned power = args->bs_Ptx_min; power <= args->bs_Ptx_max; ++power)
     {
         power_list.emplace_back(dBm2watt(power));
     }
 
     for (unsigned i = 0; i < mobile_station_pos.size(); ++i)
     {
-        stations.emplace_back(i, cows, sys->NF_watt);
+        stations.emplace_back(i, cows, args->NF_watt);
     }
 
-    auto bs_Ptx_min = dBm2watt(sys->bs_Ptx_min);
-    auto bs_Ptx_max = dBm2watt(sys->bs_Ptx_max);
-    auto bs_scan_min = deg2rad(sys->bs_scan_min);
-    auto bs_scan_max = deg2rad(sys->bs_scan_max);
+    auto bs_Ptx_min = dBm2watt(args->bs_Ptx_min);
+    auto bs_Ptx_max = dBm2watt(args->bs_Ptx_max);
+    auto bs_scan_min = deg2rad(args->bs_scan_min);
+    auto bs_scan_max = deg2rad(args->bs_scan_max);
 
     /* setup the system */
-    polar_data.resize(sys->base_stations);
-    for (unsigned bs_id = 0; bs_id < sys->base_stations; ++bs_id)
+    polar_data.resize(args->base_stations);
+    for (unsigned bs_id = 0; bs_id < args->base_stations; ++bs_id)
     {
 
         unsigned idx = 0;
-        polar_data[bs_id].resize(sys->mobile_stations);
+        polar_data[bs_id].resize(args->mobile_stations);
 
         for (auto& mstation : mobile_station_pos)
         {
@@ -68,36 +70,51 @@ void setup()
             polar_data[bs_id][idx++] = cart2pol(diffx, diffy);
         }
 
-        cows.emplace_back(bs_id, sys, power_list, polar_data[bs_id]);
+        cows.emplace_back(bs_id, args, power_list, polar_data[bs_id]);
     }
 }
 
+void run()
+{
+    using slot_t = unsigned;
+    using cow_t = unsigned;
+    using sta_t = unsigned;
 
-/*
-sinr_timeslot
---------------------------------------------------------
-STA      SLOT0   SLOT1   SLOT2   SLOT3   SLOT4   SLOT5
---------------------------------------------------------
-1
---------------------------------------------------------
-2
---------------------------------------------------------
-3
---------------------------------------------------------
-4
---------------------------------------------------------
-5
---------------------------------------------------------
-6
---------------------------------------------------------
-7
---------------------------------------------------------
-..
-..
+    double SINR_CUT_OFF_VALID = log2lin(24); // dBm;
 
-*/
+    /* run the simulation */
+    SimulationHelper simparams(args, cows);
 
-void run(PerfMon*& perf)
+    auto ms_station_list = simparams.getBindings();
+
+    perfmonitor = new PerfMon(simparams, ms_station_list);
+
+    /* create a new list of power nums and run calculations on its permutations */
+    vector<double> power_list;
+    simparams.getPower(power_list);
+
+    bool ok = power_list.size() > 0;
+
+    /* update the SINR for each scenario (base-station-count factorial permutations) */
+    while (ok)
+    {
+        /* change the antenna power across all base stations */
+        simparams.setPower(power_list);
+
+        for (unsigned bs = 0; bs < args->base_stations; ++bs)
+        {
+            auto& station = stations[ms_station_list[bs]];
+            station.setRX(bs);
+
+            auto sinr = station.getSINR();
+            perfmonitor->update(bs, sinr);
+        }
+
+        ok = simparams.get_perm_power(power_list);
+    }
+}
+
+void run_across_timslots()
 {
     using slot_t = unsigned;
     using cow_t = unsigned;
@@ -107,15 +124,15 @@ void run(PerfMon*& perf)
     //unordered_set<SimulationHelper, SimulationHelper::combo_hash> combocheck;
 
     /* run the simulation */
-    SimulationHelper simparams(cows);
+    SimulationHelper simparams(args, cows);
     vector<unsigned> select_stations;
-    perf = new PerfMon(simparams, select_stations);
+    perfmonitor = new PerfMon(simparams, select_stations);
 
     int served = 0;
     unordered_map<sta_t, unordered_map<slot_t, cow_t>> station_binding;
 
-
-    while (served < sys->mobile_stations)
+    vector<double> power_list;
+    while (served < args->mobile_stations)
     {
         simparams.timeslot = 0;
         /* setup the cows first such that the simulation is set with alphas and TX powers */
@@ -126,7 +143,7 @@ void run(PerfMon*& perf)
             select_stations = simparams.getBindings();
 
             /* change the antenna power and recalculate the Rx signal power + get SINR */
-            simparams.setPower(); // random power in the range [-30, 30]
+            simparams.setPower(power_list); // random power in the range [-30, 30]
 
             /* change the scan angle of the base stations as per the bindings */
             simparams.setAlpha();
@@ -143,7 +160,7 @@ void run(PerfMon*& perf)
                 auto sinr = station.getSINR();
                 if (sinr >= SINR_CUT_OFF_VALID) // check this settings
                 {
-                    perf->update(sinr);
+                    perfmonitor->update(bs_id, sinr);
                     ++served;
                 }
 
@@ -155,19 +172,50 @@ void run(PerfMon*& perf)
     } //end of sta_id
 }
 
+void close()
+{
+    delete perfmonitor;
+    delete args;
+}
 
 int main(int argc, char** argv, char** envp)
 {
-    /* setup the simulation runtime parameters */
-    setup();
+    auto program_args = argparse::parse<MyArgs>(argc, argv);
+    program_args.print();
 
-    /* run the simulation and get the SNR table */
-    PerfMon* perfmonitor;
+    if (program_args.isDefault())
+    {
+        Defaults program(args);
+    }
+    /* run test from the args */
+    else
+    {
+        /* run once with specific parameters */
+        program_args.interprete();
+        program_args.parse_data(args);
+    }
 
-    run(perfmonitor);
-    delete perfmonitor;
+    for (auto& test : program_args.json_files)
+    {
+        /* setup the simulation runtime parameters */
+        setup(test);
 
-    plot(mobile_station_pos);
+        /* run the simulation and get the SNR table */
+        run();
 
+        //plot(mobile_station_pos);
+    }
+
+    for (auto& entrylist : perfmonitor->get_data())
+    {
+        for (auto& entry : entrylist.second)
+        {
+            cout << "SINR:" << entrylist.first
+                << " " << entry << endl;
+
+        }
+    }
+
+    close();
     return 0;
 }
