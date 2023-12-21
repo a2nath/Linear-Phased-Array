@@ -87,7 +87,7 @@ function [cow, ms, SINR] = gPower(dtheta,cow,iteration_num,locations, mscords)
                 ];
                
               
-				/* this change reveals that the current setup and timeslot does not find a combo which will hit the cuttof */
+				% this change reveals that the current setup and timeslot does not find a combo which will hit the cuttof
                 for row = 1:length(rx_power_possibilities)
                     if (cutoff >= rx_power_possibilities(row,1) && cutoff >= rx_power_possibilities(row,2) && cutoff >= rx_power_possibilities(row,3) )
                         thesum = sum(rx_power_possibilities(row,:));
