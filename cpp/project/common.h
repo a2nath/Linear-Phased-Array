@@ -15,7 +15,7 @@ inline T rand(T min, T max)
 
 inline std::string getcwd()
 {
-    return std::filesystem::current_path().u8string();
+    return std::filesystem::current_path().string();
 }
 
 /* Inverse map with limited size. Starts discarding lower entries with full */
