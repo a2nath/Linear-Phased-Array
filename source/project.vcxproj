@@ -19,18 +19,17 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="inc\argparse\argparse.hpp" />
-    <ClInclude Include="project\common.h" />
-    <ClInclude Include="project\coordinates.h" />
-    <ClInclude Include="project\args.h" />
-    <ClInclude Include="project\matplot.h" />
-    <ClInclude Include="project\network.h" />
-    <ClInclude Include="project\project.h" />
-    <ClInclude Include="project\random.h" />
-    <ClInclude Include="project\station.h" />
+    <ClInclude Include="inc\args.h" />
+    <ClInclude Include="inc\common.h" />
+    <ClInclude Include="inc\coordinates.h" />
+    <ClInclude Include="inc\matplot.h" />
+    <ClInclude Include="inc\network.h" />
+    <ClInclude Include="inc\project.h" />
+    <ClInclude Include="inc\random.h" />
+    <ClInclude Include="inc\station.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="project\project.cpp" />
+    <ClCompile Include="src\project.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
@@ -132,8 +131,7 @@
     <ClCompile>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>
-      </AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>inc/</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>

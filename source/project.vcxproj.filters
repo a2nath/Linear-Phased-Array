@@ -18,36 +18,33 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="project\matplot.h">
+    <ClInclude Include="inc\args.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="project\network.h">
+    <ClInclude Include="inc\common.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="project\project.h">
+    <ClInclude Include="inc\coordinates.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="project\random.h">
+    <ClInclude Include="inc\matplot.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="project\station.h">
+    <ClInclude Include="inc\network.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="project\common.h">
+    <ClInclude Include="inc\project.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="project\coordinates.h">
+    <ClInclude Include="inc\random.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="inc\argparse\argparse.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="project\args.h">
+    <ClInclude Include="inc\station.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="project\project.cpp">
+    <ClCompile Include="src\project.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
