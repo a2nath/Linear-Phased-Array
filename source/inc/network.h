@@ -127,27 +127,27 @@ namespace network_package
     {
         const antennadim& dims;
         std::vector<double> Gtx;
-        unsigned panel_count;
+        const unsigned& panel_count;
     public:
-        const antennadim size() const { return dims; }
+        const antennadim& size() const { return dims; }
         const std::vector<double>& getGain() const { return Gtx; }
-        const int count() const { return panel_count; }
+        const unsigned& count() const { return panel_count; }
         void setGain(double gain) { Gtx.emplace_back(panel_count * gain); }
-        AntennaSystem(const antennadim& size, const unsigned _count) : dims(size), panel_count(_count) {}
+        AntennaSystem(const antennadim& size, const unsigned& _count) : dims(size), panel_count(_count) {}
     };
 
     /* Linear Phase Array Antenna */
     class AAntenna
     {
-        const double ms_Grx_watt;
         const unsigned antenna_id;
-        AntennaSystem antennas;
-        unsigned count;                              // number of panels
+        const double ms_Grx_watt;
         double power;                                // array power
         double alpha;                                // scan angle
-        double spacing;                              // array spacing
-        double theta_c;                              // antenna array direction
+        unsigned count;                              // number of panels
         double lambda;                               // wavelength of the RF signal
+        double theta_c;                              // antenna array direction
+        double spacing;                              // array spacing
+        AntennaSystem antennas;
         std::vector<double> phee_minus_alpha_list;
         std::vector<double> pathloss_list;
         std::vector<double> hmatrix;                 // hmatrix from BS pov
@@ -222,13 +222,13 @@ namespace network_package
         AAntenna(unsigned& id, const Input* parameters, const std::vector<Polar_Coordinates>& polar_sta_data) :
             antenna_id(id),
             ms_Grx_watt(parameters->ms_Grx_W),
-            antennas(parameters->ant.antenna_dim_mtrs, parameters->ant.antcount_per_base[id]),
-            count(parameters->ant.antcount_per_base[id]),
-            theta_c(parameters->ant.antenna_orientation[id]),
             power(dBm2watt(INIT_POWER_DBM)), // arbitrary
             alpha(INIT_SCAN_ANGLE),          // arbitrary
-            spacing(parameters->ant.antenna_spacing[id]),
+            count(parameters->ant.antcount_per_base[id]),
             lambda(parameters->lambda),
+            theta_c(parameters->ant.antenna_orientation[id]),
+            spacing(parameters->ant.antenna_spacing[id]),
+            antennas(parameters->ant.antenna_dim_mtrs, parameters->ant.antcount_per_base[id]),
             hmatrix(polar_sta_data.size(), 0.0)
         {
             double phee_temp = (2 * M_PIl * spacing / lambda);

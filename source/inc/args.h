@@ -7,7 +7,11 @@
 #include <fstream>
 #include "common.h"
 #include "network.h"
+#ifdef _WIN32
 #include "json/json.h"
+#else
+#include <jsoncpp/json/json.h>
+#endif
 #include "../inc/argparse/argparse.hpp"
 
 using namespace network_package;
@@ -230,7 +234,7 @@ struct MyArgs : public argparse::Args, public ProgramConfig {
     std::optional<std::vector<unsigned>>& mobile_stations_loc = kwarg("mobile_stations_loc", "Location of mobile stations, get a list");
     std::optional<std::vector<unsigned>>& bs_antenna_counts   = kwarg("antenna_counts", "Location of mobile stations, get a list");
     std::optional<std::vector<double>>& power_range           = kwarg("power_range", "Range of power that base stations will use in dBm");
-    std::optional<std::vector<double>>& scan_angle_range      = kwarg("scan_angle_range", "Scan angle of the antenna linear array at the base station in degrees").set_default("-90,90");;
+    std::optional<std::vector<double>>& scan_angle_range      = kwarg("scan_angle_range", "Scan angle of the antenna linear array at the base station in degrees").set_default("-90,90");
     std::optional<std::vector<double>>& antenna_spacing       = kwarg("antenna_spacing", "Antenna spacing between panels");
     std::optional<std::vector<double>>& antenna_dims          = kwarg("antenna_dims", "Antenna dimensions in meters");
     std::optional<std::vector<double>>& bs_tx_power_dBm       = kwarg("antenna_txpower", "Base station transmit TX power in dBm");
@@ -495,7 +499,7 @@ class JasonHelper : public ProgramConfig
             out.emplace_back(stod(input.substr(idx, idx2 - idx)));
         }
         return out.size() ? out : std::vector<std::vector<T>>();
-    };
+    }
 
     template<class T> const auto get_pair(Json::Value::const_iterator input)
     {
@@ -512,7 +516,7 @@ class JasonHelper : public ProgramConfig
         }
 
         return output;
-    };
+    }
 
 public:
     JasonHelper(const std::string& file)

@@ -70,7 +70,7 @@ struct SimulationHelper
     void setAlpha()
     {
         auto& source = alphas_lut.size() ? alphas_lut[timeslot] : alphas;
-        for (int c = 0; c < cows.size(); ++c)
+        for (unsigned c = 0; c < cows.size(); ++c)
         {
             cows[c].antennaUpdate(source[c]);
         }
@@ -167,7 +167,7 @@ struct PerfMon
         auto& cows = params.getCows();
         for (unsigned c = 0; c < params.cow_count; ++c)
         {
-            sinrlist[sinr].emplace_back(telemetry_t(cows[c], params.timeslot, bindings[c++], sinr));
+            sinrlist[sinr].emplace_back(telemetry_t(cows[c], params.timeslot, bindings[c], sinr));
         }
     }
 

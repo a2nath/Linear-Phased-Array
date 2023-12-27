@@ -128,7 +128,7 @@ void run_across_timslots()
     vector<unsigned> select_stations;
     perfmonitor = new PerfMon(simparams, select_stations);
 
-    int served = 0;
+    unsigned served = 0;
     unordered_map<sta_t, unordered_map<slot_t, cow_t>> station_binding;
 
     vector<double> power_list;
@@ -136,7 +136,7 @@ void run_across_timslots()
     {
         simparams.timeslot = 0;
         /* setup the cows first such that the simulation is set with alphas and TX powers */
-        for (int slot = 0; slot < simparams.timeslots; ++slot)
+        for (unsigned slot = 0; slot < simparams.timeslots; ++slot)
         {
             /* retrive the coefficients from base stations after antenna reconfig (alpha change) */
 

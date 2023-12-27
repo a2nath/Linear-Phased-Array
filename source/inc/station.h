@@ -121,7 +121,7 @@ public:
 	}
 
 	/* get SINR in linear by passing signal and inteference/noise in dB */
-	const double getSINR() const
+	double getSINR() const
 	{
 		return lin2dB(sinr);
 	}

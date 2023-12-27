@@ -36,7 +36,7 @@ struct revmap_t
     }
     const V& operator[](const U& key)
     {
-        return container[U];
+        return container[key];
     }
     revmap_t(size_t _size) : size(size) {}
 };
