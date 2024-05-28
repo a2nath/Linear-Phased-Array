@@ -10,9 +10,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     # Debug build flags
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -g")  # No optimization, include debug information
-elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+	message(STATUS "Debug Build")
+else() #(CMAKE_BUILD_TYPE STREQUAL "Release")
     # Release build flags
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")  # Highest level of optimization
+	message(STATUS "Release Build")
 endif()
 
 # FetchContent is available from CMake 3.11 onwards
@@ -34,7 +36,7 @@ endif()
 # Fetch and make available argparse
 FetchContent_Declare(
     argparse
-    GIT_REPOSITORY https://github.com/p-ranav/argparse.git
+    GIT_REPOSITORY https://github.com/morrisfranken/argparse.git
 )
 
 FetchContent_MakeAvailable(argparse)
