@@ -1,0 +1,86 @@
+{
+  "FileVersion": 2,
+  "Id": "f0fcce7e-702b-45d6-8568-170910d82f78",
+  "Items": [
+    {
+      "Id": "42c5ca4e-4afa-4676-9c32-d321a39406b9",
+      "Command": "--frequency 1900000000.0"
+    },
+    {
+      "Id": "1d04c57b-83f3-473e-a855-91f9e77ce7ba",
+      "Command": "--bandwidth 20000000.0"
+    },
+    {
+      "Id": "6ada9f59-1942-4990-ad56-f43ad8ca3158",
+      "Command": "--symrate 3840000.0"
+    },
+    {
+      "Id": "93302343-0940-4d8e-9698-dbdfbe8d5fca",
+      "Command": "--blockps 768"
+    },
+    {
+      "Id": "a811c0c6-fcef-4146-8db6-4952fb463fae",
+      "Command": "--height 200"
+    },
+    {
+      "Id": "c25f2d51-6a26-4761-a3c6-0c80b2dde453",
+      "Command": "--ms_grx -2"
+    },
+    {
+      "Id": "5c4cd6d5-1d90-4165-8b66-00b905443bdd",
+      "Command": "--system_noise 5"
+    },
+    {
+      "Id": "1c2699bd-2b61-407a-85d2-ae7a39f888ff",
+      "Command": "--mobile_stations 15"
+    },
+    {
+      "Id": "0a7bf718-52f4-405c-b999-b95635db6067",
+      "Command": "--base_stations 3"
+    },
+    {
+      "Id": "1940594e-94c5-4908-a736-2643925a9c34",
+      "Command": "--base_station_theta_c 75.0,90.0,105.0"
+    },
+    {
+      "Id": "984a448b-c20c-49ac-abfb-35ad2af44ac6",
+      "Command": "--base_station_location \"250,200 500,180 750,200\""
+    },
+    {
+      "Id": "e8709b9e-6e99-4cb4-a206-c48d4a26e6c8",
+      "Command": "--mobile_station_location \"250,500 350,500 450,500 550,500 650,500 750,500 250,600 350,600 450,600 550,600 650,600 750,600 450,325 500,325 550,325\""
+    },
+    {
+      "Id": "379de62d-8e40-4dd4-96e2-231cfbd08cb7",
+      "Command": "--base_station_antenna_counts 5,3,5"
+    },
+    {
+      "Id": "7db6a3a8-d4b9-4fd8-80a2-4f2cac8ecb46",
+      "Command": "--base_station_power_range_dBm -30,30"
+    },
+    {
+      "Id": "5d48cec9-4dd9-4df9-9a30-e5d3f1a513ae",
+      "Command": "--base_station_scan_angle_range_deg -90,90"
+    },
+    {
+      "Id": "a48036f2-fbd1-4000-b38e-2f9bc162f050",
+      "Command": "--antenna_spacing 0.3,0.4,0.3"
+    },
+    {
+      "Id": "981ae002-0e72-4715-9b72-96205008df2f",
+      "Command": "--antenna_dims 0.2,0.4"
+    },
+    {
+      "Id": "3583d3fe-81df-4fbc-b490-fe680fef8d47",
+      "Command": "--antenna_txpower 0.0,0.0,0.0"
+    },
+    {
+      "Id": "21f99835-7342-437f-8176-47da6947dbd6",
+      "Command": "--scan_angle 0.0,0.0,0.0"
+    },
+    {
+      "Id": "d0bc3350-7d6c-4489-be29-bdd006175595",
+      "Command": "--ms_selection 1,2,3"
+    }
+  ]
+}
