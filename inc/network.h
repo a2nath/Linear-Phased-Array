@@ -31,18 +31,25 @@ namespace network_package
     }
 
     inline double getLambda(double frequency)
-    {
-        if (frequency > 0)
-            return C / frequency;
+	{
+		if (frequency > 0)
+		{
+			return C / frequency;
+		}
 
-        throw std::runtime_error("Divide by zero error from passing 0 frequency in getLambda call");
-    }
+		throw std::invalid_argument("Divide by zero error from passing 0 frequency in getLambda call");
+	}
 
-    /* Get system noise figure in [dBm] with thermal noise by passing B/W in [Mhz], and system noise in [dB] */
-    inline double getThermalSystemNoise(const double& bandwidth, const double& system_noise)
-    {
-        return -174 + round(10 * log10(bandwidth)) + system_noise;
-    }
+	/* Get system noise figure in [dBm] with thermal noise by passing B/W in [Mhz], and system noise in [dB] */
+	inline double getThermalSystemNoise(const double& bandwidth, const double& system_noise)
+	{
+		if (bandwidth > 0)
+		{
+			return -174 + round(10 * log10(bandwidth)) + system_noise;
+		}
+
+		throw std::invalid_argument("Bandwidth cannot be zero or when setting system noise factor");
+	}
 
     struct Input
     {
@@ -128,13 +135,13 @@ namespace network_package
         AntennaSystem(const antennadim& size, const unsigned& _count) : dims(size), panel_count(_count) {}
     };
 
-    /* Linear Phase Array Antenna */
+	/* Linear Phase Array Antenna */
     class AAntenna
     {
         double power;                                // array power
         double alpha;                                // scan angle
-        const double ms_Grx_watt;
-        unsigned count;                              // number of panels
+        const double ms_grx_linear;
+        unsigned panel_count;                              // number of panels
         double lambda;                               // wavelength of the RF signal
         double spacing;                              // array spacing
         double theta_c;                              // antenna array direction
@@ -171,7 +178,7 @@ namespace network_package
 
         void setPanelCount(unsigned panels)
         {
-            count = panels;
+            panel_count = panels;
         }
 
         /* set power in watts */
@@ -209,16 +216,16 @@ namespace network_package
                 {
                     double phee = (calculations.phee_minus_alpha_list[idx] + new_alpha) / 2;
 
-					double sin_term = count * sin(phee);
+					double sin_term = panel_count * sin(phee);
 					double gain_factor_antenna_system = calculations.gain_RX_grid[idx]; // xN antennas already
 
                     if (sin_term != 0)
                     {
-                        gain_factor_antenna_system *= pow(sin(count * phee) / sin_term, 2);
+                        gain_factor_antenna_system *= pow(sin(panel_count * phee) / sin_term, 2);
                     }
 
                     /* update the channel matrix */
-                    calculations.hmatrix[idx] = ms_Grx_watt * gain_factor_antenna_system / calculations.pathloss_list[idx];
+                    calculations.hmatrix[idx] = ms_grx_linear * gain_factor_antenna_system / calculations.pathloss_list[idx];
                 }
 
                 /* update the scan angle of the antenna array */
@@ -255,14 +262,14 @@ namespace network_package
                 double m = m_factor * sin(theta_minus_thetaC);
                 double singleant_gain = antenna_dim_factor * pow((1 + cos(theta_minus_thetaC)) / 2, 2);
 
-                if (m != 0)
-                {
-                    singleant_gain *= pow(sin(m) / m, 2);
-                }
+				if (m != 0)
+				{
+					singleant_gain *= pow(cached::sin(m) / m, 2);
+				}
 
                 calculations.phee_minus_alpha_list[idx] = phee_temp * sin(theta_minus_thetaC);
                 calculations.pathloss_list[idx]         = pow(pl_temp_meters * cell_polar_data.hype, 2);
-                calculations.gain_RX_grid[idx]          = singleant_gain * count;
+                calculations.gain_RX_grid[idx]          = singleant_gain * panel_count;
             }
         }
 
@@ -279,20 +286,23 @@ namespace network_package
             simulation.resize(polar_data.size());
             init(polar_data, simulation);
         }
-        AAntenna(
-			unsigned& id,
-			const Input* parameters,
-			const std::vector<Polar_Coordinates>& polar_sta_data)
+
+		AAntenna(
+			const double& init_ms_grx_linear,
+			const unsigned& init_panel_count,
+			const double& init_lambda,
+			const double& init_antenna_spacing,
+			const double& init_antenna_orientation_rads,
+			const antennadim& init_antdims)
 			:
 			power(0),
 			alpha(0),
-            ms_Grx_watt(parameters->ms_Grx_W),
-            count(parameters->ant.antcount_per_base[id]),
-            lambda(parameters->lambda),
-            theta_c(parameters->ant.antenna_orientation[id]),
-            spacing(parameters->ant.antenna_spacing[id]),
-            antenna_dims(parameters->ant.antenna_dim_mtrs)
-        {
-        }
-    };
+			ms_grx_linear(init_ms_grx_linear),
+			panel_count(init_panel_count),
+			lambda(init_lambda),
+			spacing(init_antenna_spacing),
+			theta_c(init_antenna_orientation_rads),
+			antenna_dims(init_antdims)
+		{}
+	};
 };

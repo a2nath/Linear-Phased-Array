@@ -1,4 +1,5 @@
 #pragma once
+#include <numeric>
 #include "common.h"
 #include "network.h"
 #include "random.h"
@@ -8,44 +9,54 @@ using namespace network_package;
 class Cow
 {
 	const unsigned station_id;
+	unsigned power_idx;
+
+	/* antenna parameters for all calculations */
 	AAntenna   antenna;
-	Placements location;
 
 	/* more antenna tracking for gui reset */
 	const struct Init_Antenna
 	{
-		//const Placements& location;
-		//const double& ms_grx_linear;
-		//const unsigned& panel_count;
-		//const double& lambda;
-		//const double& antenna_spacing;
-		//const double& antenna_orientation;
-		//const network_package::antennadim& antenna_dim;
+		const Placements& location;
+		const double& ms_grx_linear;
+		const unsigned& panel_count;
+		const double& lambda;
+		const double& antenna_spacing;
+		const double& antenna_orientation;
+		const network_package::antennadim& antenna_dim;
 
-		Init_Antenna()
-			//const Placements& init_bs_location,
-			//const double& init_ms_grx_linear,
-			//const unsigned& init_panel_count,
-			//const double& init_lambda,
-			//const double& init_antenna_spacing,
-			//const double& init_antenna_orientation,
-			//const network_package::antennadim& init_antenna_dim)
-			//:
-			//location(init_bs_location),
-			//ms_grx_linear(init_ms_grx_linear),
-			//panel_count(init_panel_count),
-			//lambda(init_lambda),
-			//antenna_spacing(init_antenna_spacing),
-			//antenna_orientation(init_antenna_orientation),
-			//antenna_dim(init_antenna_dim)
+		Init_Antenna(
+			const Placements& init_bs_location,
+			const double& init_ms_grx_linear,
+			const unsigned& init_panel_count,
+			const double& init_lambda,
+			const double& init_antenna_spacing,
+			const double& init_antenna_orientation,
+			const network_package::antennadim& init_antenna_dim)
+			:
+			location(init_bs_location),
+			ms_grx_linear(init_ms_grx_linear),
+			panel_count(init_panel_count),
+			lambda(init_lambda),
+			antenna_spacing(init_antenna_spacing),
+			antenna_orientation(init_antenna_orientation),
+			antenna_dim(init_antenna_dim)
 		{}
 
 	} init;
 
+	Placements location;
+	Dimensions<unsigned> gui_grid_size;
+
 	const std::vector<Placements>& ms_station_loc;
-	const std::vector<Polar_Coordinates>& coordinate_data;
-	unsigned power_idx;
-	unsigned ms_stations;
+	const unsigned& ms_stations;
+
+	/* each cell is a mobile station */
+	std::vector<Polar_Coordinates> polar_data;
+
+	/* each cell is a gui grid, hence much larger */
+	std::vector<Polar_Coordinates> gui_polar_data;
+
 public:
 
 	/* set Gtx power in linear */
@@ -119,27 +130,46 @@ public:
 		}
 	}
 
-	//antennadim dim_meters, double theta, double spacing, int antenna_count,
-	Cow(unsigned& id,
-		const Input* parameters,
-		const std::vector<double>& powerlist,
-		const std::vector<Polar_Coordinates>& polar_data
-		) :
-		station_id(id),
-		antenna(id, parameters, polar_data),
-		location(base_station_pos[id]),
-		ms_station_loc(parameters->mobile_station_loc),
-		coordinate_data(polar_data),
-		power_idx(0),
-		ms_stations(polar_data.size()),
-		init()
+	/* when user resets all the changes in the simulation */
+	void reset()
 	{
-		set_polar_data(location, coordinate_data);
+		//antenna.set_power(0);
+		//antenna.set_grx_gain(init.ms_grx_linear);
+		//antenna.set_antpanelcount(init.panel_count);
+		//antenna.set_antlambda(init.lambda);
+		//antenna.set_antspacing(init.antenna_spacing);
+		//antenna.set_beamdir(init.antenna_orientation);
+		//antenna.set_antdim(init.antenna_dim);
+		//set_polar_data(init.location, polar_data);
+		//antenna.numerical_init(polar_data);
+	}
+
+	//antennadim dim_meters, double theta, double spacing, int antenna_count,
+	Cow(
+		unsigned& id,
+		const Placements& bs_location,
+		const std::vector<Placements>& ms_pos_list,
+		const double& ms_grx_linear,
+		const unsigned& panel_count,
+		const double& lambda,
+		const double& antenna_spacing,
+		const double& antenna_orientation,
+		const network_package::antennadim& antenna_dim)
+		:
+		station_id(id),
+		init(bs_location, ms_grx_linear, panel_count, lambda, antenna_spacing, antenna_orientation, antenna_dim),
+		location(init.location),
+		ms_station_loc(ms_pos_list),
+		ms_stations(ms_pos_list.size()),
+		antenna(ms_grx_linear, panel_count, lambda, antenna_spacing, antenna_orientation, antenna_dim),
+		power_idx(0)
+	{
+		set_polar_data(init.location, polar_data);
 		antenna.numerical_init(polar_data);
 	}
 };
 
-
+/* client or handseet */
 class Station
 {
 	unsigned station_id;
