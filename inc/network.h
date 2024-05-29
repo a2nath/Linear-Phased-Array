@@ -4,11 +4,6 @@
 #include <immintrin.h>
 #include "coordinates.h"
 
-#define C       3e8 //speed of light
-#define M_PIl   3.141592653589793238462643383279502884L /* pi */
-
-
-
 namespace network_package
 {
     using antennadim = Dimensions<double>;
@@ -17,9 +12,6 @@ namespace network_package
     std::vector<std::vector<unsigned>>  station_ids_lut;
     std::vector<unsigned>               station_ids;
 
-
-    constexpr double INIT_SCAN_ANGLE = 0;
-    constexpr double INIT_POWER_DBM = 0;
 
     inline double deg2rad(double deg)
     {
@@ -139,7 +131,6 @@ namespace network_package
     /* Linear Phase Array Antenna */
     class AAntenna
     {
-        const unsigned antenna_id;
         const double ms_Grx_watt;
         double power;                                // array power
         double alpha;                                // scan angle
@@ -219,11 +210,14 @@ namespace network_package
             return hmatrix;
         }
 
-        AAntenna(unsigned& id, const Input* parameters, const std::vector<Polar_Coordinates>& polar_sta_data) :
-            antenna_id(id),
+        AAntenna(
+				unsigned& id,
+				const Input* parameters,
+				const std::vector<Polar_Coordinates>& polar_sta_data)
+			:
+			power(0),
+			alpha(0),
             ms_Grx_watt(parameters->ms_Grx_W),
-            power(dBm2watt(INIT_POWER_DBM)), // arbitrary
-            alpha(INIT_SCAN_ANGLE),          // arbitrary
             count(parameters->ant.antcount_per_base[id]),
             lambda(parameters->lambda),
             theta_c(parameters->ant.antenna_orientation[id]),
