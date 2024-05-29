@@ -39,6 +39,10 @@
       "Command": "--base_stations 3"
     },
     {
+      "Id": "89ecd075-59eb-4f4d-9472-ed42afbb198b",
+      "Command": "--slimit 24.0"
+    },
+    {
       "Id": "1940594e-94c5-4908-a736-2643925a9c34",
       "Command": "--base_station_theta_c 75.0,90.0,105.0"
     },
