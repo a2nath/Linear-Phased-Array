@@ -69,9 +69,21 @@ void setup(string config_file = "")
             long int diffy = mstation.y - base_station_pos[bs_id].y;
             polar_data[bs_id][idx++] = cart2pol(diffx, diffy);
         }
-
-        cows.emplace_back(bs_id, args, power_list, polar_data[bs_id]);
     }
+
+	/* setup the system */
+	for (unsigned bs_id = 0; bs_id < args->base_stations; ++bs_id)
+	{
+        cows.emplace_back(bs_id,
+            base_station_pos[bs_id],
+            mobile_station_pos,
+            args->ms_Grx,
+            args->ant.antcount_per_base[bs_id],
+            args->lambda,
+            args->ant.antenna_spacing[bs_id],
+            args->ant.antenna_orientation[bs_id],
+            args->ant.antenna_dim_mtrs);
+	}
 }
 
 void run()
