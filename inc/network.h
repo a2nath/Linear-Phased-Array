@@ -131,24 +131,42 @@ namespace network_package
     /* Linear Phase Array Antenna */
     class AAntenna
     {
-        const double ms_Grx_watt;
         double power;                                // array power
         double alpha;                                // scan angle
+        const double ms_Grx_watt;
         unsigned count;                              // number of panels
         double lambda;                               // wavelength of the RF signal
-        double theta_c;                              // antenna array direction
         double spacing;                              // array spacing
-        AntennaSystem antennas;
-        std::vector<double> phee_minus_alpha_list;
-        std::vector<double> pathloss_list;
-        std::vector<double> hmatrix;                 // hmatrix from BS pov
+        double theta_c;                              // antenna array direction
+        antennadim antenna_dims;
 
+        struct Calculations
+        {
+            /* Gtx gain for the whole grid */
+            std::vector<double> gain_RX_grid;
+            std::vector<double> phee_minus_alpha_list;
+            std::vector<double> pathloss_list;
+            std::vector<double> hmatrix;                 // hmatrix from BS pov
+
+            void resize(const size_t& size)
+            {
+                gain_RX_grid.resize(size);
+                phee_minus_alpha_list.resize(size);
+                pathloss_list.resize(size);
+                hmatrix.resize(size);
+            }
+        };
+
+        /* Calculations needed to create/update the H-matrix coefficient table */
+        Calculations simulation, graphic;
 
     public:
-
-        double coeff(unsigned& id) const
+        /* accepts a RX station ID with respect to THIS station
+           and returns the coefficient
+        */
+        double coeff(const unsigned& rx_sta) const
         {
-            return hmatrix[id];
+            return simulation.hmatrix[rx_sta];
         }
 
         void setPanelCount(unsigned panels)
@@ -157,13 +175,13 @@ namespace network_package
         }
 
         /* set power in watts */
-        void setPower(double power_watts)
+        void set_power(const double& power_watts)
         {
             power = power_watts;
         }
 
         /* get power in watts */
-        const double& getPower() const
+        const double& get_power() const
         {
             return power;
         }
@@ -182,38 +200,89 @@ namespace network_package
 
 
         /* update the antenna array from updated power and scan angle */
-        void update(double new_alpha)
+        inline void update(const double& new_alpha, Calculations& calculations)
         {
-            auto antenna_count = antennas.count();
-            auto& antgain_factor = antennas.getGain();
+            if (new_alpha != alpha)
+			{
+                /* update the antenna gain Gtx */
+                for (unsigned idx = 0; idx < calculations.phee_minus_alpha_list.size(); ++idx)
+                {
+                    double phee = (calculations.phee_minus_alpha_list[idx] + new_alpha) / 2;
 
-            /* update the antenna gain Gtx */
-            for (unsigned idx = 0; idx < phee_minus_alpha_list.size(); ++idx)
+					double sin_term = count * sin(phee);
+					double gain_factor_antenna_system = calculations.gain_RX_grid[idx]; // xN antennas already
+
+                    if (sin_term != 0)
+                    {
+                        gain_factor_antenna_system *= pow(sin(count * phee) / sin_term, 2);
+                    }
+
+                    /* update the channel matrix */
+                    calculations.hmatrix[idx] = ms_Grx_watt * gain_factor_antenna_system / calculations.pathloss_list[idx];
+                }
+
+                /* update the scan angle of the antenna array */
+                alpha = new_alpha;
+			}
+        }
+
+        /* for bare-minimum numerical calculations needed at the mobile_stations only */
+        void graphics_update(const double& new_alpha)
+        {
+            update(new_alpha, graphic);
+        }
+
+        /* for bare-minimum numerical calculations needed at the mobile_stations only */
+        void numerical_update(const double& new_alpha)
+        {
+            update(new_alpha, simulation);
+        }
+
+        /* re-calc the signal outs to handsets only (before calling update!) */
+        inline void init(const std::vector<Polar_Coordinates>& polar_data, Calculations& calculations)
+        {
+            const double& pioverlambda = M_PIl / lambda;
+            const double& phee_temp = 2 * spacing * pioverlambda;
+            const double& pl_temp_meters = 4 * pioverlambda;
+            const double& antenna_dim_factor = 10 * antenna_dims.x * antenna_dims.y / pow(lambda, 2);
+            double m_factor = antenna_dims.x * pioverlambda;
+
+            for (size_t idx = 0; idx < polar_data.size(); ++idx)
             {
-                double phee = (phee_minus_alpha_list[idx] + new_alpha) / 2;
+                auto& cell_polar_data = polar_data[idx];
 
-                double sin_term = antenna_count * sin(phee);
-                double gain_factor_antenna_system = antgain_factor[idx]; // xN antennas already
+                double theta_minus_thetaC = cell_polar_data.theta - theta_c;
+                double m = m_factor * sin(theta_minus_thetaC);
+                double singleant_gain = antenna_dim_factor * pow((1 + cos(theta_minus_thetaC)) / 2, 2);
 
-                if (sin_term != 0)
-                    gain_factor_antenna_system *= pow(sin(antenna_count * phee) / sin_term, 2);
+                if (m != 0)
+                {
+                    singleant_gain *= pow(sin(m) / m, 2);
+                }
 
-                /* update the channel matrix */
-                hmatrix[idx] = ms_Grx_watt * gain_factor_antenna_system / pathloss_list[idx];
+                calculations.phee_minus_alpha_list[idx] = phee_temp * sin(theta_minus_thetaC);
+                calculations.pathloss_list[idx]         = pow(pl_temp_meters * cell_polar_data.hype, 2);
+                calculations.gain_RX_grid[idx]          = singleant_gain * count;
             }
-
-            alpha = new_alpha;
         }
 
-        const std::vector<double>& getMatrix() const
+        /* for GUI simulation in the whole grid */
+        void graphics_init(const std::vector<Polar_Coordinates>& polar_data)
         {
-            return hmatrix;
+            graphic.resize(polar_data.size());
+            init(polar_data, graphic);
         }
 
+        /* for bare-minimum numerical calculations needed at the mobile_stations only */
+        void numerical_init(const std::vector<Polar_Coordinates>& polar_data)
+        {
+            simulation.resize(polar_data.size());
+            init(polar_data, simulation);
+        }
         AAntenna(
-				unsigned& id,
-				const Input* parameters,
-				const std::vector<Polar_Coordinates>& polar_sta_data)
+			unsigned& id,
+			const Input* parameters,
+			const std::vector<Polar_Coordinates>& polar_sta_data)
 			:
 			power(0),
 			alpha(0),
@@ -222,28 +291,8 @@ namespace network_package
             lambda(parameters->lambda),
             theta_c(parameters->ant.antenna_orientation[id]),
             spacing(parameters->ant.antenna_spacing[id]),
-            antennas(parameters->ant.antenna_dim_mtrs, parameters->ant.antcount_per_base[id]),
-            hmatrix(polar_sta_data.size(), 0.0)
+            antenna_dims(parameters->ant.antenna_dim_mtrs)
         {
-            double phee_temp = (2 * M_PIl * spacing / lambda);
-            double pl_temp_meters = 4 * M_PIl / lambda;
-            auto& size = antennas.size();
-
-            for (auto& station_data : polar_sta_data)
-            {
-                double theta_minus_thetaC = station_data.theta - theta_c;
-                double m = (M_PIl * size.x * sin(theta_minus_thetaC)) / lambda;
-                double singleant_gain = (10 * size.x * size.y / pow(lambda, 2)) * pow((1 + cos(theta_minus_thetaC)) / 2, 2);
-
-                if (m != 0)
-                {
-                    singleant_gain *= pow(sin(m) / m, 2);
-                }
-
-                antennas.setGain(singleant_gain);
-                phee_minus_alpha_list.emplace_back(phee_temp * sin(theta_minus_thetaC));
-                pathloss_list.emplace_back(pow(pl_temp_meters * station_data.hype, 2));
-            }
         }
     };
 };
