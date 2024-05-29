@@ -8,28 +8,56 @@ using namespace network_package;
 class Cow
 {
 	const unsigned station_id;
+	AAntenna   antenna;
+	Placements location;
 
-	double min_power_watt;
-	double max_power_watt;
-	double min_scanangle_rad;
-	double max_scanangle_rad;
-	AAntenna antenna;
-	Placements& location;
+	/* more antenna tracking for gui reset */
+	const struct Init_Antenna
+	{
+		//const Placements& location;
+		//const double& ms_grx_linear;
+		//const unsigned& panel_count;
+		//const double& lambda;
+		//const double& antenna_spacing;
+		//const double& antenna_orientation;
+		//const network_package::antennadim& antenna_dim;
 
-	const std::vector<double>& power_list;
+		Init_Antenna()
+			//const Placements& init_bs_location,
+			//const double& init_ms_grx_linear,
+			//const unsigned& init_panel_count,
+			//const double& init_lambda,
+			//const double& init_antenna_spacing,
+			//const double& init_antenna_orientation,
+			//const network_package::antennadim& init_antenna_dim)
+			//:
+			//location(init_bs_location),
+			//ms_grx_linear(init_ms_grx_linear),
+			//panel_count(init_panel_count),
+			//lambda(init_lambda),
+			//antenna_spacing(init_antenna_spacing),
+			//antenna_orientation(init_antenna_orientation),
+			//antenna_dim(init_antenna_dim)
+		{}
+
+	} init;
+
+	const std::vector<Placements>& ms_station_loc;
+	const std::vector<Polar_Coordinates>& coordinate_data;
 	unsigned power_idx;
+	unsigned ms_stations;
 public:
 
 	/* set Gtx power in linear */
 	void setPower(double& input_power)
 	{
-		antenna.setPower(input_power);
+		antenna.set_power(input_power);
 	}
 
 	/* return Gtx power in linear */
 	const double& getxPower() const
 	{
-		return antenna.getPower();
+		return antenna.get_power();
 	}
 
 	const double& getAlpha() const
@@ -48,17 +76,48 @@ public:
 	}
 
 	/* update the parameters of the Base Station and get channel state to each station */
-	void antennaUpdate(double alpha)
+	void antennaUpdate(const double& alpha)
 	{
-		antenna.update(alpha);
+		antenna.numerical_update(alpha);
 	}
 
 	/* set the signal level in Watts (linear): second parameter */
-	inline void getSignalLevel(unsigned node_id, double& signal_level_lin) const
+	inline void getSignalLevel(const unsigned& node_id, double& signal_level_lin) const
 	{
-		signal_level_lin = antenna.coeff(node_id) * antenna.getPower();
+		signal_level_lin = antenna.coeff(node_id) * antenna.get_power();
 	}
 
+
+	/* polar data for gui grid rendering */
+	void set_polar_data(const size_t& width, const size_t& height, const Placements& new_location, std::vector<Polar_Coordinates>& output)
+	{
+		size_t idx = 0;
+		output.resize(width * height);
+
+		for (int row = 0; row < width; ++row)
+		{
+			for (int col = 0; col < height; ++col)
+			{
+				long int diffx = col - new_location.x;
+				long int diffy = row - new_location.y;
+				output[idx++] = cart2pol(diffx, diffy);
+			}
+		}
+	}
+
+	/* polar data for simulation */
+	void set_polar_data(const Placements& new_location, std::vector<Polar_Coordinates>& output)
+	{
+		size_t idx = 0;
+		output.resize(ms_stations);
+
+		for (auto& mstation : ms_station_loc)
+		{
+			long int diffx = mstation.x - new_location.x;
+			long int diffy = mstation.y - new_location.y;
+			output[idx++] = cart2pol(diffx, diffy);
+		}
+	}
 
 	//antennadim dim_meters, double theta, double spacing, int antenna_count,
 	Cow(unsigned& id,
@@ -67,16 +126,16 @@ public:
 		const std::vector<Polar_Coordinates>& polar_data
 		) :
 		station_id(id),
-		min_power_watt(parameters->bs_Ptx_min),
-		max_power_watt(parameters->bs_Ptx_max),
-		min_scanangle_rad(parameters->bs_scan_min),
-		max_scanangle_rad(parameters->bs_scan_max),
 		antenna(id, parameters, polar_data),
 		location(base_station_pos[id]),
-		power_list(powerlist),
-		power_idx(0)
+		ms_station_loc(parameters->mobile_station_loc),
+		coordinate_data(polar_data),
+		power_idx(0),
+		ms_stations(polar_data.size()),
+		init()
 	{
-		/* update channel */
+		set_polar_data(location, coordinate_data);
+		antenna.numerical_init(polar_data);
 	}
 };
 
@@ -84,7 +143,7 @@ public:
 class Station
 {
 	unsigned station_id;
-	const std::vector<Cow>& cow_data; // cow that's associated to this station at any given timeslot
+	std::vector<Cow>& cow_data; // cow that's associated to this station at any given timeslot
 	const double& tnf_watt;           // thermal noise floor
 	double sinr;
 public:
