@@ -7,14 +7,305 @@
 #include <fstream>
 #include "common.h"
 #include "network.h"
-#ifdef _WIN32
-#include "json/json.h"
-#else
-#include <jsoncpp/json/json.h>
-#endif
-#include "../inc/argparse/argparse.hpp"
+#include <json/json.h>
+
+//#include "rapidjson/document.h"
+//#include "rapidjson/writer.h"
+//#include "rapidjson/stringbuffer.h"
+
+#include "argparse.hpp"
 
 using namespace network_package;
+
+namespace default_t
+{
+    const std::string test = "tests/init_test.json";
+
+    const double tx_power                      = 0.0;   // default power for all base-stations dBm
+    const double scan_angle                    = 0.0;   // default angle for all base-stations degrees
+    const double sinr_limit                    = 24.0;  // SINR limit in dB
+    const unsigned timeslots                   = 1  ;   // number of timeslots to consider
+    const std::vector<double> theta_c_radsdir  = { 60.0, 90.0, 120.0 }; // dBm [min max]
+    const std::vector<double> power_range_dBm      = { -30.0, 30.0 };       // dBm [min max]
+    const std::vector<double> scan_angle_range = { -90.0, 90.0 };       // degress [min max]
+    const int antenna_element_count            = 5;
+
+    /* Input in deg, facing up in the XY grid */
+    const double bs_direction_theta_c_deg = 90.0;
+
+    /* Input in hertz, default is half-wavelength */
+    const double antenna_spacing(const double& frequency) {
+        return C * (1 / frequency) * (1 / 2);
+    }
+}
+
+template<class T>
+struct MultiData_Setup
+{
+    std::vector<std::vector<T>> data;
+
+    const size_t& size() const
+    {
+        return data.size();
+    }
+
+    const auto& list() const
+    {
+        return data.front();
+    }
+
+    const auto& lut() const
+    {
+        return data;
+    }
+
+    /* check whether lut or not */
+    bool is_lut() const
+    {
+        return data.size() > 1;
+    }
+
+    /* default constructor */
+    MultiData_Setup() {}
+    MultiData_Setup(const std::vector<T>& input) : data(1, input) {}
+
+};
+
+template<class T>
+std::string to_string(const std::vector<T>& inputlist, std::string delim = ",")
+{
+    if (inputlist.size())
+    {
+        std::string output = std::to_string(inputlist[0]);
+        output.reserve(inputlist.size() * 2);
+        for (int i = 1; i < inputlist.size(); ++i)
+        {
+            output += delim + std::to_string(inputlist[i]);
+        }
+        return output;
+    }
+
+    return "";
+}
+
+/* join strings with multiple delimeters, e.g. multi_join(3, , */
+template<class T>
+inline std::string to_string(size_t size, T data, std::string delim = ",")
+{
+    std::string output_str = std::to_string(data);
+    for (int i = 1; i < size; ++i)
+    {
+        output_str += delim + std::to_string(data);
+    }
+    return output_str;
+}
+
+template<class T>
+inline void tokenize(const std::string& input, char token, std::vector<T>& output)
+{
+    int start_idx = 0;
+    int index = 0;
+    while ((index = input.find(token, start_idx)) != std::string::npos)
+    {
+        std::string string_data = input.substr(start_idx, index - start_idx);
+        std::istringstream ss(string_data);
+
+        output.resize(output.size() + 1);
+        ss >> output.back();
+
+        start_idx = index + 1;
+    }
+
+    std::string string_data = input.substr(start_idx);
+    std::istringstream ss(string_data);
+
+    output.resize(output.size() + 1);
+    ss >> output.back();
+}
+
+template<class T>
+inline void tokenize(const std::string& input, const std::vector<char>& tokens, std::vector<std::vector<T>>& output)
+{
+    int index = 0;
+    int start_idx = 0;
+
+    while ((index = input.find(tokens[0], start_idx)) != std::string::npos)
+    {
+        std::string substr = input.substr(start_idx, index - start_idx);
+        output.resize(output.size() + 1);
+        tokenize(substr, tokens[1], output.back());
+
+        start_idx = index + 1;
+    }
+
+    std::string substr = input.substr(start_idx);
+    output.resize(output.size() + 1);
+    tokenize(substr, tokens[1], output.back());
+}
+
+struct Power_Values : MultiData_Setup<double>
+{
+    bool is_valid_and_convert(const std::vector<double>& reference_bounds)
+    {
+        for (auto& row : data)
+        {
+            for (auto& num : row)
+            {
+                if (!(reference_bounds[0] <= num && num <= reference_bounds[1]))
+                {
+                    return false;
+                }
+            }
+
+            row = cached::dBm2watt(row);
+        }
+        return true;
+    }
+
+    Power_Values() = default;
+    Power_Values(const std::string& double_datalist)
+    {
+        tokenize(double_datalist, { ' ', ',' }, data);
+    }
+};
+
+struct Scan_Values : MultiData_Setup<double>
+{
+    bool is_valid_and_convert(const std::vector<double>& reference_bounds)
+    {
+        for (auto& row : data)
+        {
+            for (auto& num : row)
+            {
+                if (!(reference_bounds[0] <= num && num <= reference_bounds[1]))
+                {
+                    return false;
+                }
+            }
+            row = cached::deg2rad(row);
+        }
+        return true;
+    }
+
+    Scan_Values() = default;
+    Scan_Values(const std::string& double_datalist)
+    {
+        tokenize(double_datalist, { ' ', ',' }, data);
+    }
+};
+
+struct Binding_Values : MultiData_Setup<std::string>
+{
+    std::vector<std::vector<unsigned>> binding_data;
+
+    bool is_valid_and_convert(const std::pair<unsigned, unsigned>& reference_bounds)
+    {
+        for (auto& row : data)
+        {
+            cached::Cache<unsigned, unsigned> cache;
+            binding_data.emplace_back();
+
+            for (auto& num : row)
+            {
+                auto index = num.find(':');
+
+                if (index != std::string::npos)
+                {
+                    auto& total_bs_stations = reference_bounds.first;
+                    auto& total_ms_stations = reference_bounds.second;
+                    unsigned base_station, ms_station;
+
+                    std::string base_station_str = num.substr(0, index);
+                    std::string ms_station_str = num.substr(index + 1);
+
+                    base_station = stoul(base_station_str);
+                    ms_station = stoul(ms_station_str);
+
+                    if (0 <= base_station && base_station < total_bs_stations
+                        && 0 <= ms_station && ms_station < total_ms_stations)
+                    {
+                        if (cache.find(base_station) == cache.end())
+                        {
+                            cache.emplace(base_station, ms_station);
+                            binding_data.back().emplace_back(ms_station);
+                        }
+                        else
+                        {
+                            throw std::invalid_argument("Station binding " + str(base_station) + ":" + str(ms_station)
+                                + " is invalid since base station is used to talk to another handset within the same timeslot");
+                        }
+                    }
+
+                    return false;
+                }
+                else
+                {
+                    throw std::invalid_argument("Binding argument does not have a station binding syntax, e.g. bs:ms,bs:ms bs:ms,bs:ms");
+                }
+            }
+        }
+        return true;
+    }
+
+    Binding_Values() = default;
+    Binding_Values(const std::string& binding_str)
+    {
+        tokenize(binding_str, { ' ', ',' }, data);
+    }
+};
+
+template<class T>
+std::string str(std::vector<T> list)
+{
+    std::string output = list.front();
+    for (int i = 1; i < list.size() - 1; ++i)
+    {
+        output += ',' + std::to_string(list[i]);
+    }
+    return output;
+}
+
+struct Location_Setup
+{
+    std::vector<Placements> data;
+    const size_t& size() const
+    {
+        return data.size();
+    }
+
+    Location_Setup() = default;
+    Location_Setup(const std::string& location_data)
+    {
+        size_t start_idx = 0;
+        size_t index = 0;
+
+        std::istringstream ss(location_data);
+        std::string temp;
+
+        /* argument <location_data> will be "x1,y1 x2,y2 x3,y3" */
+        while (std::getline(ss, temp, ' '))
+        {
+            auto idx = temp.find(',');
+
+            try
+            {
+                unsigned x = atol(temp.substr(0, idx).c_str());
+                unsigned y = atol(temp.substr(idx + 1).c_str());
+
+                if (!(x >= 0 && y >= 0))
+                    throw std::invalid_argument("argument is negative: " + location_data);
+
+                data.emplace_back(x, y);
+            }
+            catch (std::invalid_argument ia)
+            {
+                std::cout << "Invalid argument or conversion error for location, more specifically " << ia.what() << std::endl;
+                exit(-1);
+            }
+        }
+    }
+};
+
 
 class ProgramConfig
 {
@@ -24,40 +315,6 @@ protected:
     template<typename T = double> const auto& param(const std::string& key) const
     {
         return std::any_cast<const T&>(data.at(key));
-    }
-
-    /* antenna power info info */
-    int get_power_lut(const std::vector<std::vector<double>>& input, std::vector<std::vector<double>>& powertable)
-    {
-        powertable.resize(input.size(), std::vector<double>(input[0].size()));
-
-        for (unsigned i = 0; i < input.size(); ++i)
-        {
-            for (unsigned j = 0; j < input[i].size(); ++j)
-            {
-                powertable[i][j] = dBm2watt(input[i][j]);
-            }
-        }
-
-        return 0;
-    }
-
-    /* antenna array direction info */
-    int get_scan_angle_lut(const std::vector<std::vector<double>>& input, std::vector<std::vector<double>>& alphatable)
-    {
-
-
-        alphatable.resize(input.size(), std::vector<double>(input[0].size()));
-
-        for (unsigned i = 0; i < input.size(); ++i)
-        {
-            for (unsigned j = 0; j < input[i].size(); ++j)
-            {
-                alphatable[i][j] = deg2rad(input[i][j]);
-            }
-        }
-
-        return 0;
     }
 
     /* antenna array direction info */
@@ -82,7 +339,7 @@ protected:
     {
         for (unsigned i = 0; i < input.size(); ++i)
         {
-            output_power.emplace_back(dBm2watt(input[i]));
+            output_power.emplace_back(cached::dBm2watt(input[i]));
         }
         return 0;
     }
@@ -92,7 +349,7 @@ protected:
     {
         for (auto& data : input)
         {
-            output_scan_angle.emplace_back(deg2rad(data));
+            output_scan_angle.emplace_back(data);
         }
 
         return 0;
@@ -127,7 +384,7 @@ protected:
     {
         for (auto& data : input)
         {
-            antenna_dir.emplace_back(deg2rad(data));
+            antenna_dir.emplace_back(data);
         }
 
         return 0;
@@ -149,60 +406,6 @@ protected:
         return 0;
     }
     std::unordered_map<std::string, std::any> data;
-public:
-    virtual void parse_data(Input*& args)
-    {
-        auto& power_range = param<std::vector<double>>("base_station_power_range_dBm");
-        auto& scana_range = param<std::vector<double>>("base_station_scan_angle_range_deg");
-
-        args = new Input(
-            param("frequency"),
-            param("bandwidth"),
-            param("SymbRate"),
-            param("BlocksPerSymb"),
-            param("height"),
-            power_range[0],
-            power_range[1],
-            param("ms_Grx"),
-            scana_range[0],
-            scana_range[1],
-            param("system_noise"),
-            param<unsigned>("mobile_stations"),
-            param<unsigned>("base_stations")
-        );
-
-        get_base_station_cords(param<std::vector<Placements>>("base_station_location"), base_station_pos);
-        get_mobile_station_cords(param<std::vector<Placements>>("mobile_station_location"), mobile_station_pos);
-
-        //if (data.find("mobile_station_location") != data.end())
-        //    get_power_list(param<std::vector<double>>("base_station_power_dBm"), args->ant.array_power_wtts);
-
-        if (data.find("base_station_power_dBm_lut") != data.end())
-            get_power_lut(param<std::vector<std::vector<double>>>("base_station_power_dBm_lut"), args->ant.array_power_wtts_lut);
-
-        //if (data.find("base_station_scan_alpha_deg") != data.end())
-        //    get_scan_angle_list(param<std::vector<double>>("base_station_scan_alpha_deg"), args->ant.array_scan_angle);
-
-        if (data.find("base_station_scan_alpha_deg_lut") != data.end())
-            get_scan_angle_lut(param<std::vector<std::vector<double>>>("base_station_scan_alpha_deg_lut"), args->ant.array_scan_angle_lut);
-
-        //if (data.find("base_to_mobile_station_id_selection") != data.end())
-        //    get_station_list(param<std::vector<unsigned>>("base_to_mobile_station_id_selection"), station_ids);
-
-        if (data.find("base_to_mobile_station_id_selection_lut") != data.end())
-            get_station_lut(param<std::vector<std::vector<unsigned>>>("base_to_mobile_station_id_selection_lut"), station_ids_lut);
-
-        //get_power_list(param<std::vector<double>>("base_station_power_dBm"), args->ant.array_power_wtts);
-        get_power_lut(param<std::vector<std::vector<double>>>("base_station_power_dBm_lut"), args->ant.array_power_wtts_lut);
-        //get_scan_angle_list(param<std::vector<double>>("base_station_scan_alpha_deg"), args->ant.array_scan_angle);
-        get_scan_angle_lut(param<std::vector<std::vector<double>>>("base_station_scan_alpha_deg_lut"), args->ant.array_scan_angle_lut);
-        //get_station_list(param<std::vector<unsigned>>("base_to_mobile_station_id_selection"), station_ids);
-        get_station_lut(param<std::vector<std::vector<unsigned>>>("base_to_mobile_station_id_selection_lut"), station_ids_lut);
-        get_allocation_per_bs(param<std::vector<unsigned>>("base_station_antenna_counts"), args->ant.antcount_per_base);
-        get_base_station_orientation(param<std::vector<double>>("base_station_theta_c"), args->ant.antenna_orientation);
-        get_base_station_antspace(param<std::vector<double>>("antenna_spacing"), args->ant.antenna_spacing);
-        get_base_station_anntena_dims(param<std::vector<double>>("antenna_dims"), args->ant.antenna_dim_mtrs);
-    }
 };
 
 class Default;
@@ -214,251 +417,101 @@ std::filesystem::path operator+(const std::filesystem::path dir, const std::file
 /* argparse for C++17 */
 struct MyArgs : public argparse::Args, public ProgramConfig {
 
-    std::vector<std::string> json_files;
+    std::optional<std::string>& output_dir = kwarg("o,output_dir", "Output directory to put results in").set_default(getcwd());
 
-    //std::optional<bool>& defaults                             = kwarg("d,default", "Use defaults from the program without any input file");
-    std::optional<std::string>& input_dir                     = kwarg("i,input_dir", "Input directory of the test files");
-    std::optional<std::string>& output_dir                    = kwarg("o,output_dir", "Output directory to put results in");
-    std::optional<std::string>& json_file                     = kwarg("f,test,test_file", "Input parameter file to run in .json format");
-    std::optional<double>& frequency                          = kwarg("frequency", "Frequency of the signal system wide");
-    std::optional<double>& bandwidth                          = kwarg("bandwidth", "Bandwidth of the singal");
-    std::optional<double>& symrate                            = kwarg("symrate", "Symbol rate of the data stream");
-    std::optional<double>& blockspersym                       = kwarg("blockps", "Blocks of data per symbol");
-    std::optional<double>& antenna_height                     = kwarg("height", "Height of the antenna");
-    std::optional<double>& gain_gtrx                          = kwarg("ms_grx", "Antenna gain of the antenna at the mobile or client station in dB");
-    std::optional<double>& system_noise                       = kwarg("system_noise", "System noise in the transmitter and receiver");
-    std::optional<unsigned>& mobile_stations_count            = kwarg("mobile_stations", "Number of mobile stations in the simulation");
-    std::optional<unsigned>& base_stations_count              = kwarg("base_stations", "Number of base stations in the simulation");
-    std::optional<std::vector<double>>& bs_theta_c            = kwarg("theta_c", "Directions antennas are placed at");
-    std::optional<std::vector<unsigned>>& base_stations_loc   = kwarg("base_stations_loc", "Location of base stattions, get a list");
-    std::optional<std::vector<unsigned>>& mobile_stations_loc = kwarg("mobile_stations_loc", "Location of mobile stations, get a list");
-    std::optional<std::vector<unsigned>>& bs_antenna_counts   = kwarg("antenna_counts", "Location of mobile stations, get a list");
-    std::optional<std::vector<double>>& power_range           = kwarg("power_range", "Range of power that base stations will use in dBm");
-    std::optional<std::vector<double>>& scan_angle_range      = kwarg("scan_angle_range", "Scan angle of the antenna linear array at the base station in degrees").set_default("-90,90");
-    std::optional<std::vector<double>>& antenna_spacing       = kwarg("antenna_spacing", "Antenna spacing between panels");
-    std::optional<std::vector<double>>& antenna_dims          = kwarg("antenna_dims", "Antenna dimensions in meters");
-    std::optional<std::vector<double>>& bs_tx_power_dBm       = kwarg("antenna_txpower", "Base station transmit TX power in dBm");
-    std::optional<std::vector<std::vector<double>>>& bs_tx_power_dBm_lut    = kwarg("antenna_txpower_lut", "Base station transmit TX power in dBm lookup table");
-    std::optional<std::vector<double>>& bs_scan_alpha_deg                   = kwarg("scan_angle", "Base station scan angle");
-    std::optional<std::vector<std::vector<double>>>& bs_scan_alpha_deg_lut  = kwarg("scan_angle_lut", "Base station scan angle lookup table");
-    std::optional<std::vector<unsigned>>& ms_selection                      = kwarg("ms_selection", "Mobile station id selection");
-    std::optional<std::vector<std::vector<unsigned>>>& ms_selection_lut     = kwarg("ms_selection_lut", "Mobile station id selection lookup table");
+    double& frequency                      = kwarg("frequency", "Frequency of the signal system wide");
+    double& bandwidth                      = kwarg("bandwidth", "Bandwidth of the singal");
+    double& symrate                        = kwarg("symbolrate", "Symbol rate of the data stream");
+    double& blockspersym                   = kwarg("blockpersymbol", "Blocks of data per symbol");
+    double& antenna_height                 = kwarg("height", "Height of the antenna");
+    double& gain_gtrx                      = kwarg("ms_grx", "Antenna gain of the antenna at the mobile or client station in dB");
+    double& system_noise                   = kwarg("system_noise", "System noise in the transmitter and receiver");
+    unsigned& base_station_count           = kwarg("base_stations", "Number of base stations in the simulation");
+    unsigned& mobile_station_count         = kwarg("mobile_stations", "Number of mobile stations in the simulation");
+    unsigned& timeslots                    = kwarg("timeslots", "Number of timeslots to carry out the simulation on").set_default(default_t::timeslots);
+    double& sinr_limit_dB                  = kwarg("slimit", "SINR limit to consider the configuration as valid to get a good 'slimit' dB signal at the handset").set_default(default_t::sinr_limit);
+    std::vector<double>& bs_theta_c        = kwarg("base_station_theta_c", "Direction antennas are facing").set_default(default_t::theta_c_radsdir);
+    Location_Setup& base_stations_loc      = kwarg("base_station_location", "Location of base stattions is a list");
+    Location_Setup& mobile_stations_loc    = kwarg("mobile_station_location", "Location of mobile stations is a list");
+    std::vector<unsigned>& bs_antenna_count = kwarg("base_station_antenna_counts", "Number of panels in the antenna array");
+    std::vector<double>& power_range_dBm   = kwarg("base_station_power_range_dBm", "Range of power that base stations will use in dBm").set_default(default_t::power_range_dBm);
+    std::vector<double>& scan_angle_range  = kwarg("base_station_scan_angle_range_deg", "Scan angle of the antenna linear array at the base station in degrees").set_default(default_t::scan_angle_range);
+    std::vector<double>& antenna_spacing   = kwarg("antenna_spacing", "Antenna spacing between panels").set_default(std::vector<double>());
+    std::vector<double>& antenna_dims      = kwarg("antenna_dims", "Antenna dimensions in meters");
 
+    std::optional<Power_Values>& bs_tx_power_dBm   = kwarg("antenna_txpower", "Base station transmit TX power in dBm (list or a lut)");
+    std::optional<Scan_Values>& bs_scan_alpha_deg = kwarg("scan_angle", "Base station scan angle in degrees (list or a lut)");
 
-    /* get a list of config files in json format */
-    int get_tests(const std::string& directory)
+    Binding_Values& ms_id_selections       = kwarg("ms_selection", "Base station_ID - handset_ID binding. \
+                                                    Syntax is for 1 timeslot as: 2:3,3:4 or for 2+ timeslots as: 2:3,3:4 4:6,5:7");
+    bool& showgui                          = flag("g", "Show gui of the simulation").set_default(false);
+    bool& debug                            = flag("q,quiet", "Supress output").set_default(true);
+
+    void init()
     {
-        std::string path(directory);
-        std::string ext(".json");
-        for (auto& p : std::filesystem::recursive_directory_iterator(path))
+        /* make the directory if it does not exist */
+        common::mkdir(output_dir.value());
+
+        assert(antenna_height > 0);
+        assert(base_station_count > 0);
+        assert(mobile_station_count >= base_station_count);
+
+        /* validate theta_C and ensure that it doesn't change between timelots (1, #bs) size */
+        assert(bs_theta_c.size() == base_station_count);
+
+        /* validate the location and antenna panel counts for each station */
+        assert(base_stations_loc.data.size() == base_station_count);
+        assert(mobile_stations_loc.data.size() == mobile_station_count);
+        assert(bs_antenna_count.size() == base_station_count);
+
+        /* assign default values */
+        assert(power_range_dBm.size() == 2);
+        assert(scan_angle_range.size() == 2);
+
+        if (antenna_spacing.size() != base_station_count)
+            antenna_spacing = std::vector<double>(base_station_count, default_t::antenna_spacing(frequency));
+
+        assert(antenna_dims.size() == 2);
+
+        /* assign default values and ensure values are within range */
+        if (bs_tx_power_dBm.has_value())
         {
-            if (p.path().extension().compare(ext) == 0) // if that extension
-                json_files.emplace_back(p.path().string());
-        }
-        return json_files.size();
-    }
-
-    bool isFile(std::string& path)
-    {
-        bool answer = false;
-
-        const std::string& dir = input_dir != std::nullopt && isDir(input_dir.value()) ? input_dir.value() : getcwd();
-        std::filesystem::path filename(path);
-
-        if (filename.parent_path().string().size() == 0) // just a filename so append input dir
-        {
-            answer = std::filesystem::is_regular_file(dir + filename.filename());
-            path = dir + filename.filename().string();   // filename has input dir as well
+            assert(bs_tx_power_dBm.value().data.size() == timeslots);
+            assert(bs_tx_power_dBm.value().data[0].size() == base_station_count);
+            assert(bs_tx_power_dBm.value().is_valid_and_convert(power_range_dBm) == true); // gets converted into watts after this
         }
         else
         {
-            answer = std::filesystem::is_regular_file(path);
+            bs_tx_power_dBm.value().data = std::vector<std::vector<double>>(timeslots,
+                                                std::vector<double>(base_station_count, dBm2watt(default_t::tx_power)));
         }
 
-        json_files.emplace_back(path);
-
-        return answer;
-    }
-
-    bool isDir(std::filesystem::path path)
-    {
-
-        bool answer = std::filesystem::is_directory(path);
-
-        if (!answer)
-            std::cout << "WARNING: " << "input directory is not valid" << std::endl;
-
-        return answer;
-    }
-
-    /* check if default values to be used from the hardcoded file */
-    bool isDefault()
-    {
-        bool answer = !(
-            /* check if the path is correct and whether there are valid tests to add, if file is not separately specified */
-               (input_dir != std::nullopt && json_file == std::nullopt && isDir(input_dir.value()) && get_tests(input_dir.value()) > 0)
-
-            /* check if the ouput dir is valid */
-            || (output_dir != std::nullopt && isDir(output_dir.value()))
-
-            /* check if the file is valid and whether it can be added to the list with or without the input dir */
-            || (json_file != std::nullopt && isFile(json_file.value()))
-
-            /* check the rest of the parameters if they are defined */
-            || frequency != std::nullopt
-            || bandwidth != std::nullopt
-            || symrate != std::nullopt
-            || blockspersym != std::nullopt
-            || antenna_height != std::nullopt
-            || gain_gtrx != std::nullopt
-            || system_noise != std::nullopt
-            || mobile_stations_count != std::nullopt
-            || base_stations_count != std::nullopt
-            || bs_theta_c != std::nullopt
-            || base_stations_loc != std::nullopt
-            || mobile_stations_loc != std::nullopt
-            || bs_antenna_counts != std::nullopt
-            || power_range != std::nullopt
-            || scan_angle_range != std::nullopt
-            || antenna_spacing != std::nullopt
-            || antenna_dims != std::nullopt
-            || bs_tx_power_dBm != std::nullopt
-            || bs_tx_power_dBm_lut != std::nullopt
-            || bs_scan_alpha_deg != std::nullopt
-            || bs_scan_alpha_deg_lut != std::nullopt
-            || ms_selection != std::nullopt
-            || ms_selection_lut != std::nullopt
-            );
-
-        /* add at least one so that test can start */
-        if (json_files.empty())
-            json_files.emplace_back("");
-
-        return answer;
-    }
-
-    void interprete()
-    {
-        data.emplace("frequency", frequency.value());
-        data.emplace("bandwidth", bandwidth.value());
-        data.emplace("SymbRate", symrate.value());
-        data.emplace("BlocksPerSymb", blockspersym.value());
-        data.emplace("height", antenna_height.value());
-        data.emplace("ms_Grx", gain_gtrx.value());
-        data.emplace("system_noise", system_noise.value());
-        data.emplace("mobile_stations", mobile_stations_count.value());
-        data.emplace("base_stations", base_stations_count.value());
-
-        if (bs_antenna_counts.value().size() != base_stations_count.value())
-            throw std::runtime_error("Antenna allocation info is incorrect");
-
-        data.emplace("base_station_antenna_counts", bs_antenna_counts.value());
-
-        if (power_range.value().size() != 2 || scan_angle_range.value().size() != 2)
-            throw std::runtime_error("Power range or scan angle range is not correct");
-
-        data.emplace("base_station_power_range_dBm", power_range.value());
-        data.emplace("base_station_scan_angle_range_deg", scan_angle_range.value());
-
-
-        if (bs_theta_c.value().size() != base_stations_count.value())
-            throw std::runtime_error("Theta_C info is incorrect");
-
-        data.emplace("base_station_theta_c", bs_theta_c.value());
-
-        if (antenna_spacing.value().size() != base_stations_count.value())
-            throw std::runtime_error("Antenna spacing is not correct");
-
-        data.emplace("antenna_spacing", antenna_spacing.value());
-
-        if (antenna_dims.value().size() != 2)
-            throw std::runtime_error("Antenna dimension is not correct");
-
-        data.emplace("antenna_dims", antenna_dims.value());
-
-        if (base_stations_loc.value().size() % 2 > 0 || mobile_stations_loc.value().size() % 2 > 0)
-            throw std::runtime_error("Station location data is not correct");
-
-        std::vector<Placements> bs_locs, ms_locs;
-        for (unsigned i = 0; i < base_stations_loc.value().size(); i += 2)
+        /* assign default values and ensure values are within range */
+        if (bs_scan_alpha_deg.has_value())
         {
-            bs_locs.emplace_back(base_stations_loc.value()[i], base_stations_loc.value()[i + 1]);
+            assert(bs_scan_alpha_deg.value().data.size() == timeslots);
+            assert(bs_scan_alpha_deg.value().data[0].size() == base_station_count);
+            assert(bs_scan_alpha_deg.value().is_valid_and_convert(scan_angle_range) == true); // gets converted into rads after this
         }
-        data.emplace("base_station_location", bs_locs);
-
-        for (unsigned i = 0; i < mobile_stations_loc.value().size(); i += 2)
+        else
         {
-            ms_locs.emplace_back(mobile_stations_loc.value()[i], mobile_stations_loc.value()[i + 1]);
+            bs_scan_alpha_deg.value().data = std::vector<std::vector<double>>(timeslots,
+                                                std::vector<double>(base_station_count, deg2rad(default_t::scan_angle)));
         }
-        data.emplace("mobile_station_location", ms_locs);
 
-        if (bs_tx_power_dBm != std::nullopt)
-            data.emplace("base_station_power_dBm", bs_tx_power_dBm.value());
-
-        if (bs_tx_power_dBm_lut != std::nullopt)
-            data.emplace("base_station_power_dBm_lut", bs_tx_power_dBm_lut.value());
-
-        if (bs_scan_alpha_deg != std::nullopt)
-            data.emplace("base_station_scan_alpha_deg", bs_scan_alpha_deg.value());
-
-        if (bs_scan_alpha_deg_lut != std::nullopt)
-            data.emplace("base_station_scan_alpha_deg_lut", bs_scan_alpha_deg_lut.value());
-
-        if (ms_selection != std::nullopt)
-            data.emplace("base_to_mobile_station_id_selection", ms_selection.value());
-
-        if (ms_selection_lut != std::nullopt)
-            data.emplace("base_to_mobile_station_id_selection_lut", ms_selection_lut.value());
-    }
-
-    void parse_data(Input*& args)
-    {
-        auto& power_range = param<std::vector<double>>("base_station_power_range_dBm");
-        auto& scana_range = param<std::vector<double>>("base_station_scan_angle_range_deg");
-
-        args = new Input(
-            param("frequency"),
-            param("bandwidth"),
-            param("SymbRate"),
-            param("BlocksPerSymb"),
-            param("height"),
-            power_range[0],
-            power_range[1],
-            param("ms_Grx"),
-            scana_range[0],
-            scana_range[1],
-            param("system_noise"),
-            param<unsigned>("mobile_stations"),
-            param<unsigned>("base_stations")
-        );
-
-        get_base_station_cords(param<std::vector<Placements>>("base_station_location"), base_station_pos);
-        get_mobile_station_cords(param<std::vector<Placements>>("mobile_station_location"), mobile_station_pos);
-
-        if (data.find("base_station_power_dBm") != data.end())
-            get_power_list(param<std::vector<double>>("base_station_power_dBm"), args->ant.array_power_wtts);
-
-        if (data.find("base_station_power_dBm_lut") != data.end())
-            get_power_lut(param<std::vector<std::vector<double>>>("base_station_power_dBm_lut"), args->ant.array_power_wtts_lut);
-
-        if (data.find("base_station_scan_alpha_deg") != data.end())
-            get_scan_angle_list(param<std::vector<double>>("base_station_scan_alpha_deg"), args->ant.array_scan_angle);
-
-        if (data.find("base_station_scan_alpha_deg_lut") != data.end())
-            get_scan_angle_lut(param<std::vector<std::vector<double>>>("base_station_scan_alpha_deg_lut"), args->ant.array_scan_angle_lut);
-
-        if (data.find("base_to_mobile_station_id_selection") != data.end())
-            get_station_list(param<std::vector<unsigned>>("base_to_mobile_station_id_selection"), station_ids);
-
-        if (data.find("base_to_mobile_station_id_selection_lut") != data.end())
-            get_station_lut(param<std::vector<std::vector<unsigned>>>("base_to_mobile_station_id_selection_lut"), station_ids_lut);
-
-        get_allocation_per_bs(param<std::vector<unsigned>>("base_station_antenna_counts"), args->ant.antcount_per_base);
-        get_base_station_orientation(param<std::vector<double>>("base_station_theta_c"), args->ant.antenna_orientation);
-        get_base_station_antspace(param<std::vector<double>>("antenna_spacing"), args->ant.antenna_spacing);
-        get_base_station_anntena_dims(param<std::vector<double>>("antenna_dims"), args->ant.antenna_dim_mtrs);
+        //assert(ms_id_selections.data.size() * ms_id_selections.data[0].size() == mobile_station_count);
+        assert(ms_id_selections.data.size() == timeslots);
+        assert(ms_id_selections.data[0].size() == base_station_count);
+        assert(ms_id_selections.is_valid_and_convert(std::pair<unsigned, unsigned>{base_station_count, mobile_station_count}) == true); // gets converted into rads after this
     }
 };
+
+
+template <typename T> std::string stringify(T x) {
+    std::stringstream ss;
+    ss << x;
+    return ss.str();
+}
 
 class JasonHelper : public ProgramConfig
 {
@@ -518,12 +571,52 @@ class JasonHelper : public ProgramConfig
         return output;
     }
 
+    // RapidJSON
+    //struct MyHandler {
+    //    const char* type;
+    //    std::string data;
+    //
+    //    MyHandler() : type(), data() {}
+    //
+    //    bool Null() { type = "Null"; data.clear(); return true; }
+    //    bool Bool(bool b) { type = "Bool:"; data = b ? "true" : "false"; return true; }
+    //    bool Int(int i) { type = "Int:"; data = stringify(i); return true; }
+    //    bool Uint(unsigned u) { type = "Uint:"; data = stringify(u); return true; }
+    //    bool Int64(int64_t i) { type = "Int64:"; data = stringify(i); return true; }
+    //    bool Uint64(uint64_t u) { type = "Uint64:"; data = stringify(u); return true; }
+    //    bool Double(double d) { type = "Double:"; data = stringify(d); return true; }
+    //    bool RawNumber(const char* str, SizeType length, bool) { type = "Number:"; data = std::string(str, length); return true; }
+    //    bool String(const char* str, SizeType length, bool) { type = "String:"; data = std::string(str, length); return true; }
+    //    bool StartObject() { type = "StartObject"; data.clear(); return true; }
+    //    bool Key(const char* str, SizeType length, bool) { type = "Key:"; data = std::string(str, length); return true; }
+    //    bool EndObject(SizeType memberCount) { type = "EndObject:"; data = stringify(memberCount); return true; }
+    //    bool StartArray() { type = "StartArray"; data.clear(); return true; }
+    //    bool EndArray(SizeType elementCount) { type = "EndArray:"; data = stringify(elementCount); return true; }
+    //private:
+    //    MyHandler(const MyHandler& noCopyConstruction);
+    //    MyHandler& operator=(const MyHandler& noAssignment);
+    //};
 public:
     JasonHelper(const std::string& file)
     {
         Json::Value root;
         std::ifstream ifs;
-        ifs.open(file);
+
+        // Set exceptions to be thrown on failure
+        ifs.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+
+        std::string filecontents = "";
+        try
+        {
+            ifs.open(file);
+            // Read from the file
+        }
+        catch (const std::ifstream::failure& e)
+        {
+            std::cerr << "Exception opening/reading file: " << e.what() << '\n';
+            std::cerr << "Error code: " << strerror(errno) << '\n';
+            exit(errno);
+        }
 
         /* parse the json file and fill in args for the program */
         if (ifs.good())
@@ -531,11 +624,33 @@ public:
             Json::CharReaderBuilder builder;
             builder["collectComments"] = false;
             JSONCPP_STRING errs;
-            if (!parseFromStream(builder, ifs, &root, &errs)) {
+            if (!parseFromStream(builder, ifs, &root, &errs))
+            {
                 std::cout << errs << std::endl;
                 throw std::runtime_error("Parser problem: " + str(EXIT_FAILURE));
             }
+            //Document d;
+            //d.Parse(json);
+            //
+            //MyHandler handler;
+            //StringStream ss(filecontents.c_str());
+            //
+            //Reader reader;
+            //reader.IterativeParseInit();
+            //while (!reader.IterativeParseComplete()) {
+            //    reader.IterativeParseNext<kParseDefaultFlags>(ss, handler);
+            //    cout << handler.type << handler.data << endl;
+            //}
 
+            //Json::CharReaderBuilder builder;
+            //builder["collectComments"] = false;
+            //JSONCPP_STRING errs;
+            //if (!parseFromStream(builder, ifs, &root, &errs))
+            //{
+            //    std::cerr << "JSON parser problem: " << errs << std::endl;
+            //    exit(EXIT_FAILURE);
+            //}
+            //
             /* gather the data */
             for (Json::Value::const_iterator outer = root.begin(); outer != root.end(); outer++)
             {
@@ -601,198 +716,7 @@ public:
         }
         else
         {
-            sim_error = "JasonHelper: json file not read";
+            std::cerr << "JasonHelper: json file not read" << std::endl;
         }
-    }
-};
-
-class Defaults : public ProgramConfig
-{
-    const double   frequency = 1900e6;   // center frequency
-    const double   bandwidth = 20e6;     // channel bandwidth in Mz
-    const double   SymbRate = 3.84e6;    // symbol rate
-    const double   BlocksPerSymb = 768;  // blocks per symbol
-    const double   lambda = C / frequency;
-    const double   height = 200;         //antenna height in meters
-    const double   ms_Grx = -2;          // dBi
-    const double   system_noise = 5;     // System noise in dB;
-    const unsigned mobile_stations = 15; // number of handdset
-    const unsigned base_stations = 3;    // number of base stations
-
-    const std::vector<double> BS_THETAC_DEG = { 75, 90, 105 };    // degrees
-
-    const std::vector<Placements> COW_LOCATION =    // in meters
-    {
-        {250, 200}, {500, 180}, {750, 200}
-    };
-
-    const std::vector<Placements> NODE_LOCATIONS =  // in meters
-    {
-        {250, 500}, {350, 500}, {450, 500}, {550, 500}, {650, 500}, {750, 500},
-        {250, 600}, {350, 600}, {450, 600}, {550, 600}, {650, 600}, {750, 600},
-                          {450, 325}, {500, 325}, {550, 325}
-    };
-
-    const std::vector<int> BS_ANTENNA_COUNTS = { 5, 3, 5 };        // number of antenna allocation for each BS
-
-
-    const int MIN_POWER_dBm = -30;       // dBm
-    const int MAX_POWER_dBm = +30;       // dBm
-    const int MIN_SCANANGLE_deg = -90;   // degrees
-    const int MAX_SCANANGLE_deg = +90;   // degrees
-
-    const std::vector<double> ANTENNA_SPACING = { .3, .4, .3 }; // meters
-    const std::vector<double> ANTENNA_DIMS = { .2, .4 };     // meters
-
-    const std::vector<std::vector<double>> COW_POWER_LUT = {
-        {+30.0, +30.0, +30.0},
-        {+30.0, +30.0, +30.0},
-        {+30.0, +30.0, +30.0},
-        {-30.0, +30.0, -30.0},
-        {-30.0, +30.0, -30.0}
-    };
-
-    // degrees
-    const std::vector<std::vector<double>> SCAN_ALPHA_LUT = {
-        {+10.0, +65.0, +35.0},
-        {-10.0, -65.0, -35.0},
-        {-75.0, -40.0, +75.0},
-        {+40.0, +65.0, -40.0},
-        {+40.0, -65.0, -40.0}
-    };
-
-    /* Setup the environment */
-    const std::vector<unsigned> BS_STAID_SELECTION = {
-
-        /* BS [0] [1] [2]  */
-               2, 13, 11,
-               8, 15, 05,
-               1, 14, 06,
-               7, 04, 10,
-               9, 03, 12
-    };
-
-    /* antenna power info info */
-    int get_power_lut(std::vector<std::vector<double>>& powertable)
-    {
-        auto& list = COW_POWER_LUT;
-
-        powertable.resize(list.size(), std::vector<double>(list[0].size()));
-
-        for (unsigned i = 0; i < list.size(); ++i)
-        {
-            for (unsigned j = 0; j < list[i].size(); ++j)
-            {
-                powertable[i][j] = dBm2watt(list[i][j]);
-            }
-        }
-
-        return 0;
-    }
-
-    /* antenna array direction info */
-    int get_scan_angle_lut(std::vector<std::vector<double>>& alphatable)
-    {
-        auto& list = SCAN_ALPHA_LUT;
-
-        alphatable.resize(list.size(), std::vector<double>(list[0].size()));
-
-        for (unsigned i = 0; i < list.size(); ++i)
-        {
-            for (unsigned j = 0; j < list[i].size(); ++j)
-            {
-                alphatable[i][j] = deg2rad(list[i][j]);
-            }
-        }
-
-        return 0;
-    }
-
-
-    template<class U, class V>
-    inline int getData(const std::vector<U>& input, std::vector<V>& output)
-    {
-        for (auto& data : input)
-        {
-            output.emplace_back(data);
-        }
-        return 0;
-    }
-
-    /* phase array antenna count per base station */
-
-    int get_allocation_per_bs(std::vector<unsigned>& output_counts)
-    {
-        return getData(BS_ANTENNA_COUNTS, output_counts);
-
-    }
-
-    /* get base station location info */
-
-    int get_base_station_cords(std::vector<Placements>& station_position)
-    {
-        return getData(COW_LOCATION, station_position);
-
-    }
-
-    /* get mobile station location info */
-    int get_mobile_station_cords(std::vector<Placements>& station_position)
-    {
-        return getData(NODE_LOCATIONS, station_position);
-    }
-
-    /* this defines the thetaC term in the calculation or where the BS is facing */
-    int get_base_station_orientation(std::vector<double>& antenna_dir)
-    {
-        for (auto& data : BS_THETAC_DEG)
-
-        {
-            antenna_dir.emplace_back(deg2rad(data));
-        }
-
-        return 0;
-    }
-
-    int get_base_station_antspace(std::vector<double>& antenna_spacing)
-    {
-        return getData(ANTENNA_SPACING, antenna_spacing);
-    }
-
-    /* get the size of the antenna in [meters] where antennadim is Dimension<double> */
-    int get_base_station_anntena_dims(antennadim& dim)
-    {
-        auto& data = ANTENNA_DIMS;
-
-        dim.x = data[0];
-        dim.y = data[1];
-
-        return 0;
-    }
-public:
-    Defaults(Input*& args)
-    {
-        args = new Input(
-            frequency,
-            bandwidth,
-            SymbRate,
-            BlocksPerSymb,
-            height,
-            MIN_POWER_dBm,
-            MAX_POWER_dBm,
-            ms_Grx,
-            MIN_SCANANGLE_deg,
-            MAX_SCANANGLE_deg,
-            system_noise,
-            mobile_stations,
-            base_stations
-        );
-        get_mobile_station_cords(mobile_station_pos);
-        get_base_station_cords(base_station_pos);
-        get_power_lut(args->ant.array_power_wtts_lut);
-        get_scan_angle_lut(args->ant.array_scan_angle_lut);
-        get_allocation_per_bs(args->ant.antcount_per_base);
-        get_base_station_orientation(args->ant.antenna_orientation);
-        get_base_station_antspace(args->ant.antenna_spacing);
-        get_base_station_anntena_dims(args->ant.antenna_dim_mtrs);
     }
 };

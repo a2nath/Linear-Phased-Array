@@ -9,24 +9,32 @@
 #include "station.h"
 #include "random.h"
 #include "args.h"
-
+#include <optional>
 
 using cow_id_distribution = std::uniform_int_distribution<int>;
+
 
 struct SimulationHelper
 {
     std::vector<Cow>& cows;
-    unsigned cow_count;
-    std::vector<std::vector<unsigned>>& binding_station_ids_lut;  // base_station to station id binding lut
-    std::vector<unsigned>& binding_station_ids;                   // base_station to station id binding
-    std::vector<std::vector<double>>& powers_lut;                 // TX power level from base station in integer dBm lut
-    std::vector<double>& powers;                                  // TX power level from base station in integer dBm
-    std::vector<std::vector<double>>& alphas_lut;                 // Antenna array directions in integer rads lut
-    std::vector<double>& alphas;                                  // Antenna array directions in integer rads
+    const unsigned& cow_count, ms_stations;
+    const std::vector<std::vector<double>>& powers_lut;                 // TX power level from base station in integer dBm lut
+    const std::vector<std::vector<double>>& alphas_lut;                 // Antenna array directions in integer rads lut
+    const std::vector<std::vector<unsigned>>& binding_station_ids_lut;  // base_station to station id binding lut
 
-    unsigned timeslot;            // timeslot in the schedule
+    int      timeslot_idx;            // timeslot in the schedule
     unsigned timeslots;           // total timeslots
     unsigned nodes_rem;
+
+    void incrementTimeslot()
+    {
+        ++timeslot_idx;
+    }
+
+    const unsigned& getTimeslots() const
+    {
+        return timeslots;
+    }
 
     const std::vector<Cow>& getCows() const // this is for performance monitor
     {
@@ -34,30 +42,33 @@ struct SimulationHelper
     }
 
     /* gets called to get BS to MS bindings for a single timeslot. Output size: #bs */
-    std::vector<unsigned>& getBindings()
+    const std::vector<unsigned>& getBindings()
     {
-        return binding_station_ids_lut.size() ? binding_station_ids_lut[timeslot] : binding_station_ids;
+        timeslot_idx = (timeslot_idx + 1) % timeslots;
+        return binding_station_ids_lut[timeslot_idx];
     }
 
     /* set antenna array power level in each timeslot */
-    inline void setPower(std::vector<double>& power_list) const
+    inline void set_power(const std::vector<double>& power_list) const
     {
         for (unsigned i = 0; i < power_list.size(); ++i)
         {
-            cows[i].setPower(power_list[i]);
+            cows[i].set_power(power_list[i]);
         }
     }
 
     /* set antenna array power level in each timeslot */
-    void resetPower() const
+    void resetPower()
     {
-        setPower(powers_lut.size() ? powers_lut[timeslot] : powers);
+        timeslot_idx = (timeslot_idx + 1) % timeslots;
+        set_power(powers_lut[timeslot_idx]);
     }
 
     /* get antenna array power level in each timeslot */
-    void getPower(std::vector<double>& output) const
+    void get_power(std::vector<double>& output)
     {
-        output = powers_lut.size() ? powers_lut[timeslot] : powers;
+        timeslot_idx = (timeslot_idx + 1) % timeslots;
+        output = powers_lut[timeslot_idx];
     }
 
     /* get permutations of power applied across base stations */
@@ -67,31 +78,47 @@ struct SimulationHelper
     }
 
     /* set antenna array directivity before starting each simulation */
-    void setAlpha()
+    void set_scan_dir()
     {
-        auto& source = alphas_lut.size() ? alphas_lut[timeslot] : alphas;
+        timeslot_idx = (timeslot_idx + 1) % timeslots;
+        auto& source = alphas_lut[timeslot_idx];
+
         for (unsigned c = 0; c < cows.size(); ++c)
         {
             cows[c].antennaUpdate(source[c]);
         }
     }
 
-    SimulationHelper(Input* args, std::vector<Cow>& c) :
-        cows(c),
-        cow_count(args->base_stations),
-        binding_station_ids_lut(station_ids_lut),
-        binding_station_ids(station_ids),
-        powers_lut(args->ant.array_power_wtts_lut),
-        powers(args->ant.array_power_wtts),
-        alphas_lut(args->ant.array_scan_angle_lut),
-        alphas(args->ant.array_scan_angle),
-        timeslot(0),
-        timeslots(std::ceil(args->mobile_stations / cow_count)),
-        nodes_rem(args->mobile_stations)
+    SimulationHelper(std::vector<Cow>& cowlist,
+        const unsigned& timeslot_count,
+        const unsigned& mobile_stations,
+        const std::vector<std::vector<double>>& power_bindings,
+        const std::vector<std::vector<double>>& alpha_bindings,
+        const std::vector<std::vector<unsigned>>& station_bindings)
+        :
+        cows(cowlist),
+        cow_count(cowlist.size()),
+        ms_stations(mobile_stations),
+        binding_station_ids_lut(station_bindings),
+        powers_lut(power_bindings),
+        alphas_lut(alpha_bindings),
+        timeslot_idx(-1),
+        timeslots(timeslot_count),
+        nodes_rem(mobile_stations)
     {
         /* change the scan angle of the base stations as per the bindings */
-        setAlpha();
+        set_scan_dir();
     }
+    //SimulationHelper(Input* args, std::vector<Cow>& c) :
+    //    cows(c),
+    //    cow_count(args->base_stations),
+    //    binding_station_ids(station_ids),
+    //    powers(args->ant.array_power_wtts),
+    //    alphas(args->ant.array_scan_angle),
+    //    timeslot(0)
+    //{
+    //
+    //}
 };
 
 struct telemetry_t
@@ -398,7 +425,7 @@ public:
         debug(args.debug),
         bs_tx_requested_power_dBm(args.bs_tx_power_dBm.value().data),
         bs_requested_scan_alpha_deg(args.bs_scan_alpha_deg.value().data),
-        ms2bs_requested_bindings(args.ms_id_selections.data)
+        ms2bs_requested_bindings(args.ms_id_selections.binding_data)
     {
         setup();
     }

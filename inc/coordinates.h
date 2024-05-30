@@ -11,24 +11,32 @@ struct Dimensions
     {
         x = ref.x;
         y = ref.y;
+        return *this;
     }
-    Dimensions& operator=(Width& a)
+    Dimensions& operator=(const Width& ref)
     {
-        x = a;
-        y = a;
+        x = ref;
+        y = ref;
+        return *this;
     }
+
     bool operator==(const Dimensions& ref)
     {
         return x == ref.x && y == ref.y;
     }
-    Dimensions(Width& i, Width& j) : x(i), y(j) {}
+
+    bool operator!=(const Dimensions& ref)
+    {
+        return !operator==(ref);
+    }
+    Dimensions(const Width& i, const Width& j) : x(i), y(j) {}
     Dimensions() : x(0), y(0) {}
 };
 
 template<class Type>
 struct Coordinates : public Dimensions<Type>
 {
-    Coordinates& operator-(Coordinates& a)
+    Coordinates& operator-(const Coordinates& a)
     {
         Coordinates temp = *this;
 
@@ -65,7 +73,7 @@ struct Polar_Coordinates : private Coordinates<double>
     Polar_Coordinates() : Coordinates(), theta(x), hype(y) {}
 };
 
-inline Polar_Coordinates cart2pol(double x, double y)
+inline Polar_Coordinates cart2pol(const double& x, const double& y)
 {
     double theta = atan2(y, x);
     double hype = hypot(x, y);
@@ -73,19 +81,19 @@ inline Polar_Coordinates cart2pol(double x, double y)
 }
 
 template<class T>
-inline Polar_Coordinates cart2pol(Coordinates<T>& c)
+inline Polar_Coordinates cart2pol(const Coordinates<T>& c)
 {
     return cart2pol(c.x, c.y);
 }
 
-inline Coordinates<double> pol2cart(double theta, double hype)
+inline Coordinates<double> pol2cart(const double& theta, const double& hype)
 {
     auto x = cos(theta) * hype;
     auto y = sin(theta) * hype;
     return Coordinates<double>(x, y);
 }
 
-inline Coordinates<double> pol2cart(Polar_Coordinates& c)
+inline Coordinates<double> pol2cart(const Polar_Coordinates& c)
 {
     return pol2cart(c.theta, c.hype);
 }
