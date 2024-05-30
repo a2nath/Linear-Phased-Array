@@ -7,10 +7,6 @@
 namespace network_package
 {
     using antennadim = Dimensions<double>;
-    std::vector<Placements>             mobile_station_pos;  // SEATING_LOCATION
-    std::vector<Placements>             base_station_pos;    // COW_LOCATION
-    std::vector<std::vector<unsigned>>  station_ids_lut;
-    std::vector<unsigned>               station_ids;
 
 
     inline double deg2rad(double deg)
@@ -31,120 +27,37 @@ namespace network_package
     }
 
     inline double getLambda(double frequency)
-	{
-		if (frequency > 0)
-		{
-			return C / frequency;
-		}
-
-		throw std::invalid_argument("Divide by zero error from passing 0 frequency in getLambda call");
-	}
-
-	/* Get system noise figure in [dBm] with thermal noise by passing B/W in [Mhz], and system noise in [dB] */
-	inline double getThermalSystemNoise(const double& bandwidth, const double& system_noise)
-	{
-		if (bandwidth > 0)
-		{
-			return -174 + round(10 * log10(bandwidth)) + system_noise;
-		}
-
-		throw std::invalid_argument("Bandwidth cannot be zero or when setting system noise factor");
-	}
-
-    struct Input
     {
-        const double   frequency;     // center  frequency in Mz
-        const double   bandwidth;     // channel bandwidth in Mz
-        const double   SymbRate;      // symbol rate
-        const double   BlocksPerSymb; // blocks per symbol
-        const double   lambda;        // size of the waveform or wavelength
-        const double   height;        // antenna height in meters
-        //const double   bs_Gtx;        // radiated gain in dBi
-        //const double   bs_Gtx_W;      // radiated gain in W
-        const double   bs_Ptx_min;    // radiated power in dBm
-        const double   bs_Ptx_max;    // radiated power in dBm
-        const double   ms_Grx;        // radiated gain in dBi
-        const double   ms_Grx_W;      // radiated gain in W
-        const double   bs_scan_min;   // radiated gain in deg
-        const double   bs_scan_max;   // radiated gain in deg
-        const double   system_noise;  // System noise in dB;
-        const unsigned mobile_stations; // number of handsets
-        const unsigned base_stations; // number of base stations
-        const double   NF_watt;
-
-        struct Antenna
+        if (frequency > 0)
         {
-            std::vector<std::vector<double>>    array_power_wtts_lut;  // antenna array power level lookup table [W]
-            std::vector<std::vector<double>>    array_scan_angle_lut;  // antenna scan angle in timeslots/BS lookup table [rads]
-            std::vector<double>                 array_power_wtts;      // antenna array power level [W]
-            std::vector<double>                 array_scan_angle;      // antenna scan angle in timeslots/BS [rads]
-            std::vector<unsigned>               antcount_per_base;     // antenna allocation per bs array
-            std::vector<double>                 antenna_orientation;   // antenna orientation in its placement in [rads]
-            std::vector<double>                 antenna_spacing;       // antenna spacing in an array in [meters]
-            antennadim                          antenna_dim_mtrs;      // antenna dims in [meters]
-        };
-        Antenna ant;
-
-        Input(
-            const double& _frequency,
-            const double& _bandwidth,
-            const double& _SymbRate,
-            const double& _BlocksPerSymb,
-            const double& _height,
-            const double& _bs_Ptx_min,
-            const double& _bs_Ptx_max,
-            const double& _ms_Grx,
-            const double& _bs_scan_min,
-            const double& _bs_scan_max,
-            const double& _system_noise,
-            const unsigned& _mobile_stations,
-            const unsigned& _base_stations
-        ) :
-            frequency(_frequency),
-            bandwidth(_bandwidth),
-            SymbRate(_SymbRate),
-            BlocksPerSymb(_BlocksPerSymb),
-            lambda(getLambda(frequency)),
-            height(_height),
-            //bs_Gtx(_bs_Gtx),
-            //bs_Gtx_W(log2lin(_bs_Gtx)),
-            bs_Ptx_min(dBm2watt(_bs_Ptx_min)),
-            bs_Ptx_max(dBm2watt(_bs_Ptx_max)),
-            ms_Grx(_ms_Grx),
-            ms_Grx_W(log2lin(ms_Grx)),
-            bs_scan_min(deg2rad(_bs_scan_min)),
-            bs_scan_max(deg2rad(_bs_scan_max)),
-            system_noise(_system_noise),
-            mobile_stations(_mobile_stations),
-            base_stations(_base_stations),
-            NF_watt(log2lin(getThermalSystemNoise(bandwidth, system_noise)))
-        {
+            return C / frequency;
         }
-    };
 
-    class AntennaSystem // think of this as multiple antennas each with the following
+        throw std::invalid_argument("Divide by zero error from passing 0 frequency in getLambda call");
+    }
+
+    /* Get system noise figure in [dBm] with thermal noise by passing B/W in [Mhz], and system noise in [dB] */
+    inline double getThermalSystemNoise(const double& bandwidth, const double& system_noise)
     {
-        const antennadim& dims;
-        std::vector<double> Gtx;
-        const unsigned& panel_count;
-    public:
-        const antennadim& size() const { return dims; }
-        const std::vector<double>& getGain() const { return Gtx; }
-        const unsigned& count() const { return panel_count; }
-        void setGain(double gain) { Gtx.emplace_back(panel_count * gain); }
-        AntennaSystem(const antennadim& size, const unsigned& _count) : dims(size), panel_count(_count) {}
-    };
+        if (bandwidth > 0)
+        {
+            return -174 + round(10 * log10(bandwidth)) + system_noise;
+        }
 
-	/* Linear Phase Array Antenna */
+        throw std::invalid_argument("Bandwidth cannot be zero or when setting system noise factor");
+    }
+
+    /* Linear Phase Array Antenna */
     class AAntenna
     {
-        double power;                                // array power
-        double alpha;                                // scan angle
-        const double ms_grx_linear;
-        unsigned panel_count;                              // number of panels
-        double lambda;                               // wavelength of the RF signal
-        double spacing;                              // array spacing
-        double theta_c;                              // antenna array direction
+        //typedef void (*FuncPtr)(double);
+        double     power;              // array power
+        double     alpha;              // scan angle
+        double     ms_grx_linear;      // gain factor for a client station
+        unsigned   panel_count;        // number of panels
+        double     lambda;             // wavelength of the RF signal
+        double     spacing;            // wavelength of the RF signal
+        double     theta_c;            // antenna array direction
         antennadim antenna_dims;
 
         struct Calculations
@@ -171,14 +84,9 @@ namespace network_package
         /* accepts a RX station ID with respect to THIS station
            and returns the coefficient
         */
-        double coeff(const unsigned& rx_sta) const
+        const double& coeff(const unsigned& rx_sta) const
         {
             return simulation.hmatrix[rx_sta];
-        }
-
-        void setPanelCount(unsigned panels)
-        {
-            panel_count = panels;
         }
 
         /* set power in watts */
@@ -199,12 +107,76 @@ namespace network_package
             return alpha;
         }
 
+        /* set station grx in linear_factor */
+        void set_grx_gain(const unsigned& linear_factor)
+        {
+            ms_grx_linear = linear_factor;
+        }
+
+        /* get station grx in linear_factor */
+        const double& grx_gain() const
+        {
+            return ms_grx_linear;
+        }
+        /* sett panel count in the antenna array */
+        void set_antpanelcount(const unsigned& count)
+        {
+            panel_count = count;
+        }
+
+        /* get panel count in the antenna array */
+        const unsigned& antpanelcount() const
+        {
+            return panel_count;
+        }
+
+        /* set wavelength in meters */
+        void set_antlambda(const double& meters_lambda)
+        {
+            lambda = meters_lambda;
+        }
+
+        /* get wavelength in meters */
+        const double& antlambda() const
+        {
+            return lambda;
+        }
+
+        /* set the physical antenna panel spacing in meters */
+        void set_antspacing(const double& meters_separation)
+        {
+            spacing = meters_separation;
+        }
+
+        /* get the physical antenna panel spacing in meters */
+        const double& antspacing() const
+        {
+            return spacing;
+        }
+
+        /* get the physical antenna direction in rads */
+        void set_beamdir(const double& rads_direction)
+        {
+            theta_c = rads_direction;
+        }
+
         /* get the physical antenna direction */
         const double& beamdir() const
         {
             return theta_c;
         }
 
+        /* set the physical size in meters */
+        void set_antdim(const antennadim& meters_dim)
+        {
+            antenna_dims = meters_dim;
+        }
+
+        /* get the physical size in meters */
+        const antennadim antdim() const
+        {
+            return antenna_dims;
+        }
 
         /* update the antenna array from updated power and scan angle */
         inline void update(const double& new_alpha, Calculations& calculations)
@@ -221,7 +193,7 @@ namespace network_package
 
                     if (sin_term != 0)
                     {
-                        gain_factor_antenna_system *= pow(sin(panel_count * phee) / sin_term, 2);
+                        gain_factor_antenna_system *= pow(cached::sin(panel_count * phee) / sin_term, 2);
                     }
 
                     /* update the channel matrix */
@@ -259,15 +231,15 @@ namespace network_package
                 auto& cell_polar_data = polar_data[idx];
 
                 double theta_minus_thetaC = cell_polar_data.theta - theta_c;
-                double m = m_factor * sin(theta_minus_thetaC);
-                double singleant_gain = antenna_dim_factor * pow((1 + cos(theta_minus_thetaC)) / 2, 2);
+                double m = m_factor * cached::sin(theta_minus_thetaC);
+                double singleant_gain = antenna_dim_factor * pow((1 + cached::cos(theta_minus_thetaC)) / 2, 2);
 
 				if (m != 0)
 				{
 					singleant_gain *= pow(cached::sin(m) / m, 2);
 				}
 
-                calculations.phee_minus_alpha_list[idx] = phee_temp * sin(theta_minus_thetaC);
+                calculations.phee_minus_alpha_list[idx] = phee_temp * cached::sin(theta_minus_thetaC);
                 calculations.pathloss_list[idx]         = pow(pl_temp_meters * cell_polar_data.hype, 2);
                 calculations.gain_RX_grid[idx]          = singleant_gain * panel_count;
             }
