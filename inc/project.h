@@ -11,8 +11,7 @@
 #include "args.h"
 #include <optional>
 
-using cow_id_distribution = std::uniform_int_distribution<int>;
-
+//using cow_id_distribution = std::uniform_int_distribution<int>;
 
 struct SimulationHelper
 {
@@ -107,88 +106,106 @@ struct SimulationHelper
     }
 };
 
-struct telemetry_t
-{
-    const double power;
-    const double alpha;
-    const Placements pos;
-    const unsigned cow_id;
-    const unsigned timeslot_idx;
-    const unsigned sta_id;
-    double sinr;
-
-    telemetry_t(const Cow& cow, const unsigned& timeslot, const unsigned& sta, const double& _sinr)
-        :
-        power(cow.getxPower()),
-        alpha(cow.getAlpha()),
-        pos(cow.getPosition()),
-        cow_id(cow.sid()),
-        timeslot_idx(timeslot),
-        sta_id(sta),
-        sinr(_sinr)
-    {}
-    telemetry_t(const Cow& cow, const unsigned& sta, const double& _sinr)
-        :
-        power(cow.getxPower()),
-        alpha(cow.getAlpha()),
-        pos(cow.getPosition()),
-        cow_id(cow.sid()),
-        timeslot_idx(0),
-        sta_id(sta),
-        sinr(_sinr)
-    {}
-    telemetry_t() :
-        power(0),
-        alpha(0),
-        pos(),
-        cow_id(0),
-        timeslot_idx(0),
-        sta_id(0),
-        sinr(0) {}
-};
-
-std::ostream& operator<<(std::ostream& out, telemetry_t const& data)
-{
-    out << std::fixed << std::fixed << std::setprecision(3);
-    out << "power:\t" << data.power << " "
-        << "alpha:\t" << data.alpha << " "
-        << "placement:\t" << data.pos.x << "," << data.pos.y << " "
-        << "cow_id:\t" << data.cow_id << " "
-        << "timeslot:\t" << data.timeslot_idx << " "
-        << "sta_id:\t" << data.sta_id;
-
-    return out;
-}
-
 /* performance logging and analysis latter */
 struct PerfMon
 {
     SimulationHelper& params;
 
     /* keep track of sinr and note the configurations and bindings in decreasing order of SINR */
-    std::map<double, std::vector<telemetry_t>, std::greater<double>> sinrlist;
-
-    const std::map<double, std::vector<telemetry_t>, std::greater<double>>& get_data() const
+    struct dataitem_t
     {
-        return sinrlist;
-    }
+        unsigned tslot_id;
+        double power;
+        double alpha;
+        Placements pos;
+        unsigned cow_id;
+        unsigned sta_id;
+        double sinr;
 
-    void update_timeslot(const double& sinr, const std::vector<unsigned>& binding_in_timeslot)
-    {
-        auto& cows = params.cowlist();
-        for (unsigned c = 0; c < params.cow_count; ++c)
+        friend std::ostream& operator<<(std::ostream& out, const dataitem_t& item)
         {
-            sinrlist[sinr].emplace_back(telemetry_t(cows[c], params.timeslot_idx, binding_in_timeslot[c], sinr));
+            out
+                << std::fixed
+                << std::setprecision(2)
+                << std::setprecision(2)
+                << std::fixed
+                << std::fixed
+                << std::fixed
+                << std::fixed
+                << std::setprecision(2);
+            out
+                << "timeslot: " << item.tslot_id << "\t"
+                << "power: " << lin2dB(item.power) + 30 << "\t"
+                << "alpha: " << rad2deg(item.alpha) << "\t"
+                << "placement: " << item.pos.x << ","
+                                 << item.pos.y << "\t"
+                << "cow_id: " << item.cow_id << "\t"
+                << "sta_id: " << item.sta_id << "\t"
+                << "sinr: " << lin2dB(item.sinr);
+
+            return out;
+        }
+
+        // Deleted copy constructor and copy assignment operator
+        dataitem_t(const dataitem_t&) = delete;
+        dataitem_t& operator=(const dataitem_t&) = delete;
+
+        // Defaulted move constructor and move assignment operator
+        dataitem_t(dataitem_t&&) noexcept = default;
+        dataitem_t& operator=(dataitem_t&& other) noexcept = default;
+
+        dataitem_t(
+            const unsigned& itslot_id,
+            const double& ipower,
+            const double& ialpha,
+            const Placements& ipos,
+            const unsigned& icow_id,
+            const unsigned& ista_id,
+            const double& isinr)
+            :
+            tslot_id(itslot_id),
+            power(ipower),
+            alpha(ialpha),
+            pos(ipos),
+            cow_id(icow_id),
+            sta_id(ista_id),
+            sinr(isinr)
+        {}
+    };
+
+    struct data_comparator
+    {
+        bool operator()(const dataitem_t& p1, const dataitem_t& p2) const
+        {
+            return p1.sinr > p2.sinr; // like std::greater<Pixel>
+        }
+    };
+
+    std::priority_queue<dataitem_t, std::vector<dataitem_t>, data_comparator> pqueue;
+
+    void print()
+    {
+        while (pqueue.size())
+        {
+            std::cout << pqueue.top() << std::endl;
+            pqueue.pop();
         }
     }
 
-    void update(const unsigned& cow_id, const double& sinr, const std::vector<unsigned>& binding_in_timeslot)
+    void update(const unsigned& bs_id, const double& sinr, const std::vector<unsigned>& binding_in_timeslot)
     {
-        sinrlist[sinr].emplace_back(telemetry_t(params.cowlist()[cow_id], binding_in_timeslot[cow_id], sinr));
+        auto& cow = params.cowlist()[bs_id];
+        pqueue.emplace(
+            params.timeslot_idx,
+            cow.getxPower(),
+            cow.getAlpha(),
+            cow.getPosition(),
+            cow.sid(),
+            binding_in_timeslot[bs_id],
+            sinr);
     }
 
-    PerfMon(SimulationHelper& parameters) :
-        params(parameters)
+    PerfMon(SimulationHelper& parameters) : params(parameters)
     {}
 };
 
@@ -334,9 +351,9 @@ public:
     }
 
 
-    const PerfMon& get_perf() const
+    void print()
     {
-        return *monitor;
+        monitor->print();
     }
 
     ~Simulator()
