@@ -8,7 +8,10 @@ namespace network_package
 {
 	using antennadim = Dimensions<double>;
 
-
+	inline double rad2deg(double rad)
+	{
+		return rad * 180.0 / M_PIl;
+	}
 	inline double deg2rad(double deg)
 	{
 		return deg * M_PIl / 180.0;
