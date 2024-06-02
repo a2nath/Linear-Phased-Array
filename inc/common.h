@@ -103,9 +103,21 @@ public:
 		stream.close();
 	}
 
-	Logger(const std::string& filename)
+	Logger(path inputfile, path output_filename, path output_dirname)
 	{
-		stream.open(filename);
+		if (std::filesystem::is_regular_file(inputfile))
+		{
+			/* place the input configfile into the output directory to quickly check the inputs */
+			std::filesystem::copy_file(inputfile, path(output_dirname / inputfile.filename()).string());
+		}
+		else
+		{
+			std::cout << "No reference input file found that could be associated to the sim outputs" << std::endl;
+		}
+
+		/* open the output file stream during sim */
+		stream.open(path(output_dirname / output_filename).string());
+
 	}
 };
 

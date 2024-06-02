@@ -34,6 +34,12 @@ void close(Logger& logger)
 
 int main(int argc, char** argv, char** envp)
 {
+    using path = filesystem::path;
+
+#ifdef _DEBUG
+    std::cout << "PID: " << getpid() << std::endl;
+#endif
+
     auto args = argparse::parse<MyArgs>(argc, argv);
 
     cout << "arguments as follows:\n" << "-----------------------" << endl;
@@ -42,7 +48,7 @@ int main(int argc, char** argv, char** envp)
     /* setup the simulation runtime parameters */
     args.init();
 
-    Logger logger(args.output_dir.value()  + "/output.txt");
+    Logger logger(args.get_input_filename(), args.output_dir, "output.txt");
     Simulator sim(args, logger);
 
     /* run the simulation and get the SNR table */
