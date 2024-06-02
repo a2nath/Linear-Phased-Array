@@ -26,26 +26,25 @@ struct SimulationHelper
     unsigned timeslots;           // total timeslots
     unsigned nodes_rem;
 
-    void incrementTimeslot()
+    void inc_timeslot()
     {
         ++timeslot_idx;
     }
 
-    const unsigned& getTimeslots() const
+    const unsigned& get_timeslots() const
     {
         return timeslots;
     }
 
-    const std::vector<Cow>& getCows() const // this is for performance monitor
+    const std::vector<Cow>& cowlist() const // performance monitor needs a list
     {
         return cows;
     }
 
     /* gets called to get BS to MS bindings for a single timeslot. Output size: #bs */
-    const std::vector<unsigned>& getBindings()
+    inline void get_bindings(std::vector<unsigned>& output) const
     {
-        timeslot_idx = (timeslot_idx + 1) % timeslots;
-        return binding_station_ids_lut[timeslot_idx];
+        output = binding_station_ids_lut[timeslot_idx];
     }
 
     /* set antenna array power level in each timeslot */
@@ -58,21 +57,19 @@ struct SimulationHelper
     }
 
     /* set antenna array power level in each timeslot */
-    void resetPower()
+    inline void reset_power() const
     {
-        timeslot_idx = (timeslot_idx + 1) % timeslots;
         set_power(powers_lut[timeslot_idx]);
     }
 
     /* get antenna array power level in each timeslot */
-    void get_power(std::vector<double>& output)
+    inline void get_power(std::vector<double>& output) const
     {
-        timeslot_idx = (timeslot_idx + 1) % timeslots;
         output = powers_lut[timeslot_idx];
     }
 
     /* get permutations of power applied across base stations */
-    bool get_perm_power(std::vector<double>& power_list)
+    inline bool get_perm_power(std::vector<double>& power_list) const
     {
         return std::next_permutation(power_list.begin(), power_list.end());
     }
@@ -80,7 +77,6 @@ struct SimulationHelper
     /* set antenna array directivity before starting each simulation */
     void set_scan_dir()
     {
-        timeslot_idx = (timeslot_idx + 1) % timeslots;
         auto& source = alphas_lut[timeslot_idx];
 
         for (unsigned c = 0; c < cows.size(); ++c)
@@ -102,23 +98,13 @@ struct SimulationHelper
         binding_station_ids_lut(station_bindings),
         powers_lut(power_bindings),
         alphas_lut(alpha_bindings),
-        timeslot_idx(-1),
+        timeslot_idx(0),
         timeslots(timeslot_count),
         nodes_rem(mobile_stations)
     {
         /* change the scan angle of the base stations as per the bindings */
         set_scan_dir();
     }
-    //SimulationHelper(Input* args, std::vector<Cow>& c) :
-    //    cows(c),
-    //    cow_count(args->base_stations),
-    //    binding_station_ids(station_ids),
-    //    powers(args->ant.array_power_wtts),
-    //    alphas(args->ant.array_scan_angle),
-    //    timeslot(0)
-    //{
-    //
-    //}
 };
 
 struct telemetry_t
@@ -131,7 +117,7 @@ struct telemetry_t
     const unsigned sta_id;
     double sinr;
 
-    telemetry_t(const Cow& cow, const unsigned& timeslot, const unsigned& sta, double& _sinr)
+    telemetry_t(const Cow& cow, const unsigned& timeslot, const unsigned& sta, const double& _sinr)
         :
         power(cow.getxPower()),
         alpha(cow.getAlpha()),
@@ -141,7 +127,7 @@ struct telemetry_t
         sta_id(sta),
         sinr(_sinr)
     {}
-    telemetry_t(const Cow& cow, const unsigned& sta, double& _sinr)
+    telemetry_t(const Cow& cow, const unsigned& sta, const double& _sinr)
         :
         power(cow.getxPower()),
         alpha(cow.getAlpha()),
@@ -177,8 +163,7 @@ std::ostream& operator<<(std::ostream& out, telemetry_t const& data)
 /* performance logging and analysis latter */
 struct PerfMon
 {
-    const SimulationHelper& params;
-    const std::vector<unsigned>& bindings;
+    SimulationHelper& params;
 
     /* keep track of sinr and note the configurations and bindings in decreasing order of SINR */
     std::map<double, std::vector<telemetry_t>, std::greater<double>> sinrlist;
@@ -188,23 +173,22 @@ struct PerfMon
         return sinrlist;
     }
 
-    void update_timeslot(double sinr)
+    void update_timeslot(const double& sinr, const std::vector<unsigned>& binding_in_timeslot)
     {
-        auto& cows = params.getCows();
+        auto& cows = params.cowlist();
         for (unsigned c = 0; c < params.cow_count; ++c)
         {
-            sinrlist[sinr].emplace_back(telemetry_t(cows[c], params.timeslot_idx, bindings[c], sinr));
+            sinrlist[sinr].emplace_back(telemetry_t(cows[c], params.timeslot_idx, binding_in_timeslot[c], sinr));
         }
     }
 
-    void update(const unsigned& cow_id, double sinr)
+    void update(const unsigned& cow_id, const double& sinr, const std::vector<unsigned>& binding_in_timeslot)
     {
-        sinrlist[sinr].emplace_back(telemetry_t(params.getCows()[cow_id], bindings[cow_id], sinr));
+        sinrlist[sinr].emplace_back(telemetry_t(params.cowlist()[cow_id], binding_in_timeslot[cow_id], sinr));
     }
 
-    PerfMon(const SimulationHelper& parameters, std::vector<unsigned>& cowbindings) :
-        params(parameters),
-        bindings(cowbindings)
+    PerfMon(SimulationHelper& parameters) :
+        params(parameters)
     {}
 };
 
@@ -216,7 +200,8 @@ protected:
     std::string sim_error;
     std::vector<Cow> cows;
     std::vector<Station> stations;
-    PerfMon* perfmonitor;
+    PerfMon* monitor;
+
     //std::vector<double> dBm2watts;              // in watts
     //std::vector<double> deg2rads;  // scan angle
     const double&   frequency;
@@ -284,68 +269,13 @@ protected:
         }
     }
 
-    void run_multi_timeslot(SimulationHelper& simhelper)
+    void run_single_timelot()
     {
-        using slot_t = unsigned;
-        using cow_t = unsigned;
-        using sta_t = unsigned;
+        auto& simhelper = monitor->params;
 
+        /* set the selected stations as per bindings */
         std::vector<unsigned> select_stations;
-        perfmonitor = new PerfMon(simhelper, select_stations);
-
-        unsigned served = 0;
-        std::unordered_map<sta_t, std::unordered_map<slot_t, cow_t>> station_binding;
-
-        std::vector<double> power_list;
-        while (served < mobile_station_count)
-        {
-            simhelper.timeslot_idx = 0;
-            /* setup the cows first such that the simulation is set with alphas and TX powers */
-            for (unsigned slot = 0; slot < simhelper.timeslots; ++slot)
-            {
-                /* retrive the coefficients from base stations after antenna reconfig (alpha change) */
-
-                select_stations = simhelper.getBindings();
-
-                /* change the antenna power and recalculate the Rx signal power + get SINR */
-                simhelper.set_power(power_list); // random power in the range [-30, 30]
-
-                /* change the scan angle of the base stations as per the bindings */
-                simhelper.set_scan_dir();
-
-                /* check sinr for each receiving stations */
-                for (unsigned bs_id = 0; bs_id < select_stations.size(); ++bs_id)
-                {
-                    /* setup the stations with the COW bindings to calculate RX signal and interference */
-                    auto& station_id = select_stations[bs_id];
-
-                    auto& station = stations[station_id];
-                    station.set_rx(bs_id);
-
-                    auto sinr = station.get_sinr();
-                    if (sinr >= sinr_limit_linear) // check this settings
-                    {
-                        perfmonitor->update(bs_id, sinr);
-                        ++served;
-                    }
-
-                } //end of cow_id
-
-                ++simhelper.timeslot_idx; // increment the timeslot to get the next parameters
-
-            } //end of sta_id
-        } //end of sta_id
-    }
-
-    void run_single_timelot(SimulationHelper& simhelper)
-    {
-        using slot_t = unsigned;
-        using cow_t = unsigned;
-        using sta_t = unsigned;
-
-        auto ms_station_list = simhelper.getBindings();
-
-        perfmonitor = new PerfMon(simhelper, ms_station_list);
+        simhelper.get_bindings(select_stations);
 
         /* create a new list of power nums and run calculations on its permutations */
         std::vector<double> power_list;
@@ -358,15 +288,27 @@ protected:
             /* change the antenna power across all base stations */
             simhelper.set_power(power_list);
 
-            for (size_t bs = 0; bs < base_station_count; ++bs)
+            for (size_t bs_id = 0; bs_id < base_station_count; ++bs_id)
             {
-                auto& station = stations[ms_station_list[bs]];
-                station.set_rx(bs);
+                auto& station = stations[select_stations[bs_id]];
+                station.set_rx(bs_id);
 
-                perfmonitor->update(bs, station.get_sinr());
+                monitor->update(bs_id, station.get_sinr(), select_stations);
             }
 
             permutation_state = simhelper.get_perm_power(power_list);
+        }
+    }
+
+    void run_multi_timeslot()
+    {
+        auto& simhelper = monitor->params;
+
+        /* setup the cows first such that the simulation is set with alphas and TX powers */
+        for (unsigned slot = 0; slot < simhelper.timeslots; ++slot)
+        {
+            run_single_timelot();
+            simhelper.inc_timeslot(); // increment the timeslot to get the next parameters
         }
     }
 
@@ -383,24 +325,30 @@ public:
             ms2bs_requested_bindings
         );
 
-        if (timeslot_count > 1)
-            run_multi_timeslot(simparams);
-        else
-            run_single_timelot(simparams);
+        monitor = new PerfMon(simparams);
 
+        if (timeslot_count > 1)
+            run_multi_timeslot();
+        else
+            run_single_timelot();
     }
 
 
     const PerfMon& get_perf() const
     {
-        return *perfmonitor;
+        return *monitor;
+    }
+
+    ~Simulator()
+    {
+        delete monitor;
     }
 
     Simulator(const MyArgs& args, Logger& ilogger)
         :
         logger(ilogger),
         sim_error(""),
-        perfmonitor(nullptr),
+        monitor(nullptr),
         frequency(args.frequency),
         lambda(getLambda(frequency)),
         bandwidth(args.bandwidth),
