@@ -10,7 +10,6 @@
 #include "project.h"
 //#include "matplot.h"
 
-
 #ifdef GRAPHICS
 #include <SFML/Graphics.hpp>
 #endif
@@ -53,18 +52,11 @@ int main(int argc, char** argv, char** envp)
 
     /* run the simulation and get the SNR table */
     sim.run();
-    auto& perfmon = sim.get_perf();
+    sim.print();
+
 
     //plot(mobile_station_pos);
 
-    for (auto& entrylist : perfmon.get_data())
-    {
-        for (auto& entry : entrylist.second)
-        {
-            cout << "SINR:" << entrylist.first
-                << " " << entry << endl;
-        }
-    }
 
     close(logger);
     return 0;
