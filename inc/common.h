@@ -3,15 +3,26 @@
 #include <map>
 #include <filesystem>
 #include <unordered_map>
+#include <unordered_set>
 #include <exception>
 #include <fstream>
 
 #define C       3e8 //speed of light
 #define M_PIl   3.141592653589793238462643383279502884L /* pi */
 
+
+#ifdef _WIN32
+#include <process.h>
+/* get process id and attach to process */
+#define GetCurrentProcessId getpid
+#else
+#include <unistd.h>
+#endif
+
 extern std::string sim_error;
 
 template<class T> std::string str(const T& input) { return std::to_string(input); }
+template<class U, class V> using Pair = std::pair<U, V>;
 
 template<class T>
 inline T rand(T min, T max)
@@ -73,8 +84,8 @@ struct revmap_t
 
 class Logger
 {
+	using path = std::filesystem::path;
 	std::ofstream stream;
-
 public:
 	inline void write(const std::string& str)
 	{
@@ -101,6 +112,7 @@ public:
 namespace cached
 {
 	template<class U, class V> using Cache = std::unordered_map<U, V>;
+	template<class U> using HashSet        = std::unordered_set<U>;
 	Cache<double, double> cache_sin, cache_dbm2w, cache_db2lin;
 
 	inline double deg2rad(const double& deg)
