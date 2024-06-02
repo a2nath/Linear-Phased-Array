@@ -198,11 +198,11 @@ struct Binding_Values : MultiData_Setup<std::string>
 {
 	std::vector<std::vector<unsigned>> binding_data;
 
-	bool is_valid_and_convert(const std::pair<unsigned, unsigned>& reference_bounds)
+	bool is_valid_and_convert(const Pair<unsigned, unsigned>& reference_bounds)
 	{
 		for (auto& row : data)
 		{
-			cached::Cache<unsigned, unsigned> cache;
+			cached::HashSet<unsigned> set;
 			binding_data.emplace_back();
 
 			for (auto& num : row)
@@ -218,29 +218,44 @@ struct Binding_Values : MultiData_Setup<std::string>
 					std::string base_station_str = num.substr(0, index);
 					std::string ms_station_str = num.substr(index + 1);
 
-					base_station = stoul(base_station_str);
-					ms_station = stoul(ms_station_str);
+					try
+					{
+						base_station = stoul(base_station_str) - 1;
+						ms_station = stoul(ms_station_str) - 1;
+					}
+					catch (const std::invalid_argument& ia)
+					{
+						std::cerr << "Binding selection between " << base_station_str << " and "
+							<< ms_station_str << " is " << ia.what() << " " << strerror(errno) << std::endl;
+					}
+					catch (const std::out_of_range& oor)
+					{
+						std::cerr << "Binding selection between " << base_station_str << " and "
+							<< ms_station_str << " is " << oor.what() << " " << strerror(errno) << std::endl;
+					}
 
 					if (0 <= base_station && base_station < total_bs_stations
 						&& 0 <= ms_station && ms_station < total_ms_stations)
 					{
-						if (cache.find(base_station) == cache.end())
+						if (set.find(base_station) == set.end())
 						{
-							cache.emplace(base_station, ms_station);
+							set.emplace(base_station);
 							binding_data.back().emplace_back(ms_station);
 						}
 						else
 						{
-							throw std::invalid_argument("Station binding " + str(base_station) + ":" + str(ms_station)
-								+ " is invalid since base station is used to talk to another handset within the same timeslot");
+							throw std::invalid_argument("Station binding " + str(base_station + 1) + ":" + str(ms_station + 1)
+								+ " is invalid since a base station is used to talk to more than one handset in the same timeslot");
 						}
 					}
-
-					return false;
+					else
+					{
+						return false;
+					}
 				}
 				else
 				{
-					throw std::invalid_argument("Binding argument does not have a station binding syntax, e.g. bs:ms,bs:ms bs:ms,bs:ms");
+					throw std::invalid_argument("Binding argument has invalid station binding syntax, e.g. bs:ms,bs:ms bs:ms,bs:ms");
 				}
 			}
 		}
@@ -417,7 +432,8 @@ std::filesystem::path operator+(const std::filesystem::path dir, const std::file
 /* argparse for C++17 */
 struct MyArgs : public argparse::Args, public ProgramConfig {
 
-	std::optional<std::string>& output_dir = kwarg("o,output_dir", "Output directory to put results in").set_default(getcwd());
+	std::string& output_dir                = kwarg("o,output_dir", "Output directory to put results in").set_default(getcwd());
+	std::string& i_json_file               = kwarg("f,file", "Input file used to run the simulation").set_default("");
 
 	double& frequency                      = kwarg("frequency", "Frequency of the signal system wide");
 	double& bandwidth                      = kwarg("bandwidth", "Bandwidth of the singal");
@@ -440,17 +456,22 @@ struct MyArgs : public argparse::Args, public ProgramConfig {
 	std::vector<double>& antenna_dims      = kwarg("antenna_dims", "Antenna dimensions in meters");
 
 	std::optional<Power_Values>& bs_tx_power_dBm   = kwarg("antenna_txpower", "Base station transmit TX power in dBm (list or a lut)");
-	std::optional<Scan_Values>& bs_scan_alpha_deg = kwarg("scan_angle", "Base station scan angle in degrees (list or a lut)");
+	std::optional<Scan_Values>& bs_scan_alpha_deg  = kwarg("scan_angle", "Base station scan angle in degrees (list or a lut)");
 
 	Binding_Values& ms_id_selections       = kwarg("ms_selection", "Base station_ID - handset_ID binding. \
 													Syntax is for 1 timeslot as: 2:3,3:4 or for 2+ timeslots as: 2:3,3:4 4:6,5:7");
 	bool& showgui                          = flag("g", "Show gui of the simulation").set_default(false);
 	bool& debug                            = flag("q,quiet", "Supress output").set_default(true);
 
+	const std::string& get_input_filename()
+	{
+		return i_json_file;
+	}
+
 	void init()
 	{
 		/* make the directory if it does not exist */
-		common::mkdir(output_dir.value());
+		common::mkdir(output_dir);
 
 		assert(antenna_height > 0);
 		assert(base_station_count > 0);
@@ -502,7 +523,7 @@ struct MyArgs : public argparse::Args, public ProgramConfig {
 		//assert(ms_id_selections.data.size() * ms_id_selections.data[0].size() == mobile_station_count);
 		assert(ms_id_selections.data.size() == timeslots);
 		assert(ms_id_selections.data[0].size() == base_station_count);
-		assert(ms_id_selections.is_valid_and_convert(std::pair<unsigned, unsigned>{base_station_count, mobile_station_count}) == true); // gets converted into rads after this
+		assert(ms_id_selections.is_valid_and_convert(Pair<unsigned, unsigned>{base_station_count, mobile_station_count}) == true); // gets converted into rads after this
 	}
 };
 
@@ -613,8 +634,8 @@ public:
 		}
 		catch (const std::ifstream::failure& e)
 		{
-			std::cerr << "Exception opening/reading file: " << e.what() << '\n';
-			std::cerr << "Error code: " << strerror(errno) << '\n';
+			std::cerr << "Exception opening/reading file: " << e.what() << std::endl;
+			std::cerr << "Error code: " << strerror(errno) << std::endl;
 			exit(errno);
 		}
 
