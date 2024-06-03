@@ -12,11 +12,11 @@
     },
     {
       "Id": "6ada9f59-1942-4990-ad56-f43ad8ca3158",
-      "Command": "--symrate 3840000.0"
+      "Command": "--symbolrate 3840000.0"
     },
     {
       "Id": "93302343-0940-4d8e-9698-dbdfbe8d5fca",
-      "Command": "--blockps 768"
+      "Command": "--blockpersymbol 768"
     },
     {
       "Id": "a811c0c6-fcef-4146-8db6-4952fb463fae",
@@ -84,7 +84,7 @@
     },
     {
       "Id": "d0bc3350-7d6c-4489-be29-bdd006175595",
-      "Command": "--ms_selection 1,2,3"
+      "Command": "--ms_selection 1:1,2:2,3:3"
     }
   ]
 }
