@@ -7,7 +7,7 @@
 #include <exception>
 #include <fstream>
 
-#define C       3e8 //speed of light
+#define C_SPEED 3e8L /* speed of light */
 #define M_PIl   3.141592653589793238462643383279502884L /* pi */
 
 

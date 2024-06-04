@@ -3,6 +3,7 @@
 #include <smmintrin.h>
 #include <immintrin.h>
 #include "coordinates.h"
+#include "common.h"
 
 namespace network_package
 {
@@ -33,7 +34,7 @@ namespace network_package
 	{
 		if (frequency > 0)
 		{
-			return C / frequency;
+			return C_SPEED / frequency;
 		}
 
 		throw std::invalid_argument("Divide by zero error from passing 0 frequency in getLambda call");

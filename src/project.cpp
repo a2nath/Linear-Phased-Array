@@ -33,19 +33,17 @@ void close(Logger& logger)
 
 int main(int argc, char** argv, char** envp)
 {
-    using path = filesystem::path;
-
 #ifdef _DEBUG
     std::cout << "PID: " << getpid() << std::endl;
 #endif
 
     auto args = argparse::parse<MyArgs>(argc, argv);
 
-    cout << "arguments as follows:\n" << "-----------------------" << endl;
-    args.print();
-
     /* setup the simulation runtime parameters */
     args.init();
+
+    cout << "arguments as follows:\n" << "-----------------------" << endl;
+    args.print();
 
     Logger logger(args.get_input_filename(), args.output_dir, "output.txt");
     Simulator sim(args, logger);

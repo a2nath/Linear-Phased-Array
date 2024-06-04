@@ -9,9 +9,10 @@
 #include "network.h"
 #include <json/json.h>
 
-//#include "rapidjson/document.h"
-//#include "rapidjson/writer.h"
-//#include "rapidjson/stringbuffer.h"
+#define RAPIDJSON_HAS_STDSTRING 1
+#include "rapidjson/document.h"
+#include "rapidjson/writer.h"
+#include "rapidjson/stringbuffer.h"
 
 #include "argparse.hpp"
 
@@ -35,7 +36,7 @@ namespace default_t
 
 	/* Input in hertz, default is half-wavelength */
 	const double antenna_spacing(const double& frequency) {
-		return C * (1 / frequency) * (1 / 2);
+		return C_SPEED * (1.0 / frequency) * (1.0/ 2.0);
 	}
 }
 
@@ -321,116 +322,9 @@ struct Location_Setup
 	}
 };
 
-
-class ProgramConfig
-{
-protected:
-	/* simulation system parameters */
-
-	template<typename T = double> const auto& param(const std::string& key) const
-	{
-		return std::any_cast<const T&>(data.at(key));
-	}
-
-	/* antenna array direction info */
-	int get_station_lut(const std::vector<std::vector<unsigned>>& input, std::vector<std::vector<unsigned>>& station_ids)
-	{
-		station_ids = input;
-		return 0;
-	}
-
-	template<class U, class V>
-	inline int getData(const std::vector<U>& input, std::vector<V>& output)
-	{
-		for (auto& data : input)
-		{
-			output.emplace_back(data);
-		}
-		return 0;
-	}
-
-	/* get list of tx power for each base station in a timeslot */
-	int get_power_list(const std::vector<double>& input, std::vector<double>& output_power)
-	{
-		for (unsigned i = 0; i < input.size(); ++i)
-		{
-			output_power.emplace_back(cached::dBm2watt(input[i]));
-		}
-		return 0;
-	}
-
-	/* get list of scan angle for each base station in a timeslot */
-	int get_scan_angle_list(const std::vector<double>& input, std::vector<double>& output_scan_angle)
-	{
-		for (auto& data : input)
-		{
-			output_scan_angle.emplace_back(data);
-		}
-
-		return 0;
-	}
-
-	/* get a list of stations to transmit to in a timeslot */
-	int get_station_list(const std::vector<unsigned>& input, std::vector<unsigned>& station_ids)
-	{
-		return getData(input, station_ids);
-	}
-
-	/* phase array antenna count per base station */
-	int get_allocation_per_bs(const std::vector<unsigned>& input, std::vector<unsigned>& output_counts)
-	{
-		return getData(input, output_counts);
-	}
-
-	/* get base station location info */
-	int get_base_station_cords(const std::vector<Placements>& input, std::vector<Placements>& station_position)
-	{
-		return getData(input, station_position);
-	}
-
-	/* get mobile station location info */
-	int get_mobile_station_cords(const std::vector<Placements>& input, std::vector<Placements>& station_position)
-	{
-		return getData(input, station_position);
-	}
-
-	/* this defines the thetaC term in the calculation or where the BS is facing */
-	int get_base_station_orientation(const std::vector<double>& input, std::vector<double>& antenna_dir)
-	{
-		for (auto& data : input)
-		{
-			antenna_dir.emplace_back(data);
-		}
-
-		return 0;
-	}
-
-	int get_base_station_antspace(const std::vector<double>& input, std::vector<double>& antenna_spacing)
-	{
-		return getData(input, antenna_spacing);
-	}
-
-	/* get the size of the antenna in [meters] where antennadim is Dimension<double> */
-	int get_base_station_anntena_dims(const std::vector<double>& input, antennadim& dim)
-	{
-		auto& data = input;
-
-		dim.x = data[0];
-		dim.y = data[1];
-
-		return 0;
-	}
-	std::unordered_map<std::string, std::any> data;
-};
-
-class Default;
-std::filesystem::path operator+(const std::filesystem::path dir, const std::filesystem::path& name)
-{
-	return dir.string() + '/' + name.string();
-}
-
 /* argparse for C++17 */
-struct MyArgs : public argparse::Args, public ProgramConfig {
+struct MyArgs : public argparse::Args
+{
 
 	std::string& output_dir                = kwarg("o,output_dir", "Output directory to put results in").set_default(getcwd());
 	std::string& i_json_file               = kwarg("f,file", "Input file used to run the simulation").set_default("");
@@ -470,6 +364,11 @@ struct MyArgs : public argparse::Args, public ProgramConfig {
 
 	void init()
 	{
+		if (!i_json_file.empty())
+		{
+			load_from_json();
+		}
+
 		/* make the directory if it does not exist */
 		common::mkdir(output_dir);
 
@@ -489,9 +388,12 @@ struct MyArgs : public argparse::Args, public ProgramConfig {
 		assert(power_range_dBm.size() == 2);
 		assert(scan_angle_range.size() == 2);
 
-		if (antenna_spacing.size() != base_station_count)
+		assert((antenna_spacing.size() > 0 && antenna_spacing.size() == base_station_count) || antenna_spacing.empty());
+
+		if (antenna_spacing.empty())
 			antenna_spacing = std::vector<double>(base_station_count, default_t::antenna_spacing(frequency));
 
+		/* dimension of the antennas for all base stations */
 		assert(antenna_dims.size() == 2);
 
 		/* assign default values and ensure values are within range */
@@ -525,219 +427,109 @@ struct MyArgs : public argparse::Args, public ProgramConfig {
 		assert(ms_id_selections.data[0].size() == base_station_count);
 		assert(ms_id_selections.is_valid_and_convert(Pair<unsigned, unsigned>{base_station_count, mobile_station_count}) == true); // gets converted into rads after this
 	}
-};
 
-
-template <typename T> std::string stringify(T x) {
-	std::stringstream ss;
-	ss << x;
-	return ss.str();
-}
-
-class JasonHelper : public ProgramConfig
-{
-	/* helper function to break the cvs delimeters */
-	template<class T = double> const auto get_list(std::string input)
+	void load_from_json()
 	{
-		size_t idx2 = input.find(',');
-		std::vector<T> out;
+		using namespace rapidjson;
 
-		if (idx2 < std::string::npos)
+		std::ifstream ifs(i_json_file);
+		if (!ifs.is_open())
 		{
-			size_t idx = 0;
-			while (idx2 < std::string::npos)
+			std::cerr << "Cannot open JSON file: " << i_json_file << std::endl;
+			exit(EXIT_FAILURE);
+		}
+
+		//IStreamWrapper isw(ifs);
+		Document doc;
+		doc.Parse(i_json_file.c_str());
+		if (!doc.IsObject()) {
+			std::cerr << "Invalid JSON format: " << i_json_file << std::endl;
+			exit(EXIT_FAILURE);
+		}
+
+		auto get_double = [&doc](const char* key)
+		{
+			auto it = doc.FindMember(key);
+			return it != doc.MemberEnd() && it->value.IsNumber() ? it->value.GetDouble() : 0.0;
+		};
+
+		auto get_string = [&doc](const char* key)
+		{
+			auto it = doc.FindMember(key);
+			return it != doc.MemberEnd() && it->value.IsString() ? std::string(it->value.GetString()) : "";
+		};
+
+		auto get_unsigned = [&doc](const char* key)
+		{
+			auto it = doc.FindMember(key);
+			return it != doc.MemberEnd() && it->value.IsUint() ? it->value.GetUint() : 0u;
+		};
+
+		auto get_vector_double = [&doc](const char* key)
+		{
+			std::vector<double> vec;
+			auto it = doc.FindMember(key);
+			if (doc.HasMember(key) && it->value.IsArray())
 			{
-				out.emplace_back(stod(input.substr(idx, idx2 - idx)));
-				idx = idx2 + 1;
-				idx2 = input.find(',', idx2 + 1);
-			}
-			out.emplace_back(stod(input.substr(idx, idx2 - idx)));
-		}
-		return out.size() ? out : std::vector<T>();
-	}
-
-	template<class T = double> auto get_table(std::string input)
-	{
-		size_t idx2 = input.find(',');
-		std::vector<std::vector<T>> out;
-
-		if (idx2 < std::string::npos)
-		{
-			size_t idx = 0;
-			while (idx2 < std::string::npos)
-			{
-				out.emplace_back(stod(input.substr(idx, idx2 - idx)));
-				idx = idx2 + 1;
-				idx2 = input.find(',', idx2 + 1);
-			}
-			out.emplace_back(stod(input.substr(idx, idx2 - idx)));
-		}
-		return out.size() ? out : std::vector<std::vector<T>>();
-	}
-
-	template<class T> const auto get_pair(Json::Value::const_iterator input)
-	{
-		std::vector<Placements> output;
-
-		for (Json::Value::const_iterator ite = (*input).begin(); ite != (*input).end();)
-		{
-			output.emplace_back();
-
-			output.back().x = stod((*ite).asString());
-			++ite;
-			output.back().y = stod((*ite).asString());
-			++ite;
-		}
-
-		return output;
-	}
-
-	// RapidJSON
-	//struct MyHandler {
-	//    const char* type;
-	//    std::string data;
-	//
-	//    MyHandler() : type(), data() {}
-	//
-	//    bool Null() { type = "Null"; data.clear(); return true; }
-	//    bool Bool(bool b) { type = "Bool:"; data = b ? "true" : "false"; return true; }
-	//    bool Int(int i) { type = "Int:"; data = stringify(i); return true; }
-	//    bool Uint(unsigned u) { type = "Uint:"; data = stringify(u); return true; }
-	//    bool Int64(int64_t i) { type = "Int64:"; data = stringify(i); return true; }
-	//    bool Uint64(uint64_t u) { type = "Uint64:"; data = stringify(u); return true; }
-	//    bool Double(double d) { type = "Double:"; data = stringify(d); return true; }
-	//    bool RawNumber(const char* str, SizeType length, bool) { type = "Number:"; data = std::string(str, length); return true; }
-	//    bool String(const char* str, SizeType length, bool) { type = "String:"; data = std::string(str, length); return true; }
-	//    bool StartObject() { type = "StartObject"; data.clear(); return true; }
-	//    bool Key(const char* str, SizeType length, bool) { type = "Key:"; data = std::string(str, length); return true; }
-	//    bool EndObject(SizeType memberCount) { type = "EndObject:"; data = stringify(memberCount); return true; }
-	//    bool StartArray() { type = "StartArray"; data.clear(); return true; }
-	//    bool EndArray(SizeType elementCount) { type = "EndArray:"; data = stringify(elementCount); return true; }
-	//private:
-	//    MyHandler(const MyHandler& noCopyConstruction);
-	//    MyHandler& operator=(const MyHandler& noAssignment);
-	//};
-public:
-	JasonHelper(const std::string& file)
-	{
-		Json::Value root;
-		std::ifstream ifs;
-
-		// Set exceptions to be thrown on failure
-		ifs.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-
-		std::string filecontents = "";
-		try
-		{
-			ifs.open(file);
-			// Read from the file
-		}
-		catch (const std::ifstream::failure& e)
-		{
-			std::cerr << "Exception opening/reading file: " << e.what() << std::endl;
-			std::cerr << "Error code: " << strerror(errno) << std::endl;
-			exit(errno);
-		}
-
-		/* parse the json file and fill in args for the program */
-		if (ifs.good())
-		{
-			Json::CharReaderBuilder builder;
-			builder["collectComments"] = false;
-			JSONCPP_STRING errs;
-			if (!parseFromStream(builder, ifs, &root, &errs))
-			{
-				std::cout << errs << std::endl;
-				throw std::runtime_error("Parser problem: " + str(EXIT_FAILURE));
-			}
-			//Document d;
-			//d.Parse(json);
-			//
-			//MyHandler handler;
-			//StringStream ss(filecontents.c_str());
-			//
-			//Reader reader;
-			//reader.IterativeParseInit();
-			//while (!reader.IterativeParseComplete()) {
-			//    reader.IterativeParseNext<kParseDefaultFlags>(ss, handler);
-			//    cout << handler.type << handler.data << endl;
-			//}
-
-			//Json::CharReaderBuilder builder;
-			//builder["collectComments"] = false;
-			//JSONCPP_STRING errs;
-			//if (!parseFromStream(builder, ifs, &root, &errs))
-			//{
-			//    std::cerr << "JSON parser problem: " << errs << std::endl;
-			//    exit(EXIT_FAILURE);
-			//}
-			//
-			/* gather the data */
-			for (Json::Value::const_iterator outer = root.begin(); outer != root.end(); outer++)
-			{
-				if (outer.key().compare("base_station_antenna_counts") == 0)
-				{
-					for (Json::Value::const_iterator inner = (*outer).begin(); inner != (*outer).end(); inner++)
-					{
-						data.emplace(inner.key().asString(), get_list<unsigned>((*inner).asString()));
+				for (auto& v : it->value.GetArray()) {
+					if (v.IsNumber()) {
+						vec.push_back(v.GetDouble());
 					}
-				}
-				else if (outer.key().compare("base_station_power_range_dBm") == 0
-					|| outer.key().compare("base_station_scan_angle_range_deg") == 0)
-				{
-					for (Json::Value::const_iterator inner = (*outer).begin(); inner != (*outer).end(); inner++)
-					{
-						data.emplace(inner.key().asString(), get_list((*inner).asString()));
-					}
-				}
-				else if (outer.key().compare("base_station_theta_c") == 0
-					|| outer.key().compare("antenna_spacing") == 0
-					|| outer.key().compare("antenna_dims") == 0)
-				{
-					for (Json::Value::const_iterator inner = (*outer).begin(); inner != (*outer).end(); inner++)
-					{
-						data.emplace(inner.key().asString(), get_list((*inner).asString()));
-					}
-				}
-				else if (outer.key().compare("base_station_location") == 0
-					|| outer.key().compare("mobile_station_location") == 0)
-				{
-					for (Json::Value::const_iterator inner = (*outer).begin(); inner != (*outer).end(); inner++)
-					{
-						data.emplace(inner.key().asString(), get_pair<Placements>((*inner).begin()));
-					}
-
-				}
-				else if (outer.key().compare("base_station_power_dBm_lut") == 0
-					|| outer.key().compare("base_station_scan_alpha_deg_lut") == 0)
-				{
-					for (Json::Value::const_iterator inner = (*outer).begin(); inner != (*outer).end(); inner++)
-					{
-						for (Json::Value::const_iterator last_ite = (*inner).begin(); last_ite != (*inner).end(); last_ite++)
-						{
-							data.emplace(last_ite.key().asString(), get_table<double>((*last_ite).asString()));
-						}
-					}
-				}
-				else if (outer.key().compare("base_to_mobile_station_id_selection_lut") == 0)
-				{
-					for (Json::Value::const_iterator inner = (*outer).begin(); inner != (*outer).end(); inner++)
-					{
-						for (Json::Value::const_iterator last_ite = (*inner).begin(); last_ite != (*inner).end(); last_ite++)
-						{
-							data.emplace(last_ite.key().asString(), get_table<unsigned>((*last_ite).asString()));
-						}
-					}
-				}
-				else
-				{
-					data.emplace(outer.key().asString(), get_list<double>((*outer).asString()));
 				}
 			}
-		}
-		else
+			return vec;
+		};
+
+		auto get_vector_unsigned = [&doc](const char* key)
 		{
-			std::cerr << "JasonHelper: json file not read" << std::endl;
+			std::vector<unsigned> vec;
+			auto it = doc.FindMember(key);
+			if (doc.HasMember(key) && it->value.IsArray())
+			{
+				for (auto& v : it->value.GetArray()) {
+					if (v.IsNumber()) {
+						vec.push_back(v.GetDouble());
+					}
+				}
+			}
+			return vec;
+		};
+
+		output_dir = get_string("output_dir");
+		frequency = get_double("frequency");
+		bandwidth = get_double("bandwidth");
+		symrate = get_double("symbolrate");
+		blockspersym = get_double("blockspersym");
+		antenna_height = get_double("height");
+		gain_gtrx = get_double("ms_grx");
+		system_noise = get_double("system_noise");
+		base_station_count = get_unsigned("base_stations");
+		mobile_station_count = get_unsigned("mobile_stations");
+		timeslots = get_unsigned("timeslots");
+		sinr_limit_dB = get_double("slimit");
+		bs_theta_c = get_vector_double("base_station_theta_c");
+		base_stations_loc = Location_Setup(get_string("base_station_location"));
+		mobile_stations_loc = Location_Setup(get_string("mobile_station_location"));
+		bs_antenna_count = get_vector_unsigned("base_station_antenna_counts");
+		power_range_dBm = get_vector_double("base_station_power_range_dBm");
+		scan_angle_range = get_vector_double("base_station_scan_angle_range_deg");
+		antenna_spacing = get_vector_double("antenna_spacing");
+		antenna_dims = get_vector_double("antenna_dims");
+
+		// Optional fields handling
+		if (doc.HasMember("antenna_txpower"))
+		{
+			bs_tx_power_dBm = Power_Values(get_string("antenna_txpower"));
+		}
+
+		if (doc.HasMember("scan_angle"))
+		{
+			bs_scan_alpha_deg = Scan_Values(get_string("scan_angle"));
+		}
+
+		if (doc.HasMember("ms_selection"))
+		{
+			ms_id_selections = Binding_Values(get_string("ms_selection"));
 		}
 	}
 };
