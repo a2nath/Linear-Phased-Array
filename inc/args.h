@@ -22,20 +22,21 @@ namespace default_t
 {
 	const std::string test = "tests/init_test.json";
 
-	const double tx_power                      = 0.0;   // default power for all base-stations dBm
-	const double scan_angle                    = 0.0;   // default angle for all base-stations degrees
-	const double sinr_limit                    = 24.0;  // SINR limit in dB
-	const unsigned timeslots                   = 1  ;   // number of timeslots to consider
-	const std::vector<double> theta_c_radsdir  = { 60.0, 90.0, 120.0 }; // dBm [min max]
-	const std::vector<double> power_range_dBm      = { -30.0, 30.0 };       // dBm [min max]
-	const std::vector<double> scan_angle_range = { -90.0, 90.0 };       // degress [min max]
-	const int antenna_element_count            = 5;
+	const double tx_power                       = 0.0;   // default power for all base-stations dBm
+	const double scan_angle                     = 0.0;   // default angle for all base-stations degrees
+	const double sinr_limit                     = 24.0;  // SINR limit in dB
+	const unsigned timeslots                    = 1  ;   // number of timeslots to consider
+	const std::vector<double> theta_c_radsdir   = { 60.0, 90.0, 120.0 }; // dBm [min max]
+	const std::vector<double> power_range_dBm   = { -30.0, 30.0 };       // dBm [min max]
+	const std::vector<double> scan_angle_range  = { -90.0, 90.0 };       // degress [min max]
+	const int antenna_element_count             = 5;
 
 	/* Input in deg, facing up in the XY grid */
-	const double bs_direction_theta_c_deg = 90.0;
+	const double bs_direction_theta_c_deg       = 90.0;
 
 	/* Input in hertz, default is half-wavelength */
-	const double antenna_spacing(const double& frequency) {
+	const double antenna_spacing(const double& frequency)
+	{
 		return C_SPEED * (1.0 / frequency) * (1.0/ 2.0);
 	}
 }
@@ -326,36 +327,36 @@ struct Location_Setup
 struct MyArgs : public argparse::Args
 {
 
-	std::string& output_dir                = kwarg("o,output_dir", "Output directory to put results in").set_default(getcwd());
-	std::string& i_json_file               = kwarg("f,file", "Input file used to run the simulation").set_default("");
+	std::string& output_dir                 = kwarg("o,output_dir", "Output directory to put results in").set_default(getcwd());
+	std::string& i_json_file                = kwarg("f,file", "Input file used to run the simulation").set_default("");
 
-	double& frequency                      = kwarg("frequency", "Frequency of the signal system wide");
-	double& bandwidth                      = kwarg("bandwidth", "Bandwidth of the singal");
-	double& symrate                        = kwarg("symbolrate", "Symbol rate of the data stream");
-	double& blockspersym                   = kwarg("blockpersymbol", "Blocks of data per symbol");
-	double& antenna_height                 = kwarg("height", "Height of the antenna");
-	double& gain_gtrx                      = kwarg("ms_grx", "Antenna gain of the antenna at the mobile or client station in dB");
-	double& system_noise                   = kwarg("system_noise", "System noise in the transmitter and receiver");
-	unsigned& base_station_count           = kwarg("base_stations", "Number of base stations in the simulation");
-	unsigned& mobile_station_count         = kwarg("mobile_stations", "Number of mobile stations in the simulation");
-	unsigned& timeslots                    = kwarg("timeslots", "Number of timeslots to carry out the simulation on").set_default(default_t::timeslots);
-	double& sinr_limit_dB                  = kwarg("slimit", "SINR limit to consider the configuration as valid to get a good 'slimit' dB signal at the handset").set_default(default_t::sinr_limit);
-	std::vector<double>& bs_theta_c        = kwarg("base_station_theta_c", "Direction antennas are facing").set_default(default_t::theta_c_radsdir);
-	Location_Setup& base_stations_loc      = kwarg("base_station_location", "Location of base stattions is a list");
-	Location_Setup& mobile_stations_loc    = kwarg("mobile_station_location", "Location of mobile stations is a list");
+	double& frequency                       = kwarg("frequency", "Frequency of the signal system wide");
+	double& bandwidth                       = kwarg("bandwidth", "Bandwidth of the singal");
+	double& symrate                         = kwarg("symbolrate", "Symbol rate of the data stream");
+	double& blockspersym                    = kwarg("blockpersymbol", "Blocks of data per symbol");
+	double& antenna_height                  = kwarg("height", "Height of the antenna");
+	double& gain_gtrx                       = kwarg("ms_grx", "Antenna gain of the antenna at the mobile or client station in dB");
+	double& system_noise                    = kwarg("system_noise", "System noise in the transmitter and receiver");
+	unsigned& base_station_count            = kwarg("base_stations", "Number of base stations in the simulation");
+	unsigned& mobile_station_count          = kwarg("mobile_stations", "Number of mobile stations in the simulation");
+	unsigned& timeslots                     = kwarg("timeslots", "Number of timeslots to carry out the simulation on").set_default(default_t::timeslots);
+	double& sinr_limit_dB                   = kwarg("slimit", "SINR limit to consider the configuration as valid to get a good 'slimit' dB signal at the handset").set_default(default_t::sinr_limit);
+	std::vector<double>& bs_theta_c         = kwarg("base_station_theta_c", "Direction antennas are facing").set_default(default_t::theta_c_radsdir);
+	Location_Setup& base_stations_loc       = kwarg("base_station_location", "Location of base stattions is a list");
+	Location_Setup& mobile_stations_loc     = kwarg("mobile_station_location", "Location of mobile stations is a list");
 	std::vector<unsigned>& bs_antenna_count = kwarg("base_station_antenna_counts", "Number of panels in the antenna array");
-	std::vector<double>& power_range_dBm   = kwarg("base_station_power_range_dBm", "Range of power that base stations will use in dBm").set_default(default_t::power_range_dBm);
-	std::vector<double>& scan_angle_range  = kwarg("base_station_scan_angle_range_deg", "Scan angle of the antenna linear array at the base station in degrees").set_default(default_t::scan_angle_range);
-	std::vector<double>& antenna_spacing   = kwarg("antenna_spacing", "Antenna spacing between panels").set_default(std::vector<double>());
-	std::vector<double>& antenna_dims      = kwarg("antenna_dims", "Antenna dimensions in meters");
+	std::vector<double>& power_range_dBm    = kwarg("base_station_power_range_dBm", "Range of power that base stations will use in dBm").set_default(default_t::power_range_dBm);
+	std::vector<double>& scan_angle_range   = kwarg("base_station_scan_angle_range_deg", "Scan angle of the antenna linear array at the base station in degrees").set_default(default_t::scan_angle_range);
+	std::vector<double>& antenna_spacing    = kwarg("antenna_spacing", "Antenna spacing between panels").set_default(std::vector<double>());
+	std::vector<double>& antenna_dims       = kwarg("antenna_dims", "Antenna dimensions in meters");
 
 	std::optional<Power_Values>& bs_tx_power_dBm   = kwarg("antenna_txpower", "Base station transmit TX power in dBm (list or a lut)");
 	std::optional<Scan_Values>& bs_scan_alpha_deg  = kwarg("scan_angle", "Base station scan angle in degrees (list or a lut)");
 
-	Binding_Values& ms_id_selections       = kwarg("ms_selection", "Base station_ID - handset_ID binding. \
-													Syntax is for 1 timeslot as: 2:3,3:4 or for 2+ timeslots as: 2:3,3:4 4:6,5:7");
-	bool& showgui                          = flag("g", "Show gui of the simulation").set_default(false);
-	bool& debug                            = flag("q,quiet", "Supress output").set_default(true);
+	Binding_Values& ms_id_selections        = kwarg("ms_selection", "Base station_ID - handset_ID binding. \
+											   		Syntax is for 1 timeslot as: 2:3,3:4 or for 2+ timeslots as: 2:3,3:4 4:6,5:7");
+	bool& showgui                           = flag("g", "Show gui of the simulation").set_default(false);
+	bool& debug                             = flag("q,quiet", "Supress output").set_default(true);
 
 	const std::string& get_input_filename()
 	{
