@@ -114,7 +114,7 @@ def main():
 
 				while not done and steps < args.num_steps:
 					action = agent.choose_action(state)
-					next_state, reward, done, _ = env.step(action)
+					next_state, reward, done = env.step(action)
 					agent.learn(state, action, reward, next_state)
 					state = next_state
 					total_reward[timeslot] += reward
