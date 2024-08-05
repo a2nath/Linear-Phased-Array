@@ -3,13 +3,14 @@ import os
 import QLearningAgent
 from utils.mdp import *
 
-model_bin          = "../Solution/bin/model.exe";
-compile_file       =  "compile.sh";
-sinr_limit         = 24.0
-number_of_episodes = 1;
-epsilon            = 0.1;
-number_of_steps    = 1000;
-recompile          = False;
+
+model_bin    = "../Solution/bin/model.exe";
+compile_file =  "compile.sh";
+limit_sinr   = 24.0
+num_episodes = 10;
+epsilon      = 0.85;
+num_steps    = 10000;
+recompile    = False;
 
 def args_init(args):
 	json_datalist = [] # stores json data, rather than files
@@ -61,32 +62,75 @@ def args_init(args):
 
 	return json_datalist
 
-
 def main():
-
 	parser = argparse.ArgumentParser("Performs Reinforcement Learning to check for the most optimized location of nodes in the network", add_help=True)
 	parser.add_argument("-f", "--filename", help="Name of the input json file")
 	parser.add_argument("-i", "--input_dir", help="Input directory where input json files are", default=os.getcwd())
+	parser.add_argument("-b", "--binary", help="Binary to execute for the modelling and simulation", default=model_bin)
 	parser.add_argument("-o", "--output_dir",  help="Ouput directory")
-	parser.add_argument("-l", "--snr_limit", \
-		help="Lower SINR limit for any handset when calculating reward system for the RL network", default=sinr_limit)
-	parser.add_argument("-e", "--episode", help="Number of episodes in the RL simulation", default=number_of_episodes)
+	parser.add_argument("-l", "--limit_sinr", \
+		help="Lower SINR limit for any handset when calculating reward system for the RL network", default=limit_sinr)
+	parser.add_argument("-e", "--num_episodes", help="Number of episodes in the RL simulation", default=num_episodes)
 	parser.add_argument("--epsilon", help="Epsilon for greedy explorative agent to check new values", default=epsilon)
-	parser.add_argument("-s", "--step", help="Number of steps in each episodes taken by an agent", default=number_of_steps)
+	parser.add_argument("-s", "--num_steps", help="Number of steps in each episodes taken by an agent", default=num_steps)
 	parser.add_argument("--quiet", help="Debug print off", action='store_true')
 
 	args = parser.parse_args()
 	json_datalist = args_init(args);
-	mdp_process = MDP(args, not args.quiet)
 
 	# run each scenario file
 	for data in json_datalist:
-		start_time = timeit.default_timer()
 
-		output_file = str(Path(args.output_dir, data[0].name + "." + time.strftime("%Y%m%d-%H%M%S") + ".txt"))
-		mdp_process.launch_scenario(data[1], output_file)
+		# set the log Path for logging purposes
+		output_file = Path(args.output_dir, "log_" + data[0].name + "." + time.strftime("%Y%m%d-%H%M%S") + ".txt")
 
-		end_time = timeit.default_timer()
+		logging.basicConfig(filename=output_file, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+		console_handler = logging.StreamHandler()
+		console_handler.setLevel(logging.INFO)
+
+		logging.getLogger().addHandler(console_handler)
+		args.ptx_episodes = [] # across timeslots
+
+		num_timeslots = len(data[1]['base_station_power_dBm_lut']) # 1
+
+		env = MDPEnv(args.binary, args.limit_sinr, not args.quiet, logging.getLogger(). data[1])
+
+		# get powers from previous timeslot
+
+		agent = QLearningAgent(env.action_space, env.observation_space.shape[0])
+
+		for episode in range(args.num_episodes):
+			start_time = timeit.default_timer()
+
+			# erase the state (as opposed to advance())
+			state = env.reset(args.timeslot, data)
+			total_reward = [0] * num_timeslots
+
+			for timeslot in num_timeslots:
+
+				done = False
+				steps = 0
+				total_reward[timeslot] = 0
+
+				while not done and steps < args.num_steps:
+					action = agent.choose_action(state)
+					next_state, reward, done, _ = env.step(action)
+					agent.learn(state, action, reward, next_state)
+					state = next_state
+					total_reward[timeslot] += reward
+					steps += 1
+
+				logging.info(f"state {env.results}, reward {total_reward[timeslot]}")
+
+				# critical for simulating more than 1 timeslot
+				env.advance_simulation()
+
+			agent.update_epsilon()
+			print(f"Episode {episode + 1}: Total Reward: {total_reward}")
+
+			end_time = timeit.default_timer()
+
+
 		print("-------------------------------------------------------")
 		print(f"{data[0].name} test done in {end_time - start_time}")
 
