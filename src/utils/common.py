@@ -17,10 +17,10 @@ def log_print(log_handle: Union[TextIO, str], text: str, mode: str = 'a+'):
 		log_handle.write(text + '\n')
 	log_handle.flush()
 
-def log_printline(log: TextIOWrapper, text: str, mode = 'a+'):
+def log_printline(log: TextIO, text: str, mode = 'a+'):
 	log_print(log, text + '\n', mode)
 
-def log_printfor(log: TextIOWrapper, array, mode = 'a+', delim = ','):
+def log_printfor(log: TextIO, array, mode = 'a+', delim = ','):
 	newstr = array[0]
 	for item in array[1:]:
 		newstr += delim + item
@@ -75,32 +75,3 @@ def restricted_float(fx):
 	if fx < 0.0:
 		raise argparse.ArgumentTypeError("%r is not positive"%(fx,))
 	return fx
-
-
-
-class Argument:
-	# val        : value of the argument
-	# mutable    : can be changed between steps RL
-	# parameters : counts as 1 or more parameter(s)
-
-	@property
-	def value(self):
-		return self._val
-
-	@value.setter
-	def value(self, val):
-		self._val = val
-
-
-	@property
-	def len(self):
-		return self._num_parameters
-
-	@property
-	def mutable(self):
-		return self._mutable
-
-	def __init__(self, val, mutable = False, parameters = 1):
-		self._val = val
-		self._mutable = mutable
-		self._num_parameters = parameters

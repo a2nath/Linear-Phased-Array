@@ -2,7 +2,7 @@ import time, timeit
 import subprocess
 import numpy as np
 from utils.common import *
-import gym
+from gym import spaces
 from collections import OrderedDict
 
 import pdb
@@ -136,7 +136,8 @@ class MDPEnv:
 			'--antenna_txpower' ,                  ','.join([str(s) for s in self.arguments['antenna_txpower']]),\
 			'--scan_angle'      ,                  ','.join([str(s) for s in self.arguments['antenna_scan_angle']]),\
 			'--antenna_spacing',                   ','.join([str(s) for s in self.arguments['antenna_spacing']]),\
-			'--base_station_antenna_counts',       ','.join([str(s) for s in self.arguments['antenna_counts']]),\
+			'--base_station_antenna_counts',       ','.join([str(s) for s in arguments['antenna_counts']]),\
+			#'--base_station_antenna_counts',       ','.join([str(s) for s in self.antenna_panels]),\
 			'--base_station_theta_c',              ','.join([str(s) for s in self.arguments['transmitter_direction'].value]),\
 			'--base_station_location',             ','.join([str(s) for s in _location['tx_station']]),\
 			'--mobile_station_location',           ','.join([str(s) for s in _location['rx_station']]),\
@@ -158,7 +159,8 @@ class MDPEnv:
 
 			# tx is transmitter
 			for tx_idx in range(self.num_transmitters):
-				action_per_parameter_per_tx = actions_list[index] - 1  # -1, 0, +1
+				discrete_action = actions_list[index]
+				action_per_parameter_per_tx = discrete_action - 1  # -1, 0, +1
 
 				if param_type == 'continuous':
 					# Calculate delta based on the range and action
@@ -167,8 +169,6 @@ class MDPEnv:
 					delta = action_per_parameter_per_tx * (range_span / 100) # * randomness_factor
 
 				else:# 'discrete'
-					action_per_parameter_per_tx = round(action_per_parameter_per_tx)
-					# For discrete, ensure the action results in a valid value
 					delta = action_per_parameter_per_tx
 					#delta = action_per_parameter_per_tx * (range_span / 100) # * randomness_factor
 					#new_index = self.action_index[key] + action_per_parameter_per_tx
@@ -279,27 +279,43 @@ class MDPEnv:
 		return self.get_state()
 	# end def
 
+	# for advanced timeslots
+	def get_mask(self):
+		mask = []
+		for value in self.arguments_metadata:
+			if value['const_in_advance']:
+				temp_arr = [0] * self.num_transmitters
+			else:
+				temp_arr = [1] * self.num_transmitters
+			mask.extend(temp_arr)
+
+		return mask
+
+	@property
+	def num_parameters(self):
+		return len(self.arguments_metadata) * self.num_transmitters
+
 	def __init__(self, binary, limit_sinr, debug, log_handle, json_data = None):
 
 		global global_c_speed
-
 		# validate the executatable
 		self.model_bin         = binary
 		self.limit_reward      = limit_sinr
 		self.logger            = log_handle
 		self.debug_flag        = debug
 		self.timeout           = None
-		self.frequency         = float(json_data['frequency']),
-		self.bandwidth         = 20e6 if not json_data else float(json_data['bandwidth']),
-		self.symbolrate        = int(json_data['symbolrate']),
-		self.blockpersymbol    = int(json_data['blockpersymbol']),
-		self.antenna_height    = int(json_data['antenna_height']),
-		self.antenna_size      = int(json_data['antenna_dims']),
-		self.ms_grx            = int(json_data['ms_grx_dB']),
-		self.system_noise      = 5  if not json_data else float(json_data['system_noise_dB']),
-		self.num_transmitters  = 3  if not json_data else int(json_data['mobile_stations']),
-		self.num_receivers     = 15 if not json_data else int(json_data['base_stations']),
-		self.limit_sinr        = 24 if not json_data else float(json_data['sinr_limit_dB']),
+		self.frequency         = float(json_data['frequency'])
+		self.bandwidth         = 20e6 if not json_data else float(json_data['bandwidth'])
+		self.symbolrate        = int(json_data['symbolrate'])
+		self.blockpersymbol    = int(json_data['blockpersymbol'])
+		self.antenna_height    = int(json_data['antenna_height'])
+		self.antenna_size      = [float(s) for s in json_data['antenna_dims']]
+		#self.antenna_panels    = [float(s) for s in json_data['base_station_antenna_counts']]
+		self.ms_grx            = int(json_data['ms_grx_dB'])
+		self.system_noise      = 5  if not json_data else float(json_data['system_noise_dB'])
+		self.num_transmitters  = 3  if not json_data else int(json_data['mobile_stations'])
+		self.num_receivers     = 15 if not json_data else int(json_data['base_stations'])
+		self.limit_sinr        = 24 if not json_data else float(json_data['sinr_limit_dB'])
 
 		self.limit_power             = [-30.0, 30.0] if not json_data else [float(f) for f in json_data['base_station_power_range_dBm']]
 		self.limit_scana             = [-90.0, 90.0] if not json_data else [float(f) for f in json_data['base_station_scan_angle_range_deg']]
@@ -307,8 +323,11 @@ class MDPEnv:
 		self.limit_antenna_direction = [0, 360] if not json_data else [float(f) for f in json_data['base_station_theta_c_lim_deg']]
 
 		# discrete places where the clients are placed
-		self.limit_tx_location_range = [[ 0, 0 ], [ 1000, 200 ]] if not json_data else [float(f) for f in json_data['base_station_field_range_meters']]
-		self.limit_rx_location_range = [list(range(200, 800, 50)), list(range(450, 650, 50))] if not json_data else [float(f) for f in json_data['mobile_station_field_range_meters']]
+		self.limit_tx_location_range = [[ 0, 0 ], [ 1000, 200 ]] if not json_data else \
+			[[float(c) for c in coordinates] for coordinates in json_data['base_station_field_range_meters']]
+
+		self.limit_rx_location_range = [list(range(200, 800, 50)), list(range(450, 650, 50))] if not json_data else \
+			[[float(c) for c in coordinates] for coordinates in json_data['mobile_station_field_range_meters']]
 
 		_limit_tx_location_range = np.transpose(self.limit_tx_location_range)
 		#self.receiver_list = list(range(self.num_receivers))
@@ -330,7 +349,6 @@ class MDPEnv:
 		})
 
 		# Automatically scale the number of actions
-		_num_parameters = len(self.arguments_metadata) * self.num_transmitters
 		_arguments_bounds = [[], []]
 
 		for key, value in self.arguments_metadata.items():
@@ -339,27 +357,33 @@ class MDPEnv:
 			_arguments_bounds[1].extend([_range[1]] * self.num_transmitters)
 
 		# Determine the action space. For each parameter, we'll have 3 possible actions: -1 (decrease), 0 (no change), +1 (increase)
-		self.action_space = spaces.Box(low=np.array([-1] * _num_parameters), high=np.array([1] * _num_parameters), dtype=np.float32)
+		#self.action_space = spaces.Box(low=np.array([-1] * _num_parameters), high=np.array([1] * _num_parameters), dtype=np.float32)
 		self.observation_space = spaces.Box(low=np.array(_arguments_bounds[0]), high=np.array(_arguments_bounds[1]), dtype=np.float32)
 	# end def
 
 class QLearningAgent:
-	def __init__(self, action_space, state_space, learning_rate=0.1, discount_factor=0.99, epsilon=0.1, epsilon_decay=0.99):
+	def __init__(self, action_space, state_space, precision, learning_rate=0.1, discount_factor=0.99, epsilon=0.1, epsilon_decay=0.99):
 		self.action_space = action_space
 		self.state_space = state_space
 		self.learning_rate = learning_rate
 		self.discount_factor = discount_factor
 		self.epsilon = epsilon
 		self.epsilon_decay = epsilon_decay
-		self.q_table = np.zeros((state_space, action_space))
+		self.precision = precision
+		self.reset_qtable()
+		#self.mask    =
+
+	def reset_qtable(self):
+		_total_discrete_actions = np.prod(self.action_space.nvec)
+		_state_space_size = self.state_space.shape[0]
+		self.q_table = np.zeros((_state_space_size, _total_discrete_actions), dtype=self.precision)
 
 	def choose_action(self, state):
-
 		if np.random.rand() < self.epsilon:
-			action = self.action_space.sample()  # Random actions for all parameters and base stations
+			sampled_action = self.action_space.sample() # Random actions for all parameters and base stations
+			action = sampled_action - 1
 		else:
-			state_index = self.state_to_index(state)
-			action = np.argmax(self.q_table[state_index]) # best-known action using argmax
+			action = np.argmax(self.q_table[state, :]) # best-known action using argmax
 
 		return action
 
