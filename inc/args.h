@@ -25,6 +25,7 @@ namespace default_t
 	const double tx_power                       = 0.0;   // default power for all base-stations dBm
 	const double scan_angle                     = 0.0;   // default angle for all base-stations degrees
 	const double sinr_limit                     = 24.0;  // SINR limit in dB
+	const unsigned timeslot                     = 0;     // current timeslot
 	const unsigned timeslots                    = 1  ;   // number of timeslots to consider
 	const std::vector<double> theta_c_radsdir   = { 60.0, 90.0, 120.0 }; // dBm [min max]
 	const std::vector<double> power_range_dBm   = { -30.0, 30.0 };       // dBm [min max]
@@ -196,72 +197,38 @@ struct Scan_Values : MultiData_Setup<double>
 	}
 };
 
-struct Binding_Values : MultiData_Setup<std::string>
+struct Binding_Values : MultiData_Setup<unsigned>
 {
 	std::vector<std::vector<unsigned>> binding_data;
 
-	bool is_valid_and_convert(const Pair<unsigned, unsigned>& reference_bounds)
+	bool is_valid_and_convert(const Pair<unsigned, unsigned>& bounds)
 	{
-		for (auto& row : data)
+		auto& num_base_stations = bounds.first;
+		auto& num_clients = bounds.second;
+
+		for (auto& ms_list : data)
 		{
-			cached::HashSet<unsigned> set;
-			binding_data.emplace_back();
-
-			for (auto& num : row)
+			if (ms_list.size() == num_base_stations && is_unique(ms_list))
 			{
-				auto index = num.find(':');
-
-				if (index != std::string::npos)
+				for (unsigned base_station_idx = 0; base_station_idx < num_base_stations; ++base_station_idx)
 				{
-					auto& total_bs_stations = reference_bounds.first;
-					auto& total_ms_stations = reference_bounds.second;
-					unsigned base_station, ms_station;
+					auto ms_idx = ms_list[base_station_idx];
 
-					std::string base_station_str = num.substr(0, index);
-					std::string ms_station_str = num.substr(index + 1);
-
-					try
-					{
-						base_station = stoul(base_station_str) - 1;
-						ms_station = stoul(ms_station_str) - 1;
-					}
-					catch (const std::invalid_argument& ia)
-					{
-						std::cerr << "Binding selection between " << base_station_str << " and "
-							<< ms_station_str << " is " << ia.what() << " " << strerror(errno) << std::endl;
-					}
-					catch (const std::out_of_range& oor)
-					{
-						std::cerr << "Binding selection between " << base_station_str << " and "
-							<< ms_station_str << " is " << oor.what() << " " << strerror(errno) << std::endl;
-					}
-
-					if (0 <= base_station && base_station < total_bs_stations
-						&& 0 <= ms_station && ms_station < total_ms_stations)
-					{
-						if (set.find(base_station) == set.end())
-						{
-							set.emplace(base_station);
-							binding_data.back().emplace_back(ms_station);
-						}
-						else
-						{
-							throw std::invalid_argument("Station binding " + str(base_station + 1) + ":" + str(ms_station + 1)
-								+ " is invalid since a base station is used to talk to more than one handset in the same timeslot");
-						}
-					}
-					else
+					if (!(0 <= ms_idx && ms_idx <= num_clients))
 					{
 						return false;
 					}
 				}
-				else
-				{
-					throw std::invalid_argument("Binding argument has invalid station binding syntax, e.g. bs:ms,bs:ms bs:ms,bs:ms");
-				}
+
+				binding_data.emplace_back(ms_list);
+			}
+			else
+			{
+				throw std::invalid_argument("Binding argument has invalid station binding syntax " + to_string(ms_list));
 			}
 		}
-		return true;
+
+		return !binding_data.empty();
 	}
 
 	Binding_Values() = default;
@@ -330,6 +297,7 @@ struct MyArgs : public argparse::Args
 	std::string& output_dir                 = kwarg("o,output_dir", "Output directory to put results in").set_default(getcwd());
 	std::string& i_json_file                = kwarg("f,file", "Input file used to run the simulation").set_default("");
 
+	std::optional<unsigned>& timeslot       = kwarg("timeslot", "Timeslot for logging reasons").set_default(default_t::timeslot);
 	double& frequency                       = kwarg("frequency", "Frequency of the signal system wide");
 	double& bandwidth                       = kwarg("bandwidth", "Bandwidth of the singal");
 	double& symrate                         = kwarg("symbolrate", "Symbol rate of the data stream");
@@ -497,6 +465,7 @@ struct MyArgs : public argparse::Args
 		};
 
 		output_dir = get_string("output_dir");
+		timeslot = get_unsigned("timeslot");
 		frequency = get_double("frequency");
 		bandwidth = get_double("bandwidth");
 		symrate = get_double("symbolrate");
