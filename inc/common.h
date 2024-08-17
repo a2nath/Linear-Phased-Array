@@ -6,6 +6,7 @@
 #include <unordered_set>
 #include <exception>
 #include <fstream>
+#include <vector>
 
 #define C_SPEED 3e8L /* speed of light */
 #define M_PIl   3.141592653589793238462643383279502884L /* pi */
@@ -33,6 +34,13 @@ inline T rand(T min, T max)
 inline std::string getcwd()
 {
 	return std::filesystem::current_path().string();
+}
+
+template<class T, class Compare = std::less<T>>
+bool is_unique(std::vector<T>& vec, Compare comp = Compare())
+{
+	std::sort(vec.begin(), vec.end(), comp);
+	return std::adjacent_find(vec.begin(), vec.end()) == vec.end();
 }
 
 namespace common
