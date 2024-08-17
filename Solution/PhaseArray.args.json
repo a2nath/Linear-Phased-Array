@@ -3,6 +3,10 @@
   "Id": "f0fcce7e-702b-45d6-8568-170910d82f78",
   "Items": [
     {
+      "Id": "e6912eaf-7783-49df-84f2-936d0ef73682",
+      "Command": "--timeslot 3"
+    },
+    {
       "Id": "42c5ca4e-4afa-4676-9c32-d321a39406b9",
       "Command": "--frequency 1900000000.0"
     },
@@ -76,15 +80,15 @@
     },
     {
       "Id": "3583d3fe-81df-4fbc-b490-fe680fef8d47",
-      "Command": "--antenna_txpower 0.0,0.0,0.0"
+      "Command": "--antenna_txpower -30.0,30.0,-30.0"
     },
     {
       "Id": "21f99835-7342-437f-8176-47da6947dbd6",
-      "Command": "--scan_angle 0.0,0.0,0.0"
+      "Command": "--scan_angle 40.0,65.0,-40.0"
     },
     {
       "Id": "d0bc3350-7d6c-4489-be29-bdd006175595",
-      "Command": "--ms_selection 1:1,2:2,3:3"
+      "Command": "--ms_selection 7,4,10"
     }
   ]
 }
