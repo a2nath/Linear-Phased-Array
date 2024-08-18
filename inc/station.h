@@ -261,13 +261,13 @@ public:
 	}
 
 	/* get signal power in watts */
-	inline void get_rx_signal_power(const unsigned& bs_id, double& power_watts)
+	inline void get_tx_signal_power(const unsigned& bs_id, double& power_watts)
 	{
 		bs_station_list[bs_id].getSignalLevel(station_id, power_watts);
 	}
 
 	/* calcalate the rx signal based on the station-base station binding */
-	void set_rx(const unsigned& associated_bs_id)
+	void set_tx_idx(const unsigned& associated_bs_id)
 	{
 		double signal, interference = 0, power;
 
@@ -275,12 +275,12 @@ public:
 		{
 			if (bs_id != associated_bs_id)
 			{
-				get_rx_signal_power(bs_id, power);
+				get_tx_signal_power(bs_id, power);
 				interference += power;
 			}
 			else
 			{
-				get_rx_signal_power(associated_bs_id, power);
+				get_tx_signal_power(associated_bs_id, power);
 				signal = power;
 			}
 		}

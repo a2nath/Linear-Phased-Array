@@ -272,7 +272,7 @@ namespace network_package
 			const antennadim& init_antdims)
 			:
 			power(0),
-			alpha(0),
+			alpha(-1),
 			ms_grx_linear(init_ms_grx_linear),
 			panel_count(init_panel_count),
 			lambda(init_lambda),

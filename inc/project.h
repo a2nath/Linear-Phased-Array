@@ -21,8 +21,8 @@ struct SimulationHelper
     const std::vector<std::vector<double>>& alphas_lut;                 // Antenna array directions in integer rads lut
     const std::vector<std::vector<unsigned>>& binding_station_ids_lut;  // base_station to station id binding lut
 
-    int      timeslot_idx;            // timeslot in the schedule
-    unsigned timeslots;           // total timeslots
+    unsigned timeslot_idx;   // timeslot in the schedule
+    unsigned timeslots;      // total timeslots
     unsigned nodes_rem;
 
     void inc_timeslot()
@@ -43,7 +43,7 @@ struct SimulationHelper
     /* gets called to get BS to MS bindings for a single timeslot. Output size: #bs */
     inline void get_bindings(std::vector<unsigned>& output) const
     {
-        output = binding_station_ids_lut[timeslot_idx];
+        output = binding_station_ids_lut[timeslot_idx % timeslots];
     }
 
     /* set antenna array power level in each timeslot */
@@ -58,25 +58,26 @@ struct SimulationHelper
     /* set antenna array power level in each timeslot */
     inline void reset_power() const
     {
-        set_power(powers_lut[timeslot_idx]);
+        set_power(powers_lut[timeslot_idx % timeslots]);
     }
 
     /* get antenna array power level in each timeslot */
     inline void get_power(std::vector<double>& output) const
     {
-        output = powers_lut[timeslot_idx];
+        output = powers_lut[timeslot_idx % timeslots];
     }
 
-    /* get permutations of power applied across base stations */
-    inline bool get_perm_power(std::vector<double>& power_list) const
+    /* get permutations of some simulation property */
+    template<class T>
+    inline bool get_perm(std::vector<T>& list) const
     {
-        return std::next_permutation(power_list.begin(), power_list.end());
+        return std::next_permutation(list.begin(), list.end());
     }
 
     /* set antenna array directivity before starting each simulation */
     void set_scan_dir()
     {
-        auto& source = alphas_lut[timeslot_idx];
+        auto& source = alphas_lut[timeslot_idx % timeslots];
 
         for (unsigned c = 0; c < cows.size(); ++c)
         {
@@ -85,6 +86,7 @@ struct SimulationHelper
     }
 
     SimulationHelper(std::vector<Cow>& cowlist,
+        const unsigned& timeslot_num,
         const unsigned& timeslot_count,
         const unsigned& mobile_stations,
         const std::vector<std::vector<double>>& power_bindings,
@@ -97,7 +99,7 @@ struct SimulationHelper
         binding_station_ids_lut(station_bindings),
         powers_lut(power_bindings),
         alphas_lut(alpha_bindings),
-        timeslot_idx(0),
+        timeslot_idx(timeslot_num),
         timeslots(timeslot_count),
         nodes_rem(mobile_stations)
     {
@@ -177,11 +179,12 @@ struct PerfMon
     {
         bool operator()(const dataitem_t& p1, const dataitem_t& p2) const
         {
-            return p1.sinr > p2.sinr; // like std::greater<Pixel>
+            return p1.sinr < p2.sinr; // like std::greater<Pixel>
         }
     };
 
     std::priority_queue<dataitem_t, std::vector<dataitem_t>, data_comparator> pqueue;
+    std::vector<dataitem_t> arr;
 
     void print()
     {
@@ -192,16 +195,20 @@ struct PerfMon
         }
     }
 
-    void update(const unsigned& bs_id, const double& sinr, const std::vector<unsigned>& binding_in_timeslot)
+    void update(
+        const unsigned& bs_id,
+        const double& sinr,
+        const std::vector<Placements>& rx_placement,
+        const std::vector<unsigned>& rx_selected_idxlist)
     {
         auto& cow = params.cowlist()[bs_id];
         pqueue.emplace(
             params.timeslot_idx,
             cow.getxPower(),
             cow.getAlpha(),
-            cow.getPosition(),
+            rx_placement[rx_selected_idxlist[bs_id]],
             cow.sid(),
-            binding_in_timeslot[bs_id],
+            rx_selected_idxlist[bs_id],
             sinr);
     }
 
@@ -221,6 +228,7 @@ protected:
 
     //std::vector<double> dBm2watts;              // in watts
     //std::vector<double> deg2rads;  // scan angle
+    const unsigned& timeslot;
     const double&   frequency;
     const double    lambda;
     const double&   bandwidth;
@@ -290,30 +298,41 @@ protected:
     {
         auto& simhelper = monitor->params;
 
+        /* create a new list of power nums and run calculations on its permutations */
+        std::vector<double> c_power_list;
+        simhelper.get_power(c_power_list);
+
         /* set the selected stations as per bindings */
         std::vector<unsigned> select_stations;
         simhelper.get_bindings(select_stations);
 
-        /* create a new list of power nums and run calculations on its permutations */
-        std::vector<double> power_list;
-        simhelper.get_power(power_list);
+        //std::unordered_map<unsigned, std::unordered_map<unsigned, bool>> visited;
 
         /* update the SINR for each scenario (base-station-count factorial permutations) */
-        bool permutation_state = true;
-        while (permutation_state)
+        bool permutation_state_bindings = true;
+        while (permutation_state_bindings)
         {
-            /* change the antenna power across all base stations */
-            simhelper.set_power(power_list);
+            std::vector<double> power_list = c_power_list;
 
-            for (size_t bs_id = 0; bs_id < base_station_count; ++bs_id)
+            bool permutation_state_power = true;
+            while (permutation_state_power)
             {
-                auto& station = stations[select_stations[bs_id]];
-                station.set_rx(bs_id);
+                /* change the antenna power across all base stations */
+                simhelper.set_power(power_list);
 
-                monitor->update(bs_id, station.get_sinr(), select_stations);
+                for (size_t bs_id = 0; bs_id < base_station_count; ++bs_id)
+                {
+                    auto& rx_idx = select_stations[bs_id];
+                    auto& rx_station = stations[rx_idx];
+
+                    rx_station.set_tx_idx(bs_id); // reassociate with a new tx if possible
+                    monitor->update(bs_id, rx_station.get_sinr(), mobile_stations_loc, select_stations);
+                }
+
+                permutation_state_power = simhelper.get_perm(power_list);
             }
 
-            permutation_state = simhelper.get_perm_power(power_list);
+            permutation_state_bindings = simhelper.get_perm(select_stations);
         }
     }
 
@@ -335,6 +354,7 @@ public:
     void run()
     {
         SimulationHelper simparams(cows,
+            timeslot,
             timeslot_count,
             mobile_station_count,
             bs_tx_requested_power_dBm,
@@ -366,6 +386,7 @@ public:
         logger(ilogger),
         sim_error(""),
         monitor(nullptr),
+        timeslot(args.timeslot.value()),
         frequency(args.frequency),
         lambda(getLambda(frequency)),
         bandwidth(args.bandwidth),
