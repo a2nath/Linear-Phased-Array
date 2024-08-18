@@ -3,6 +3,8 @@ import argparse
 from typing import Union, TextIO
 from pathlib import Path, PurePath
 import logging
+import os
+
 
 # pipe timeout for subprocess
 global_timeout = 60
