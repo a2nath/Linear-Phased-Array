@@ -29,6 +29,10 @@ namespace network_package
 	{
 		return log2lin(dBm - 30);
 	}
+	inline double watt2dBm(double lin)
+	{
+		return lin2dB(lin) + 30;
+	}
 
 	inline double getLambda(double frequency)
 	{
@@ -183,7 +187,7 @@ namespace network_package
 		}
 
 		/* update the antenna array from updated power and scan angle */
-		inline void update(const double& new_alpha, Calculations& calculations)
+		inline void update(const double& new_alpha, Calculations& calculations, const double& grx)
 		{
 			if (new_alpha != alpha)
 			{
@@ -201,7 +205,7 @@ namespace network_package
 					}
 
 					/* update the channel matrix */
-					calculations.hmatrix[idx] = ms_grx_linear * gain_factor_antenna_system / calculations.pathloss_list[idx];
+					calculations.hmatrix[idx] = grx * gain_factor_antenna_system / calculations.pathloss_list[idx];
 				}
 
 				/* update the scan angle of the antenna array */
@@ -212,13 +216,15 @@ namespace network_package
 		/* for bare-minimum numerical calculations needed at the mobile_stations only */
 		void graphics_update(const double& new_alpha)
 		{
-			update(new_alpha, graphic);
+			double grx = 1; // factor of 1 (pixel doesn't have gain)
+			update(new_alpha, graphic, grx);
 		}
 
 		/* for bare-minimum numerical calculations needed at the mobile_stations only */
 		void numerical_update(const double& new_alpha)
 		{
-			update(new_alpha, simulation);
+			double& grx = ms_grx_linear;
+			update(new_alpha, simulation, grx);
 		}
 
 		/* re-calc the signal outs to handsets only (before calling update!) */
