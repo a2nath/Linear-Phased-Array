@@ -96,6 +96,12 @@ namespace network_package
 			return simulation.hmatrix[rx_sta];
 		}
 
+		/* hatrix with respect to pixel index (flattened from 2D) */
+		const double& gcoeff(const unsigned& pixel_idx) const
+		{
+			return graphic.hmatrix[pixel_idx];
+		}
+
 		/* set power in watts */
 		void set_power(const double& power_watts)
 		{
@@ -244,6 +250,8 @@ namespace network_package
 		/* for GUI simulation in the whole grid */
 		void graphics_init(const std::vector<Polar_Coordinates>& polar_data)
 		{
+			power = 0;
+			alpha = -1;
 			graphic.resize(polar_data.size());
 			init(polar_data, graphic);
 		}

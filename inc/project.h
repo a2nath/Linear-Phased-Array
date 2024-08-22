@@ -85,22 +85,31 @@ struct SimulationHelper
 		}
 	}
 
-	/* performance logging and analysis latter */
-	void update_results(
-		const unsigned& bs_id,
-		const double& sinr,
-		const std::vector<Placements>& rx_placement,
-		const std::vector<unsigned>& rx_selected_idxlist)
+	/* need to update all coefficients before getting rx power in any 1 station */
+	void g_setup_tx(const size_t& rows, const size_t& cols)
 	{
-		auto& cow = cows[bs_id];
+		std::vector<double> scan_angles, power_nums;
+		get_scana(scan_angles);
+		get_power(power_nums);
 
+		for (unsigned c = 0; c < cows.size(); ++c)
+		{
+			cows[c].reset_gui(rows, cols, cows[c].where());
+			cows[c].gui_udpate(scan_angles[c]);
+			cows[c].set_power(power_nums[c]);
+		}
+	}
+
+	/* performance logging and analysis latter */
+	void update_results(const unsigned& bs_id, const unsigned& ms_id, const double& sinr, const Placements& mx_location)
+	{
 		pqueue.emplace(
 			timeslot_idx,
-			cow.getxPower(),
-			cow.alpha(),
-			rx_placement[rx_selected_idxlist[bs_id]],
-			cow.sid(),
-			rx_selected_idxlist[bs_id],
+			cows[bs_id].getxPower(),
+			cows[bs_id].alpha(),
+			mx_location,
+			cows[bs_id].sid(),
+			ms_id,
 			sinr);
 	}
 
@@ -197,7 +206,7 @@ protected:
 	}
 
 	/* calcalate the rx signal based on all base stations */
-	void set_tx_idx(Station& station, const unsigned& associated_bs_id)
+	void compute_sinr(Station& station, const unsigned& associated_bs_id)
 	{
 		double signal = 0, interference = 0, power;
 		auto& gain_rx = station.get_grx();
@@ -245,8 +254,8 @@ protected:
 					auto& rx_idx = select_stations[bs_id];
 					auto& rx_station = stations[rx_idx];
 
-					set_tx_idx(rx_station, bs_id); // reassociate with a new tx if possible
-					simhelper->update_results(bs_id, rx_station.get_sinr(), mobile_stations_loc, select_stations);
+					compute_sinr(rx_station, bs_id); // reassociate with a new tx if possible
+					simhelper->update_results(bs_id, rx_idx, rx_station.get_sinr(), mobile_stations_loc[rx_idx]);
 				}
 
 				permutation_state_power = simhelper->get_perm(power_list);
@@ -276,13 +285,10 @@ public:
 
 	void guistat(const size_t& pixel_rows, const size_t& pixel_cols)
 	{
-		/* set the scan angles for each transmitter */
-		std::vector<double> scan_angles;
-		simhelper->get_scana(scan_angles);
+		std::vector<double> signal_power_lin(pixel_rows * pixel_cols);
 
-		/* set the selected stations as per bindings */
-		std::vector<unsigned> select_stations;
-		simhelper->get_bindings(select_stations);
+		/* IMPORTANT need to set this before iterating over cows again */
+		simhelper->g_setup_tx(pixel_rows, pixel_cols);
 
 		for (unsigned timeslot = 0; timeslot < timeslot_count; ++timeslot)
 		{
@@ -292,21 +298,20 @@ public:
 				auto& cow = simhelper->cows[c];
 				auto& alpha = bs_requested_scan_alpha_rad[timeslot][c];
 
-				cow.set_gui_matrix(pixel_rows, pixel_cols, cow.where());
-
-				std::vector<double> signal_power_lin(pixel_rows * pixel_cols);
-				cow.heatmap_udpate(alpha, signal_power_lin);
+				cow.heatmap(signal_power_lin);
 
 				size_t index = 0;
-				for (size_t r = 0; r = pixel_rows; ++r)
+				for (size_t r = 0; r < pixel_rows; ++r)
 				{
 					logger.write("cow " + str(cow.sid()));
-					for (size_t c = 0; c = pixel_cols; ++c)
+					for (size_t c = 0; c < pixel_cols; ++c)
 					{
-						logger.write(' ' + str(watt2dBm(signal_power_lin[index++])));
+						logger.write(' ' + str(lin2dB(signal_power_lin[index++])));
 					}
 					logger.write("\n");
 				}
+
+				memset(&signal_power_lin[0], 0, signal_power_lin.size() * sizeof signal_power_lin[0]);
 			}
 		}
 	}

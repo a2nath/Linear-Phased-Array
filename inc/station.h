@@ -46,7 +46,7 @@ class Cow
 	} init;
 
 	Placements location;
-	Dimensions<unsigned> gui_grid_size;
+	Dimensions<size_t> gui_grid_size;
 
 	const std::vector<Placements>& ms_station_loc;
 	const unsigned& ms_stations;
@@ -128,22 +128,29 @@ public:
 		antenna.numerical_update(alpha);
 	}
 
+	/* get signal level in Watts (linear): second parameter, needs to be reshaped to M x N */
+	void gui_udpate(const double& alpha)
+	{
+		antenna.graphics_update(alpha);
+	}
+
 	/* set the signal level in Watts (linear): second parameter */
 	inline void signal_power(const unsigned& node_id, double& signal_level_lin) const
 	{
 		signal_level_lin = antenna.coeff(node_id) * antenna.get_power();
 	}
 
-	/* get signal level in Watts (linear): second parameter, needs to be reshaped to M x N */
-	inline void heatmap_udpate(const double& alpha, std::vector<double>& sig_power_watts)
+	/* set the signal level in Watts (linear): second parameter */
+	inline void g_signal_power(const size_t& pidx, double& signal_level_lin) const
 	{
-		//antenna.reset();
-		antenna.graphics_update(alpha);
+		signal_level_lin = antenna.gcoeff(pidx) * antenna.get_power();
+	}
 
-		unsigned long col_idx = 0;
+	void heatmap(std::vector<double>& output)
+	{
 		for (size_t pixel_idx = 0; pixel_idx < gui_polar_data.size(); ++pixel_idx)
 		{
-			signal_power(pixel_idx, sig_power_watts[pixel_idx]);
+			g_signal_power(pixel_idx, output[pixel_idx]);
 		}
 	}
 
@@ -178,17 +185,19 @@ public:
 		}
 	}
 
+	void relocate(const Placements& new_location)
+	{
+		if (location != new_location)
+		{
+			set_polar_data(new_location, polar_data);
+			location = new_location;
+		}
+	}
+
 	/* signal heat map for cells in the GUI for one "cow" */
-	void set_gui_matrix(
-		const unsigned& rows,
-		const unsigned& cols,
-		//double&      new_antpower_watts,
-		//double&      new_gain_grx_linear,
-		//unsigned&    new_panel_count,
-		//double&      new_frequency, // for lambda
-		//double&      new_ant_spacing,
-		//double&      new_theta_c_rads,
-		//const antennadim&  new_antdim_meters,
+	void reset_gui(
+		const size_t& rows,
+		const size_t& cols,
 		const Placements& new_location)
 	{
 		/* recalculate entire antenna + grid based on the exact config change(s) */
@@ -197,49 +206,6 @@ public:
 			set_polar_data(rows, cols, new_location, gui_polar_data);
 			gui_grid_size = { rows, cols };
 		}
-
-		if (location != new_location)
-		{
-			set_polar_data(new_location, polar_data);
-			location = new_location;
-		}
-
-		//if (antenna.get_power() != new_antpower_watts)
-		//{
-		//	antenna.set_power(new_antpower_watts);
-		//}
-
-		//if (antenna.grx_gain() != new_gain_grx_linear)
-		//{
-		//	antenna.set_grx_gain(new_gain_grx_linear));
-		//}
-
-		//if (antenna.antpanelcount() != new_panel_count)
-		//{
-		//	antenna.set_antpanelcount(new_panel_count);
-		//}
-
-		//double new_lambda = getLambda(new_frequency);
-		//if (antenna.antlambda() != new_lambda)
-		//{
-		//	antenna.set_antlambda(new_lambda);
-		//}
-
-		//if (antenna.antspacing() != new_ant_spacing)
-		//{
-		//	antenna.set_antspacing(new_ant_spacing);
-		//}
-
-		//if (antenna.beamdir() != new_theta_c_rads)
-		//{
-		//	antenna.set_beamdir(new_theta_c_rads);
-		//}
-
-		//auto& dim = antenna.antdim();
-		//if (dim.x != new_antdim_meters.x || dim.y != new_antdim_meters.y)
-		//{
-		//	antenna.set_antdim(new_antdim_meters);
-		//}
 
 		antenna.graphics_init(gui_polar_data); // always calculates based on the above
 	}
