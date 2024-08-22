@@ -36,30 +36,10 @@ struct SimulationHelper
         return timeslots;
     }
 
-    const std::vector<Cow>& cowlist() const // performance monitor needs a list
-    {
-        return cows;
-    }
-
     /* gets called to get BS to MS bindings for a single timeslot. Output size: #bs */
     inline void get_bindings(std::vector<unsigned>& output) const
     {
         output = binding_station_ids_lut[timeslot_idx % timeslots];
-    }
-
-    /* set antenna array power level in each timeslot */
-    inline void set_power(const std::vector<double>& power_list) const
-    {
-        for (unsigned i = 0; i < power_list.size(); ++i)
-        {
-            cows[i].set_power(power_list[i]);
-        }
-    }
-
-    /* set antenna array power level in each timeslot */
-    inline void reset_power() const
-    {
-        set_power(powers_lut[timeslot_idx % timeslots]);
     }
 
     /* get antenna array power level in each timeslot */
@@ -88,6 +68,20 @@ struct SimulationHelper
         {
             std::cout << pqueue.top() << std::endl;
             pqueue.pop();
+        }
+    }
+
+    /* need to update all coefficients before getting rx power in any 1 station */
+    void setup_tx()
+    {
+        std::vector<double> scan_angles, power_nums;
+        get_scana(scan_angles);
+        get_power(power_nums);
+
+        for (unsigned c = 0; c < cows.size(); ++c)
+        {
+            cows[c].antenna_update(scan_angles[c]);
+            cows[c].set_power(power_nums[c]);
         }
     }
 
@@ -140,6 +134,8 @@ protected:
     std::vector<Station> stations;
     SimulationHelper* simhelper;
 
+    //std::vector<double> dBm2watts;   // in watts
+    //std::vector<double> deg2rads;    // scan angle
     const unsigned& timeslot;
     const double&   frequency;
     const double    lambda;
@@ -170,24 +166,9 @@ protected:
 
     void setup()
     {
-        //for (unsigned power = power_range_dBm.front(); power <= power_range_dBm.back(); ++power)
-        //{
-        //    dBm2watts.emplace_back(cached::dBm2watt(power));
-        //}
-        //
-        //for (unsigned alpha = power_range_dBm.front(); alpha <= power_range_dBm.back(); ++alpha)
-        //{
-        //    deg2rads.emplace_back(cached::dBm2watt(alpha));
-        //}
-
-        //for (auto& theta : bs_theta_c)
-        //{
-        //    theta = deg2rad(theta);
-        //}
-
-        for (unsigned i = 0; i < mobile_stations_loc.size(); ++i)
+        for (unsigned i = 0; i < mobile_station_count; ++i)
         {
-            stations.emplace_back(i, cows, system_noise_lin);
+            stations.emplace_back(i, cows, system_noise_lin, ms_gain_gtrx_lin);
         }
 
         /* setup the system */
@@ -219,9 +200,8 @@ protected:
 
     void run_single_timelot()
     {
-        /* set the scan angles for each transmitter */
-        std::vector<double> scan_angles;
-        simhelper->get_scana(scan_angles);
+        /* IMPORTANT need to set this before iterating over cows again */
+        simhelper->setup_tx();
 
         /* set the selected stations as per bindings */
         std::vector<unsigned> select_stations;
@@ -238,16 +218,10 @@ protected:
             bool permutation_state_power = true;
             while (permutation_state_power)
             {
-                /* change the antenna power across all base stations */
-                simhelper->set_power(power_list);
-
                 for (size_t bs_id = 0; bs_id < base_station_count; ++bs_id)
                 {
                     auto& rx_idx = select_stations[bs_id];
                     auto& rx_station = stations[rx_idx];
-
-                    cows[bs_id].antenna_update(scan_angles[bs_id]);  // update hmatrix
-                    cows[bs_id].set_power(power_list[bs_id]);        // update power
 
                     rx_station.set_tx_idx(bs_id); // reassociate with a new tx if possible
                     simhelper->update_results(bs_id, rx_station.get_sinr(), mobile_stations_loc, select_stations);
@@ -266,7 +240,7 @@ public:
     void run()
     {
         /* setup the cows first such that the simulation is set with alphas and TX powers */
-        for (unsigned slot = 0; slot < simhelper->timeslots; ++slot)
+        for (unsigned slot = 0; slot < timeslot_count; ++slot)
         {
             run_single_timelot();
             simhelper->inc_timeslot(); // increment the timeslot to get the next parameters
@@ -280,18 +254,13 @@ public:
 
     void guistat(const size_t& pixel_rows, const size_t& pixel_cols)
     {
-        /* create a new list of power nums and run calculations on its permutations */
-        std::vector<double> c_power_list;
-        simhelper->get_power(c_power_list);
+        /* set the scan angles for each transmitter */
+        std::vector<double> scan_angles;
+        simhelper->get_scana(scan_angles);
 
         /* set the selected stations as per bindings */
         std::vector<unsigned> select_stations;
         simhelper->get_bindings(select_stations);
-
-        //std::unordered_map<unsigned, std::unordered_map<unsigned, bool>> visited;
-
-        /* update the SINR for each scenario (base-station-count factorial permutations) */
-        std::vector<double> power_list = c_power_list;
 
         for (unsigned timeslot = 0; timeslot < timeslot_count; ++timeslot)
         {
