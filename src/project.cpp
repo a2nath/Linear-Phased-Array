@@ -14,6 +14,9 @@
 #include <SFML/Graphics.hpp>
 #endif
 
+#define GRID_WIDTH 1000
+#define GRID_HEIGHT 1000
+
 using namespace std;
 
 /* in case of errors, check this */
@@ -45,12 +48,13 @@ int main(int argc, char** argv, char** envp)
     cout << "arguments as follows:\n" << "-----------------------" << endl;
     args.print();
 
-    Logger logger(args.get_input_filename(), args.output_dir, "output.txt");
+    Logger logger(args.get_input_filename(), args.output_dir);
     Simulator sim(args, logger);
 
     /* run the simulation and get the SNR table */
     sim.run();
     sim.print();
+    sim.guistat(GRID_WIDTH, GRID_HEIGHT);
 
 
     //plot(mobile_station_pos);
