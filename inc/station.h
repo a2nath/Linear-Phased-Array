@@ -289,9 +289,9 @@ public:
 /* client or handseet */
 class Station
 {
-	const unsigned station_id;  // id of the station in the list of stations
-	std::vector<Cow>& bs_station_list;
-	const double& tnf_watt;           // thermal noise floor
+	const unsigned  station_id;      // station id
+	const double    tnf_watt;        // thermal noise floor
+	const double    gain_rx;
 	double sinr;
 public:
 
@@ -300,26 +300,9 @@ public:
 		return station_id;
 	}
 
-	/* calcalate the rx signal based on the station-base station binding */
-	void set_tx_idx(const unsigned& associated_bs_id)
+	void set_sinr(const double& calculation)
 	{
-		double signal = 0, interference = 0, power;
-
-		for (size_t bs_id = 0; bs_id < bs_station_list.size(); ++bs_id)
-		{
-			if (bs_id != associated_bs_id)
-			{
-				bs_station_list[bs_id].signal_power(bs_id, power);
-				interference += power;
-			}
-			else
-			{
-				bs_station_list[bs_id].signal_power(associated_bs_id, power);
-				signal = power;
-			}
-		}
-
-		sinr = signal / (interference + tnf_watt);
+		sinr = calculation;
 	}
 
 	/* get SINR in linear by passing signal and inteference/noise in linear factor */
@@ -328,10 +311,22 @@ public:
 		return sinr;
 	}
 
-	Station(unsigned id, std::vector<Cow>& icow, const double& inoise) :
+	/* get receiver gain watts */
+	const double& get_grx() const
+	{
+		return gain_rx;
+	}
+
+	/* get system noise figure in watts */
+	const double& get_nf() const
+	{
+		return tnf_watt;
+	}
+
+	Station(unsigned id, const double& inoise, const double& grx) :
 		station_id(id),
-		bs_station_list(icow),
 		tnf_watt(inoise),
+		gain_rx(grx),
 		sinr(0)
 	{}
 };

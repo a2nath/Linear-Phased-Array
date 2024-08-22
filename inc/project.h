@@ -143,8 +143,6 @@ protected:
     const double&   symrate;
     const double&   blockspersym;
     const double&   antenna_height;
-    const double&   ms_gain_gtrx_lin;
-    const double    system_noise_lin;
     const unsigned& mobile_station_count;
     const unsigned& base_station_count;
     const unsigned& timeslot_count;
@@ -164,11 +162,11 @@ protected:
     const std::vector<std::vector<double>>& bs_requested_scan_alpha_rad;
     const std::vector<std::vector<unsigned>>& ms2bs_requested_bindings;
 
-    void setup()
+    void setup(const std::vector<double>& grxlist, const double& system_noise_lin)
     {
         for (unsigned i = 0; i < mobile_station_count; ++i)
         {
-            stations.emplace_back(i, cows, system_noise_lin, ms_gain_gtrx_lin);
+            stations.emplace_back(i, system_noise_lin, grxlist[i]);
         }
 
         /* setup the system */
@@ -198,6 +196,30 @@ protected:
 
     }
 
+	/* calcalate the rx signal based on all base stations */
+	void set_tx_idx(Station& station, const unsigned& associated_bs_id)
+	{
+		double signal = 0, interference = 0, power;
+		auto& gain_rx = station.get_grx();
+
+		for (size_t bs_id = 0; bs_id < base_station_count; ++bs_id)
+		{
+			cows[bs_id].signal_power(station.sid(), power);
+
+			if (bs_id != associated_bs_id)
+			{
+				interference += power * gain_rx;
+			}
+			else
+			{
+				signal = power * gain_rx;
+			}
+		}
+
+		double sinr = signal / (interference + station.get_nf());
+		station.set_sinr(sinr);
+	}
+
     void run_single_timelot()
     {
         /* IMPORTANT need to set this before iterating over cows again */
@@ -223,7 +245,7 @@ protected:
                     auto& rx_idx = select_stations[bs_id];
                     auto& rx_station = stations[rx_idx];
 
-                    rx_station.set_tx_idx(bs_id); // reassociate with a new tx if possible
+                    set_tx_idx(rx_station, bs_id); // reassociate with a new tx if possible
                     simhelper->update_results(bs_id, rx_station.get_sinr(), mobile_stations_loc, select_stations);
                 }
 
@@ -306,8 +328,6 @@ public:
         symrate(args.symrate),
         blockspersym(args.blockspersym),
         antenna_height(args.antenna_height),
-        ms_gain_gtrx_lin(cached::log2lin(args.gain_gtrx)),
-        system_noise_lin(cached::log2lin(getThermalSystemNoise(bandwidth, args.system_noise))),
         mobile_station_count(args.mobile_station_count),
         base_station_count(args.base_station_count),
         timeslot_count(args.timeslots),
@@ -326,6 +346,7 @@ public:
         bs_requested_scan_alpha_rad(args.bs_scan_alpha_deg.value().data),
         ms2bs_requested_bindings(args.ms_id_selections.binding_data)
     {
-        setup();
+        setup(std::vector<double>(args.mobile_station_count, cached::log2lin(args.gain_gtrx)),
+			cached::log2lin(getThermalSystemNoise(bandwidth, args.system_noise)));
     }
 };
