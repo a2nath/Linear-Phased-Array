@@ -175,7 +175,6 @@ protected:
             cows.emplace_back(bs_id,
                 base_stations_loc[bs_id],
                 mobile_stations_loc,
-                ms_gain_gtrx_lin,
                 bs_antenna_counts[bs_id],
                 lambda,
                 antenna_spacing[bs_id],

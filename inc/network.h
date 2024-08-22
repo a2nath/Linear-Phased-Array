@@ -61,7 +61,6 @@ namespace network_package
 		//typedef void (*FuncPtr)(double);
 		double     power;              // array power
 		double     alpha;              // scan angle
-		double     ms_grx_linear;      // gain factor for a client station
 		unsigned   panel_count;        // number of panels
 		double     lambda;             // wavelength of the RF signal
 		double     spacing;            // wavelength of the RF signal
@@ -115,17 +114,6 @@ namespace network_package
 			return alpha;
 		}
 
-		/* set station grx in linear_factor */
-		void set_grx_gain(const unsigned& linear_factor)
-		{
-			ms_grx_linear = linear_factor;
-		}
-
-		/* get station grx in linear_factor */
-		const double& grx_gain() const
-		{
-			return ms_grx_linear;
-		}
 		/* sett panel count in the antenna array */
 		void set_antpanelcount(const unsigned& count)
 		{
@@ -187,7 +175,7 @@ namespace network_package
 		}
 
 		/* update the antenna array from updated power and scan angle */
-		inline void update(const double& new_alpha, Calculations& calculations, const double& grx)
+		inline void update(const double& new_alpha, Calculations& calculations)
 		{
 			if (new_alpha != alpha)
 			{
@@ -205,7 +193,7 @@ namespace network_package
 					}
 
 					/* update the channel matrix */
-					calculations.hmatrix[idx] = grx * gain_factor_antenna_system / calculations.pathloss_list[idx];
+					calculations.hmatrix[idx] = gain_factor_antenna_system / calculations.pathloss_list[idx];
 				}
 
 				/* update the scan angle of the antenna array */
@@ -216,15 +204,13 @@ namespace network_package
 		/* for bare-minimum numerical calculations needed at the mobile_stations only */
 		void graphics_update(const double& new_alpha)
 		{
-			double grx = 1; // factor of 1 (pixel doesn't have gain)
-			update(new_alpha, graphic, grx);
+			update(new_alpha, graphic);
 		}
 
 		/* for bare-minimum numerical calculations needed at the mobile_stations only */
 		void numerical_update(const double& new_alpha)
 		{
-			double& grx = ms_grx_linear;
-			update(new_alpha, simulation, grx);
+			update(new_alpha, simulation);
 		}
 
 		/* re-calc the signal outs to handsets only (before calling update!) */
@@ -270,7 +256,6 @@ namespace network_package
 		}
 
 		AAntenna(
-			const double& init_ms_grx_linear,
 			const unsigned& init_panel_count,
 			const double& init_lambda,
 			const double& init_antenna_spacing,
@@ -279,7 +264,6 @@ namespace network_package
 			:
 			power(0),
 			alpha(-1),
-			ms_grx_linear(init_ms_grx_linear),
 			panel_count(init_panel_count),
 			lambda(init_lambda),
 			spacing(init_antenna_spacing),

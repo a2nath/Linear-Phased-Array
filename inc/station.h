@@ -21,7 +21,6 @@ class Cow
 	const struct Init_Antenna
 	{
 		const Placements& location;
-		const double& ms_grx_linear;
 		const unsigned& panel_count;
 		const double& lambda;
 		const double& antenna_spacing;
@@ -30,7 +29,6 @@ class Cow
 
 		Init_Antenna(
 			const Placements& init_bs_location,
-			const double& init_ms_grx_linear,
 			const unsigned& init_panel_count,
 			const double& init_lambda,
 			const double& init_antenna_spacing,
@@ -38,7 +36,6 @@ class Cow
 			const network_package::antennadim& init_antenna_dim)
 			:
 			location(init_bs_location),
-			ms_grx_linear(init_ms_grx_linear),
 			panel_count(init_panel_count),
 			lambda(init_lambda),
 			antenna_spacing(init_antenna_spacing),
@@ -251,7 +248,6 @@ public:
 	void reset()
 	{
 		antenna.set_power(0);
-		antenna.set_grx_gain(init.ms_grx_linear);
 		antenna.set_antpanelcount(init.panel_count);
 		antenna.set_antlambda(init.lambda);
 		antenna.set_antspacing(init.antenna_spacing);
@@ -266,7 +262,6 @@ public:
 		unsigned& id,
 		const Placements& bs_location,
 		const std::vector<Placements>& ms_pos_list,
-		const double& ms_grx_linear,
 		const unsigned& panel_count,
 		const double& lambda,
 		const double& antenna_spacing,
@@ -274,11 +269,11 @@ public:
 		const network_package::antennadim& antenna_dim)
 		:
 		station_id(id),
-		init(bs_location, ms_grx_linear, panel_count, lambda, antenna_spacing, antenna_orientation, antenna_dim),
+		init(bs_location, panel_count, lambda, antenna_spacing, antenna_orientation, antenna_dim),
 		location(init.location),
 		ms_station_loc(ms_pos_list),
 		ms_stations(ms_pos_list.size()),
-		antenna(ms_grx_linear, panel_count, lambda, antenna_spacing, antenna_orientation, antenna_dim),
+		antenna(panel_count, lambda, antenna_spacing, antenna_orientation, antenna_dim),
 		power_idx(0)
 	{
 		set_polar_data(init.location, polar_data);
