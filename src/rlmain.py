@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import os, sys
-import QLearningAgent
 from utils.mdp import *
+from utils.agent import QLearningAgent
 
 model_bin    = "../Solution/bin/model.exe"
 comile_script = "../compile.sh"
@@ -124,7 +124,9 @@ def main():
 
 		# get powers from previous timeslot
 		action_space = spaces.MultiDiscrete([3] * env.num_parameters, dtype=np.uint8)
-		agent = QLearningAgent(action_space, env.observation_space, \
+		state_space_size = env.observation_space.shape[0]
+
+		agent = QLearningAgent(action_space, state_space_size, \
 						 args.learning_rate, args.discount_factor, args.epsilon, args.epsilon_decay, epsilon_min, epsilon_max, precision)
 
 		for episode in range(args.num_episodes):
