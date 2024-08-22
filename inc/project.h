@@ -353,8 +353,8 @@ public:
         antenna_dims(args.antenna_dims),
         showgui(args.showgui),
         debug(args.debug),
-        bs_tx_requested_power_dBm(args.bs_tx_power_dBm.value().data),
-        bs_requested_scan_alpha_deg(args.bs_scan_alpha_deg.value().data),
+        bs_tx_requested_power_watts(args.bs_tx_power_dBm.value().data),
+        bs_requested_scan_alpha_rad(args.bs_scan_alpha_deg.value().data),
         ms2bs_requested_bindings(args.ms_id_selections.binding_data)
     {
         setup();
