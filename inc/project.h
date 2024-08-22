@@ -144,12 +144,12 @@ protected:
     const double&   blockspersym;
     const double&   antenna_height;
     const double&   ms_gain_gtrx_lin;
-    const double&   system_noise_lin;
+    const double    system_noise_lin;
     const unsigned& mobile_station_count;
     const unsigned& base_station_count;
     const unsigned& timeslot_count;
-    const double&   sinr_limit_linear;
-    const std::vector<double>& bs_theta_c;
+    const double    sinr_limit_linear;
+    const std::vector<double> bs_theta_c;
     const std::vector<Placements>& base_stations_loc;
     const std::vector<Placements>& mobile_stations_loc;
     const std::vector<unsigned>& bs_antenna_counts;
