@@ -301,7 +301,7 @@ public:
 				cow.heatmap(signal_power_lin);
 
 				size_t index = 0;
-				for (size_t r = 0; r < pixel_rows; ++r)
+				for (size_t r = pixel_rows - 1 ; r >= 0; --r)
 				{
 					logger.write("cow " + str(cow.sid()));
 					for (size_t c = 0; c < pixel_cols; ++c)
@@ -309,6 +309,9 @@ public:
 						logger.write(' ' + str(lin2dB(signal_power_lin[index++])));
 					}
 					logger.write("\n");
+
+					if (r == 0)
+						break;
 				}
 
 				memset(&signal_power_lin[0], 0, signal_power_lin.size() * sizeof signal_power_lin[0]);
