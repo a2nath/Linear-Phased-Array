@@ -6,8 +6,11 @@
 #include <unordered_set>
 #include <exception>
 #include <fstream>
+#include <vector>
+#include <chrono>
+#include <sstream>
 
-#define C       3e8 //speed of light
+#define C_SPEED 3e8L /* speed of light */
 #define M_PIl   3.141592653589793238462643383279502884L /* pi */
 
 
@@ -15,7 +18,9 @@
 #include <process.h>
 /* get process id and attach to process */
 #define GetCurrentProcessId getpid
+#define localtime(current_time, local_time) localtime_s(local_time, current_time);
 #else
+#define localtime(current_time, local_time) localtime_r(&current_time, &local_time);
 #include <unistd.h>
 #endif
 
@@ -23,6 +28,26 @@ extern std::string sim_error;
 
 template<class T> std::string str(const T& input) { return std::to_string(input); }
 template<class U, class V> using Pair = std::pair<U, V>;
+
+
+std::string timestamp() {
+	// Get the current time as a time_point
+	auto now = std::chrono::system_clock::now();
+
+	// Convert to time_t to be able to format the time
+	std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
+
+	// Create a tm structure for the local time
+	std::tm localTime;
+
+	localtime(&currentTime, &localTime);
+
+	// Use a stringstream to format the timestamp
+	std::ostringstream timestamp;
+	timestamp << std::put_time(&localTime, "%Y%m%d_%H%M%S");
+
+	return timestamp.str();
+}
 
 template<class T>
 inline T rand(T min, T max)
@@ -33,6 +58,13 @@ inline T rand(T min, T max)
 inline std::string getcwd()
 {
 	return std::filesystem::current_path().string();
+}
+
+template<class T, class Compare = std::less<T>>
+bool is_unique(std::vector<T>& vec, Compare comp = Compare())
+{
+	std::sort(vec.begin(), vec.end(), comp);
+	return std::adjacent_find(vec.begin(), vec.end()) == vec.end();
 }
 
 namespace common
@@ -89,35 +121,57 @@ class Logger
 public:
 	inline void write(const std::string& str)
 	{
-		stream << str;
+		if (stream.is_open())
+		{
+			stream << str;
+		}
 	}
 
 	void writeline(const std::string& str)
 	{
-		write(str);
-		stream << std::endl;
+		if (stream.is_open())
+		{
+			write(str);
+			stream << std::endl;
+		}
 	}
 
 	void close()
 	{
-		stream.close();
+		if (stream.is_open())
+		{
+			stream.close();
+		}
 	}
 
-	Logger(path inputfile, path output_filename, path output_dirname)
+	void copy_settings(path& inputfile, path& output_dirname)
+	{
+		/* place the input configfile into the output directory to quickly check the inputs */
+		std::filesystem::copy_file(inputfile, path(output_dirname / inputfile.filename()).string());
+
+	}
+
+	Logger(path inputfile, path output_dirname, path output_filename = "")
 	{
 		if (std::filesystem::is_regular_file(inputfile))
 		{
-			/* place the input configfile into the output directory to quickly check the inputs */
-			std::filesystem::copy_file(inputfile, path(output_dirname / inputfile.filename()).string());
+			copy_settings(inputfile, output_dirname);
+			if (output_filename.string().empty())
+			{
+				output_filename = inputfile.stem().string() + "." + timestamp() + ".out";
+			}
 		}
 		else
 		{
 			std::cout << "No reference input file found that could be associated to the sim outputs" << std::endl;
+			if (output_filename.string().empty())
+			{
+				output_filename = "output." + timestamp() + ".out";
+			}
 		}
 
 		/* open the output file stream during sim */
 		stream.open(path(output_dirname / output_filename).string());
-
 	}
 };
 

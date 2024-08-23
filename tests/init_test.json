@@ -3,12 +3,12 @@
   "bandwidth": 20000000.0,
   "symbolrate": 3840000.0,
   "blockpersymbol": 768,
-  "height": 200,
+  "antenna_height": 200,
   "ms_grx_dB": -2,
-  "system_noise": 5,
+  "system_noise_dB": 5,
   "mobile_stations": 15,
   "base_stations": 3,
-  "sinr_limit": 24,
+  "sinr_limit_dB": 24,
   "base_station_theta_c": [ 75, 90, 105 ],
   "base_station_location": [
     [ 250, 200 ],
@@ -32,13 +32,23 @@
     [ 500, 325 ],
     [ 550, 325 ]
   ],
+  "base_station_theta_c_lim_deg": [ 0, 360 ],
+  "base_station_field_range_meters": [
+    [ 0, 0 ],
+    [ 1000, 200 ]
+  ],
+  "mobile_station_field_range_meters": [
+    [ 200, 450 ],
+    [ 800, 650 ]
+  ],
+  "antenna_count_limit": [ 6, 6, 6 ],
   "base_station_antenna_counts": [ 5, 3, 5 ],
   "base_station_power_range_dBm": [ -30, 30 ],
   "base_station_scan_angle_range_deg": [ -90, 90 ],
   "antenna_spacing": [ 0.3, 0.4, 0.3 ],
   "antenna_dims": [ 0.2, 0.4 ],
   "base_station_power_dBm_lut": [
-    [ 30.0, 30.0, 30.0 ],
+    [ 30.0, 29.0, 28.0 ],
     [ 30.0, 30.0, 30.0 ],
     [ 30.0, 30.0, 30.0 ],
     [ -30.0, 30.0, -30.0 ],
@@ -52,30 +62,10 @@
     [ 40.0, -65.0, -40.0 ]
   ],
   "base_to_mobile_station_id_selection_lut": [
-    [
-      [ 1, 2 ],
-      [ 2, 13 ],
-      [ 3, 11 ]
-    ],
-    [
-      [ 1, 8 ],
-      [ 2, 15 ],
-      [ 3, 5 ]
-    ],
-    [
-      [ 1, 1 ],
-      [ 2, 14 ],
-      [ 3, 6 ]
-    ],
-    [
-      [ 1, 7 ],
-      [ 2, 4 ],
-      [ 3, 10 ]
-    ],
-    [
-      [ 1, 9 ],
-      [ 2, 3 ],
-      [ 3, 12 ]
-    ]
+    [ 2, 13, 11 ],
+    [ 8, 15, 5 ],
+    [ 1, 14, 6 ],
+    [ 7, 4, 10 ],
+    [ 9, 3, 12 ]
   ]
 }

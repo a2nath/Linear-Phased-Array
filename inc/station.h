@@ -21,7 +21,6 @@ class Cow
 	const struct Init_Antenna
 	{
 		const Placements& location;
-		const double& ms_grx_linear;
 		const unsigned& panel_count;
 		const double& lambda;
 		const double& antenna_spacing;
@@ -30,7 +29,6 @@ class Cow
 
 		Init_Antenna(
 			const Placements& init_bs_location,
-			const double& init_ms_grx_linear,
 			const unsigned& init_panel_count,
 			const double& init_lambda,
 			const double& init_antenna_spacing,
@@ -38,7 +36,6 @@ class Cow
 			const network_package::antennadim& init_antenna_dim)
 			:
 			location(init_bs_location),
-			ms_grx_linear(init_ms_grx_linear),
 			panel_count(init_panel_count),
 			lambda(init_lambda),
 			antenna_spacing(init_antenna_spacing),
@@ -49,7 +46,7 @@ class Cow
 	} init;
 
 	Placements location;
-	Dimensions<unsigned> gui_grid_size;
+	Dimensions<size_t> gui_grid_size;
 
 	const std::vector<Placements>& ms_station_loc;
 	const unsigned& ms_stations;
@@ -60,7 +57,42 @@ class Cow
 	/* each cell is a gui grid, hence much larger */
 	std::vector<Polar_Coordinates> gui_polar_data;
 
+	/* helps with gui changes and recalculate based on what the exact change */
+	//struct Last_Antenna_State
+	//{
+	//	double& antpower_watts;
+	//	double& grx_gain;
+	//	double& gain_grx_linear;
+	//	unsigned& panel_count;
+	//	double& lambda;
+	//	double& ant_spacing;
+	//	double& theta_c_rads;
+	//	antennadim& antdim_meters;
+	//};
 public:
+	//void details(double& ant_spacing,
+	//	unsigned& ant_panel_count,
+	//	double& ant_tx_power,
+	//	double& ant_scan_angle,
+	//	Placements& position
+	//) const
+	//{
+	//	ant_spacing = antenna.interAntSpacing();
+	//	ant_panel_count = antenna.getPanelCount();
+	//	ant_tx_power = antenna.get_power();
+	//	ant_scan_angle = antenna.alpha();
+	//	position = location;
+	//}
+
+	const Placements& where() const
+	{
+		return location;
+	}
+
+	const AAntenna& antennaDetails() const
+	{
+		return antenna;
+	}
 
 	/* set Gtx power in linear */
 	void set_power(const double& input_power)
@@ -74,7 +106,7 @@ public:
 		return antenna.get_power();
 	}
 
-	const double& getAlpha() const
+	const double& alpha() const
 	{
 		return antenna.getAlpha();
 	}
@@ -89,25 +121,36 @@ public:
 		return station_id;
 	}
 
+
 	/* update the parameters of the Base Station and get channel state to each station */
-	void antennaUpdate(const double& alpha)
+	void antenna_update(const double& alpha)
 	{
 		antenna.numerical_update(alpha);
 	}
 
+	/* get signal level in Watts (linear): second parameter, needs to be reshaped to M x N */
+	void gui_udpate(const double& alpha)
+	{
+		antenna.graphics_update(alpha);
+	}
+
 	/* set the signal level in Watts (linear): second parameter */
-	inline void getSignalLevel(const unsigned& node_id, double& signal_level_lin) const
+	inline void signal_power(const unsigned& node_id, double& signal_level_lin) const
 	{
 		signal_level_lin = antenna.coeff(node_id) * antenna.get_power();
 	}
 
-	/* get signal level in Watts (linear): second parameter, needs to be reshaped to M x N */
-	inline void getHeatMapData(std::vector<double>& signal)
+	/* set the signal level in Watts (linear): second parameter */
+	inline void g_signal_power(const size_t& pidx, double& signal_level_lin) const
 	{
-		signal.assign(polar_data.size(), 0);
-		for (size_t id = 0; id < signal.size(); ++id)
+		signal_level_lin = antenna.gcoeff(pidx) * antenna.get_power();
+	}
+
+	void heatmap(std::vector<double>& output)
+	{
+		for (size_t pixel_idx = 0; pixel_idx < gui_polar_data.size(); ++pixel_idx)
 		{
-			getSignalLevel(id, signal[id]);
+			g_signal_power(pixel_idx, output[pixel_idx]);
 		}
 	}
 
@@ -121,7 +164,7 @@ public:
 		{
 			for (int col = 0; col < height; ++col)
 			{
-				long int diffx = col - new_location.x;
+				long int diffx = col - new_location.x; // diff with respect to pixel (think of col, row has location of rx)
 				long int diffy = row - new_location.y;
 				output[idx++] = cart2pol(diffx, diffy);
 			}
@@ -136,72 +179,32 @@ public:
 
 		for (auto& mstation : ms_station_loc)
 		{
-			long int diffx = mstation.x - new_location.x;
+			long int diffx = mstation.x - new_location.x; // diff with respect to rx
 			long int diffy = mstation.y - new_location.y;
 			output[idx++] = cart2pol(diffx, diffy);
 		}
 	}
 
-	/* signal heat map for cells in the GUI for one "cow" */
-	void set_gui_matrix(
-		Placements&  new_location,
-		double&      new_antpower_watts,
-		double&      new_gain_grx_linear,
-		unsigned&    new_panel_count,
-		double&      new_frequency, // for lambda
-		double&      new_ant_spacing,
-		double&      new_theta_c_rads,
-		const antennadim&  new_antdim_meters,
-		unsigned&    rows,
-		unsigned&    cols)
+	void relocate(const Placements& new_location)
 	{
-		/* recalculate entire antenna + grid based on the exact config change(s) */
-		if (rows != gui_grid_size.x || cols != gui_grid_size.y)
-		{
-			set_polar_data(rows, cols, new_location, gui_polar_data);
-			gui_grid_size = { rows, cols };
-		}
-
 		if (location != new_location)
 		{
 			set_polar_data(new_location, polar_data);
+			location = new_location;
 		}
+	}
 
-		if (antenna.get_power() != new_antpower_watts)
+	/* signal heat map for cells in the GUI for one "cow" */
+	void reset_gui(
+		const size_t& rows,
+		const size_t& cols,
+		const Placements& new_location)
+	{
+		/* recalculate entire antenna + grid based on the exact config change(s) */
+		if (rows != gui_grid_size.x || cols != gui_grid_size.y || location != new_location)
 		{
-			antenna.set_power(new_antpower_watts);
-		}
-
-		if (antenna.grx_gain() != new_gain_grx_linear)
-		{
-			antenna.set_grx_gain(new_gain_grx_linear);
-		}
-
-		if (antenna.antpanelcount() != new_panel_count)
-		{
-			antenna.set_antpanelcount(new_panel_count);
-		}
-
-		double new_lambda = getLambda(new_frequency);
-		if (antenna.antlambda() != new_lambda)
-		{
-			antenna.set_antlambda(new_lambda);
-		}
-
-		if (antenna.antspacing() != new_ant_spacing)
-		{
-			antenna.set_antspacing(new_ant_spacing);
-		}
-
-		if (antenna.beamdir() != new_theta_c_rads)
-		{
-			antenna.set_beamdir(new_theta_c_rads);
-		}
-
-		auto& dim = antenna.antdim();
-		if (dim.x != new_antdim_meters.x || dim.y != new_antdim_meters.y)
-		{
-			antenna.set_antdim(new_antdim_meters);
+			set_polar_data(rows, cols, new_location, gui_polar_data);
+			gui_grid_size = { rows, cols };
 		}
 
 		antenna.graphics_init(gui_polar_data); // always calculates based on the above
@@ -211,7 +214,6 @@ public:
 	void reset()
 	{
 		antenna.set_power(0);
-		antenna.set_grx_gain(init.ms_grx_linear);
 		antenna.set_antpanelcount(init.panel_count);
 		antenna.set_antlambda(init.lambda);
 		antenna.set_antspacing(init.antenna_spacing);
@@ -226,7 +228,6 @@ public:
 		unsigned& id,
 		const Placements& bs_location,
 		const std::vector<Placements>& ms_pos_list,
-		const double& ms_grx_linear,
 		const unsigned& panel_count,
 		const double& lambda,
 		const double& antenna_spacing,
@@ -234,11 +235,11 @@ public:
 		const network_package::antennadim& antenna_dim)
 		:
 		station_id(id),
-		init(bs_location, ms_grx_linear, panel_count, lambda, antenna_spacing, antenna_orientation, antenna_dim),
+		init(bs_location, panel_count, lambda, antenna_spacing, antenna_orientation, antenna_dim),
 		location(init.location),
 		ms_station_loc(ms_pos_list),
 		ms_stations(ms_pos_list.size()),
-		antenna(ms_grx_linear, panel_count, lambda, antenna_spacing, antenna_orientation, antenna_dim),
+		antenna(panel_count, lambda, antenna_spacing, antenna_orientation, antenna_dim),
 		power_idx(0)
 	{
 		set_polar_data(init.location, polar_data);
@@ -249,9 +250,9 @@ public:
 /* client or handseet */
 class Station
 {
-	const unsigned station_id;  // id of the station in the list of stations
-	std::vector<Cow>& bs_station_list;
-	const double& tnf_watt;           // thermal noise floor
+	const unsigned  station_id;      // station id
+	const double    tnf_watt;        // thermal noise floor
+	const double    gain_rx;
 	double sinr;
 public:
 
@@ -260,32 +261,9 @@ public:
 		return station_id;
 	}
 
-	/* get signal power in watts */
-	inline void get_rx_signal_power(const unsigned& bs_id, double& power_watts)
+	void set_sinr(const double& calculation)
 	{
-		bs_station_list[bs_id].getSignalLevel(station_id, power_watts);
-	}
-
-	/* calcalate the rx signal based on the station-base station binding */
-	void set_rx(const unsigned& associated_bs_id)
-	{
-		double signal, interference = 0, power;
-
-		for (size_t bs_id = 0; bs_id < bs_station_list.size(); ++bs_id)
-		{
-			if (bs_id != associated_bs_id)
-			{
-				get_rx_signal_power(bs_id, power);
-				interference += power;
-			}
-			else
-			{
-				get_rx_signal_power(associated_bs_id, power);
-				signal = power;
-			}
-		}
-
-		sinr = signal / (interference + tnf_watt);
+		sinr = calculation;
 	}
 
 	/* get SINR in linear by passing signal and inteference/noise in linear factor */
@@ -294,10 +272,22 @@ public:
 		return sinr;
 	}
 
-	Station(unsigned id, std::vector<Cow>& icow, const double& inoise) :
+	/* get receiver gain watts */
+	const double& get_grx() const
+	{
+		return gain_rx;
+	}
+
+	/* get system noise figure in watts */
+	const double& get_nf() const
+	{
+		return tnf_watt;
+	}
+
+	Station(unsigned id, const double& inoise, const double& grx) :
 		station_id(id),
-		bs_station_list(icow),
 		tnf_watt(inoise),
+		gain_rx(grx),
 		sinr(0)
 	{}
 };

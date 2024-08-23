@@ -3,6 +3,7 @@
 #include <smmintrin.h>
 #include <immintrin.h>
 #include "coordinates.h"
+#include "common.h"
 
 namespace network_package
 {
@@ -28,12 +29,16 @@ namespace network_package
 	{
 		return log2lin(dBm - 30);
 	}
+	inline double watt2dBm(double lin)
+	{
+		return lin2dB(lin) + 30;
+	}
 
 	inline double getLambda(double frequency)
 	{
 		if (frequency > 0)
 		{
-			return C / frequency;
+			return C_SPEED / frequency;
 		}
 
 		throw std::invalid_argument("Divide by zero error from passing 0 frequency in getLambda call");
@@ -56,7 +61,6 @@ namespace network_package
 		//typedef void (*FuncPtr)(double);
 		double     power;              // array power
 		double     alpha;              // scan angle
-		double     ms_grx_linear;      // gain factor for a client station
 		unsigned   panel_count;        // number of panels
 		double     lambda;             // wavelength of the RF signal
 		double     spacing;            // wavelength of the RF signal
@@ -92,6 +96,12 @@ namespace network_package
 			return simulation.hmatrix[rx_sta];
 		}
 
+		/* hatrix with respect to pixel index (flattened from 2D) */
+		const double& gcoeff(const unsigned& pixel_idx) const
+		{
+			return graphic.hmatrix[pixel_idx];
+		}
+
 		/* set power in watts */
 		void set_power(const double& power_watts)
 		{
@@ -110,17 +120,6 @@ namespace network_package
 			return alpha;
 		}
 
-		/* set station grx in linear_factor */
-		void set_grx_gain(const unsigned& linear_factor)
-		{
-			ms_grx_linear = linear_factor;
-		}
-
-		/* get station grx in linear_factor */
-		const double& grx_gain() const
-		{
-			return ms_grx_linear;
-		}
 		/* sett panel count in the antenna array */
 		void set_antpanelcount(const unsigned& count)
 		{
@@ -200,7 +199,7 @@ namespace network_package
 					}
 
 					/* update the channel matrix */
-					calculations.hmatrix[idx] = ms_grx_linear * gain_factor_antenna_system / calculations.pathloss_list[idx];
+					calculations.hmatrix[idx] = gain_factor_antenna_system / calculations.pathloss_list[idx];
 				}
 
 				/* update the scan angle of the antenna array */
@@ -251,6 +250,8 @@ namespace network_package
 		/* for GUI simulation in the whole grid */
 		void graphics_init(const std::vector<Polar_Coordinates>& polar_data)
 		{
+			power = 0;
+			alpha = -1;
 			graphic.resize(polar_data.size());
 			init(polar_data, graphic);
 		}
@@ -263,7 +264,6 @@ namespace network_package
 		}
 
 		AAntenna(
-			const double& init_ms_grx_linear,
 			const unsigned& init_panel_count,
 			const double& init_lambda,
 			const double& init_antenna_spacing,
@@ -271,8 +271,7 @@ namespace network_package
 			const antennadim& init_antdims)
 			:
 			power(0),
-			alpha(0),
-			ms_grx_linear(init_ms_grx_linear),
+			alpha(-1),
 			panel_count(init_panel_count),
 			lambda(init_lambda),
 			spacing(init_antenna_spacing),
@@ -280,4 +279,96 @@ namespace network_package
 			antenna_dims(init_antdims)
 		{}
 	};
+
+	inline double rad2deg(double rad)
+	{
+		return rad * 180.0 / M_PIl;
+	}
+	inline double deg2rad(double deg)
+	{
+		return deg * M_PIl / 180.0;
+	}
+	inline double log2lin(double log)
+	{
+		return pow(10, log / 10);
+	}
+	inline double lin2dB(double lin)
+	{
+		return 10 * log10(lin);
+	}
+	inline double dBm2watt(double dBm)
+	{
+		return log2lin(dBm - 30);
+	}
+
+	/* keep track of sinr and note the configurations and bindings in decreasing order of SINR */
+	struct dataitem_t
+	{
+		unsigned tslot_id;
+		double power;
+		double alpha;
+		Placements pos;
+		unsigned cow_id;
+		unsigned sta_id;
+		double sinr;
+
+		friend std::ostream& operator<<(std::ostream& out, const dataitem_t& item)
+		{
+			out
+				<< std::fixed
+				<< std::setprecision(2)
+				<< std::setprecision(2)
+				<< std::fixed
+				<< std::fixed
+				<< std::fixed
+				<< std::fixed
+				<< std::setprecision(2);
+			out
+				<< "timeslot: " << item.tslot_id << "\t"
+				<< "power: " << watt2dBm(item.power) << "\t"
+				<< "alpha: " << rad2deg(item.alpha) << "\t"
+				<< "placement: " << item.pos.x << ","
+				<< item.pos.y << "\t"
+				<< "cow_id: " << item.cow_id << "\t"
+				<< "sta_id: " << item.sta_id << "\t"
+				<< "sinr: " << lin2dB(item.sinr);
+
+			return out;
+		}
+
+		// Deleted copy constructor and copy assignment operator
+		dataitem_t(const dataitem_t&) = delete;
+		dataitem_t& operator=(const dataitem_t&) = delete;
+
+		// Defaulted move constructor and move assignment operator
+		dataitem_t(dataitem_t&&) noexcept = default;
+		dataitem_t& operator=(dataitem_t&& other) noexcept = default;
+
+		dataitem_t(
+			const unsigned& itslot_id,
+			const double& ipower,
+			const double& ialpha,
+			const Placements& ipos,
+			const unsigned& icow_id,
+			const unsigned& ista_id,
+			const double& isinr)
+			:
+			tslot_id(itslot_id),
+			power(ipower),
+			alpha(ialpha),
+			pos(ipos),
+			cow_id(icow_id),
+			sta_id(ista_id),
+			sinr(isinr)
+		{}
+	};
+
+	struct data_comparator
+	{
+		bool operator()(const dataitem_t& p1, const dataitem_t& p2) const
+		{
+			return p1.sinr < p2.sinr; // descending order
+		}
+	};
+
 };
