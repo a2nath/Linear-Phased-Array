@@ -296,30 +296,30 @@ struct Location_Setup
 struct MyArgs : public argparse::Args
 {
 
-	std::string& output_dir                 = kwarg("o,output_dir", "Output directory to put results in").set_default(getcwd());
-	std::string& i_json_file                = kwarg("f,file", "Input file used to run the simulation").set_default("");
+	std::string& output_dir            = kwarg("o,output_dir", "Output directory to put results in").set_default(getcwd());
+	std::string& i_json_file           = kwarg("f,file", "Input file used to run the simulation").set_default("");
 
-	std::optional<unsigned>& timeslot       = kwarg("timeslot", "Timeslot for logging reasons").set_default(default_t::timeslot);
-	double& frequency                       = kwarg("frequency", "Frequency of the signal system wide");
-	double& bandwidth                       = kwarg("bandwidth", "Bandwidth of the singal");
-	double& symrate                         = kwarg("symbolrate", "Symbol rate of the data stream");
-	double& blockspersym                    = kwarg("blockpersymbol", "Blocks of data per symbol");
-	double& antenna_height                  = kwarg("height", "Height of the antenna");
-	double& gain_gtrx                       = kwarg("ms_grx", "Antenna gain of the antenna at the mobile or client station in dB");
-	double& system_noise                    = kwarg("system_noise", "System noise in the transmitter and receiver");
-	unsigned& base_station_count            = kwarg("base_stations", "Number of base stations in the simulation");
-	unsigned& mobile_station_count          = kwarg("mobile_stations", "Number of mobile stations in the simulation");
-	unsigned& timeslots                     = kwarg("timeslots", "Number of timeslots to carry out the simulation on").set_default(default_t::timeslots);
-	double& sinr_limit_dB                   = kwarg("slimit", "SINR limit to consider the configuration as valid to get a good 'slimit' dB signal at the handset").set_default(default_t::sinr_limit);
-	std::vector<int>& field_size            = kwarg("area", "Size of the field to render GUI. Must be compiled with -DGRAPHICS").set_default(default_t::field_size);
-	std::vector<double>& bs_theta_c         = kwarg("base_station_theta_c", "Direction antennas are facing").set_default(default_t::theta_c_radsdir);
-	Location_Setup& base_stations_loc       = kwarg("base_station_location", "Location of base stattions is a list");
-	Location_Setup& mobile_stations_loc     = kwarg("mobile_station_location", "Location of mobile stations is a list");
-	std::vector<unsigned>& bs_antenna_count = kwarg("base_station_antenna_counts", "Number of panels in the antenna array");
-	std::vector<double>& power_range_dBm    = kwarg("base_station_power_range_dBm", "Range of power that base stations will use in dBm").set_default(default_t::power_range_dBm);
-	std::vector<double>& scan_angle_range   = kwarg("base_station_scan_angle_range_deg", "Scan angle of the antenna linear array at the base station in degrees").set_default(default_t::scan_angle_range);
-	std::vector<double>& antenna_spacing    = kwarg("antenna_spacing", "Antenna spacing between panels").set_default(std::vector<double>());
-	std::vector<double>& antenna_dims       = kwarg("antenna_dims", "Antenna dimensions in meters");
+	unsigned& timeslot                 = kwarg("timeslot", "Timeslot for logging reasons").set_default(default_t::timeslot);
+	double& frequency                  = kwarg("frequency", "Frequency of the signal system wide");
+	double& bandwidth                  = kwarg("bandwidth", "Bandwidth of the singal");
+	double& symrate                    = kwarg("symbolrate", "Symbol rate of the data stream");
+	double& blockspersym               = kwarg("blockpersymbol", "Blocks of data per symbol");
+	double& antenna_height             = kwarg("height", "Height of the antenna");
+	double& gain_gtrx                  = kwarg("ms_grx", "Antenna gain of the antenna at the mobile or client station in dB");
+	double& system_noise               = kwarg("system_noise", "System noise in the transmitter and receiver");
+	unsigned& base_station_count       = kwarg("base_stations", "Number of base stations in the simulation");
+	unsigned& mobile_station_count     = kwarg("mobile_stations", "Number of mobile stations in the simulation");
+	unsigned& timeslots                = kwarg("timeslots", "Number of timeslots to carry out the simulation on").set_default(default_t::timeslots);
+	double& sinr_limit_dB              = kwarg("slimit", "SINR limit to consider the configuration as valid to get a good 'slimit' dB signal at the handset").set_default(default_t::sinr_limit);
+	std::vector<int>& field_size       = kwarg("area", "Size of the field to render GUI. Must be compiled with -DGRAPHICS").set_default(default_t::field_size);
+	double_v& bs_theta_c               = kwarg("base_station_theta_c", "Direction antennas are facing").set_default(default_t::theta_c_radsdir);
+	Location_Setup& tx_loc             = kwarg("base_station_location", "Location of base stattions is a list");
+	Location_Setup& rx_loc             = kwarg("mobile_station_location", "Location of mobile stations is a list");
+	unsigned_v& bs_antenna_count       = kwarg("base_station_antenna_counts", "Number of panels in the antenna array");
+	double_v& power_range_dBm          = kwarg("base_station_power_range_dBm", "Range of power that base stations will use in dBm").set_default(default_t::power_range_dBm);
+	double_v& scan_angle_range         = kwarg("base_station_scan_angle_range_deg", "Scan angle of the antenna linear array at the base station in degrees").set_default(default_t::scan_angle_range);
+	double_v& antenna_spacing          = kwarg("antenna_spacing", "Antenna spacing between panels").set_default(std::vector<double>());
+	double_v& antenna_dims             = kwarg("antenna_dims", "Antenna dimensions in meters");
 
 	std::optional<Power_Values>& bs_tx_power_dBm   = kwarg("antenna_txpower", "Base station transmit TX power in dBm (list or a lut)");
 	std::optional<Scan_Values>& bs_scan_alpha_deg  = kwarg("scan_angle", "Base station scan angle in degrees (list or a lut)");
@@ -366,8 +366,8 @@ struct MyArgs : public argparse::Args
 		assert(bs_theta_c.size() == base_station_count);
 
 		/* validate the location and antenna panel counts for each station */
-		assert(base_stations_loc.data.size() == base_station_count);
-		assert(mobile_stations_loc.data.size() == mobile_station_count);
+		assert(tx_loc.data.size() == base_station_count);
+		assert(rx_loc.data.size() == mobile_station_count);
 		assert(bs_antenna_count.size() == base_station_count);
 
 		/* assign default values */
@@ -495,8 +495,8 @@ struct MyArgs : public argparse::Args
 		timeslots = get_unsigned("timeslots");
 		sinr_limit_dB = get_double("slimit");
 		bs_theta_c = get_vector_double("base_station_theta_c");
-		base_stations_loc = Location_Setup(get_string("base_station_location"));
-		mobile_stations_loc = Location_Setup(get_string("mobile_station_location"));
+		tx_loc = Location_Setup(get_string("base_station_location"));
+		rx_loc = Location_Setup(get_string("mobile_station_location"));
 		bs_antenna_count = get_vector_unsigned("base_station_antenna_counts");
 		power_range_dBm = get_vector_double("base_station_power_range_dBm");
 		scan_angle_range = get_vector_double("base_station_scan_angle_range_deg");
