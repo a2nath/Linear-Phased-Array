@@ -80,7 +80,7 @@
     },
     {
       "Id": "3583d3fe-81df-4fbc-b490-fe680fef8d47",
-      "Command": "--antenna_txpower -30.0,30.0,-30.0"
+      "Command": "--antenna_txpower 30.0,29.0,28.0"
     },
     {
       "Id": "21f99835-7342-437f-8176-47da6947dbd6",

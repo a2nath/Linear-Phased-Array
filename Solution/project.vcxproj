@@ -27,6 +27,7 @@
     <ClInclude Include="..\inc\project.h" />
     <ClInclude Include="..\inc\random.h" />
     <ClInclude Include="..\inc\station.h" />
+    <ClInclude Include="..\inc\visuals.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\project.cpp" />
