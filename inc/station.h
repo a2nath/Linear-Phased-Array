@@ -291,3 +291,4 @@ public:
 		sinr(0)
 	{}
 };
+using cow_v = std::vector<Cow>;

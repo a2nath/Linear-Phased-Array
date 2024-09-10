@@ -8,26 +8,14 @@
 #include <set>
 #include <queue>
 #include "project.h"
-//#include "matplot.h"
 
-#ifdef GRAPHICS
-#include <SFML/Graphics.hpp>
+
+#ifdef _WIN32
+#include <windows.h>
+#define getpid GetCurrentProcessId
 #endif
 
-#define GRID_WIDTH 1000
-#define GRID_HEIGHT 1000
-
 using namespace std;
-
-/* in case of errors, check this */
-
-/* write to a file: loggerfile, string, debug-print */
-void print(Logger& logger, const string& str, bool debug = true)
-{
-    logger.write(str);
-    if (debug)
-        cout << str << endl;
-}
 
 void close(Logger& logger)
 {
@@ -52,13 +40,12 @@ int main(int argc, char** argv, char** envp)
     Simulator sim(args, logger);
 
     /* run the simulation and get the SNR table */
+
+
     sim.run();
     sim.print();
-    sim.guistat(GRID_WIDTH, GRID_HEIGHT);
-
-
-    //plot(mobile_station_pos);
-
+    sim.gui_run();
+    sim.gui_print();
 
     close(logger);
     return 0;
