@@ -4,14 +4,128 @@
 #include <cassert>
 #include <any>
 #include <ostream>
+#include <limits>
 #include "common.h"
 #include "network.h"
 #include "station.h"
 #include "random.h"
 #include "args.h"
-#include <optional>
 
-//using cow_id_distribution = std::uniform_int_distribution<int>;
+#ifdef GRAPHICS
+#include "visuals.h"
+
+struct GraphicsHelper
+{
+	const size_t rows;
+	const size_t cols;
+	std::vector<double_v> raw_data;
+
+	void setup_cow_heat(Logger& logger, Cow& cow, const double_v& scan_alpha_lut)
+	{
+		/* IMPORTANT need to set this before iterating over cows again */
+		// also for GUI i think it makes sense to reset to the parameters in the test case
+		//setup_tx(rows, cols); <--- this is called from the calling function itself.
+
+		auto& cow_idx = cow.sid();
+
+		cow.heatmap(raw_data[cow_idx]);
+
+		size_t index = 0;
+
+		for (size_t row = 0; row < rows; ++row)
+		{
+			logger.write("cow " + str(cow.sid()) + '\n');
+
+			for (size_t col = 0; col < cols; ++col)
+			{
+				//logger.write(" ");
+				//logger.setprec(2);
+				double num = lin2dB(raw_data[cow_idx][index]);
+				raw_data[cow_idx][index] = num;
+				logger.write(" ");
+				logger.write(num);
+
+				++index;
+			}
+			logger.write("\n");
+		}
+	}
+
+	void render(Logger& logger,
+		cow_v& cows,
+		const placement_v& mobile_stations_loc,
+		const placement_v& base_stations_loc,
+		const double_v& bs_theta_c,
+		const double_v& scan_alpha_list)
+	{
+		auto double_min = std::numeric_limits<double>::lowest(), double_max = std::numeric_limits<double>::lowest();
+
+		for (auto& cow : cows)
+		{
+			setup_cow_heat(logger, cow, scan_alpha_list);
+			auto& cow_raw_data = raw_data[cow.sid()];
+			auto [imin, imax] = std::minmax_element(cow_raw_data.begin(), cow_raw_data.end());
+
+			graphics::validate_ite(cow_raw_data, imin);
+			graphics::validate_ite(cow_raw_data, imax);
+
+			if (*imin > double_min)
+				double_min = *imin;
+
+			if (*imax > double_max)
+				double_max = *imax;
+		}
+
+		graphics::render(logger,
+			mobile_stations_loc,
+			base_stations_loc,
+			raw_data,
+			bs_theta_c,
+			scan_alpha_list,
+			rows,
+			cols,
+			double_min,
+			double_max);
+	}
+
+	void plot(Logger& logger,
+		cow_v& cows,
+		const placement_v& mobile_stations_loc,
+		const placement_v& base_stations_loc,
+		const double_v& bs_theta_c,
+		const double_v& scan_alpha_list)
+	{
+		auto double_min = std::numeric_limits<double>::lowest(), double_max = std::numeric_limits<double>::lowest();
+
+		for (auto& cow : cows)
+		{
+			setup_cow_heat(logger, cow, scan_alpha_list);
+			auto& cow_raw_data = raw_data[cow.sid()];
+			auto [imin, imax] = std::minmax_element(cow_raw_data.begin(), cow_raw_data.end());
+
+			graphics::validate_ite(cow_raw_data, imin);
+			graphics::validate_ite(cow_raw_data, imax);
+
+			if (*imin > double_min)
+				double_min = *imin;
+
+			if (*imax > double_max)
+				double_max = *imax;
+		}
+
+		for (auto& cow : cows)
+		{
+			graphics::plot(logger, "transmitter_" + str(cow.sid()) + ".png", raw_data[cow.sid()], rows, cols, double_min, double_max);
+		}
+	}
+
+	GraphicsHelper(const size_t num_transmitters, const size_t& pixel_rows, const size_t& pixel_cols)
+		: rows(pixel_rows), cols(pixel_cols)
+	{
+		raw_data.resize(num_transmitters, double_v(pixel_rows * pixel_cols));
+	}
+};
+#endif
 
 struct SimulationHelper
 {
@@ -85,8 +199,8 @@ struct SimulationHelper
 		}
 	}
 
-	/* need to update all coefficients before getting rx power in any 1 station */
-	void g_setup_tx(const size_t& rows, const size_t& cols)
+	/* GUI setup for all cows together, inputs: rows, cols */
+	void setup_tx(const size_t& rows, const size_t& cols)
 	{
 		std::vector<double> scan_angles, power_nums;
 		get_scana(scan_angles);
@@ -136,15 +250,12 @@ struct SimulationHelper
 
 class Simulator
 {
-protected:
 	Logger& logger;
 	std::string sim_error;
 	std::vector<Cow> cows;
 	std::vector<Station> stations;
 	SimulationHelper* simhelper;
 
-	//std::vector<double> dBm2watts;   // in watts
-	//std::vector<double> deg2rads;    // scan angle
 	const unsigned& timeslot;
 	const double&   frequency;
 	const double    lambda;
@@ -164,8 +275,9 @@ protected:
 	const std::vector<double>& scan_angle_range;
 	const std::vector<double>& antenna_spacing;
 	const std::vector<double>& antenna_dims;
-	const bool&     showgui;
-	const bool&     debug;
+
+	GraphicsHelper visuals;
+	const bool& debug;
 
 	const std::vector<std::vector<double>>& bs_tx_requested_power_watts;
 	const std::vector<std::vector<double>>& bs_requested_scan_alpha_rad;
@@ -206,27 +318,26 @@ protected:
 	}
 
 	/* calcalate the rx signal based on all base stations */
-	void compute_sinr(Station& station, const unsigned& associated_bs_id)
+	/* calcalate the rx signal based on all base stations */
+	double calculate(Station& station, const unsigned& associated_bs_id)
 	{
 		double signal = 0, interference = 0, power;
-		auto& gain_rx = station.get_grx();
 
-		for (size_t bs_id = 0; bs_id < base_station_count; ++bs_id)
+		for (auto& cow : cows)
 		{
-			cows[bs_id].signal_power(station.sid(), power);
+			cow.signal_power(station.sid(), power);
 
-			if (bs_id != associated_bs_id)
+			if (cow.sid() != associated_bs_id)
 			{
-				interference += power * gain_rx;
+				interference += power * station.get_grx();
 			}
 			else
 			{
-				signal = power * gain_rx;
+				signal = power * station.get_grx();
 			}
 		}
 
-		double sinr = signal / (interference + station.get_nf());
-		station.set_sinr(sinr);
+		return signal / (interference + station.get_nf());;
 	}
 
 	void run_single_timelot()
@@ -249,13 +360,15 @@ protected:
 			bool permutation_state_power = true;
 			while (permutation_state_power)
 			{
-				for (size_t bs_id = 0; bs_id < base_station_count; ++bs_id)
+				for (auto& cow : cows)
 				{
+					auto& bs_id = cow.sid();
 					auto& rx_idx = select_stations[bs_id];
 					auto& rx_station = stations[rx_idx];
+					auto& rx_loc = mobile_stations_loc[rx_idx];
 
-					compute_sinr(rx_station, bs_id); // reassociate with a new tx if possible
-					simhelper->update_results(bs_id, rx_idx, rx_station.get_sinr(), mobile_stations_loc[rx_idx]);
+					auto sinr = calculate(rx_station, bs_id); // reassociate with a new tx if possible
+					simhelper->update_results(bs_id, rx_idx, sinr, mobile_stations_loc[rx_idx]);
 				}
 
 				permutation_state_power = simhelper->get_perm(power_list);
@@ -283,40 +396,31 @@ public:
 		simhelper->printout();
 	}
 
-	void guistat(const size_t& pixel_rows, const size_t& pixel_cols)
+
+	/* render a scene in a new window and show the simulation */
+	void gui_run()
 	{
-		std::vector<double> signal_power_lin(pixel_rows * pixel_cols);
+#ifdef GRAPHICS
+		double_v scan_anges;
 
-		/* IMPORTANT need to set this before iterating over cows again */
-		simhelper->g_setup_tx(pixel_rows, pixel_cols);
+		simhelper->get_scana(scan_anges);
+		simhelper->setup_tx(visuals.rows, visuals.cols);
 
-		for (unsigned timeslot = 0; timeslot < timeslot_count; ++timeslot)
-		{
-			//monitor->params.set_scan_dir();
-			for (unsigned c = 0; c < simhelper->cows.size(); ++c)
-			{
-				auto& cow = simhelper->cows[c];
-				auto& alpha = bs_requested_scan_alpha_rad[timeslot][c];
+		visuals.render(logger, cows, mobile_stations_loc, base_stations_loc, bs_theta_c, scan_anges);
+#endif
+	}
 
-				cow.heatmap(signal_power_lin);
+	/* drop of a plot in png format in the output directory */
+	void gui_print()
+	{
+#ifdef GRAPHICS
+		double_v scan_anges;
 
-				size_t index = 0;
-				for (size_t r = pixel_rows - 1 ; r >= 0; --r)
-				{
-					logger.write("cow " + str(cow.sid()));
-					for (size_t c = 0; c < pixel_cols; ++c)
-					{
-						logger.write(' ' + str(lin2dB(signal_power_lin[index++])));
-					}
-					logger.write("\n");
+		simhelper->get_scana(scan_anges);
+		simhelper->setup_tx(visuals.rows, visuals.cols);
 
-					if (r == 0)
-						break;
-				}
-
-				memset(&signal_power_lin[0], 0, signal_power_lin.size() * sizeof signal_power_lin[0]);
-			}
-		}
+		visuals.plot(logger, cows, mobile_stations_loc, base_stations_loc, bs_theta_c, scan_anges);
+#endif
 	}
 
 	~Simulator()
@@ -329,7 +433,7 @@ public:
 		logger(ilogger),
 		sim_error(""),
 		simhelper(nullptr),
-		timeslot(args.timeslot.value()),
+		timeslot(args.timeslot),
 		frequency(args.frequency),
 		lambda(getLambda(frequency)),
 		bandwidth(args.bandwidth),
@@ -348,7 +452,7 @@ public:
 		scan_angle_range(args.scan_angle_range),
 		antenna_spacing(args.antenna_spacing),
 		antenna_dims(args.antenna_dims),
-		showgui(args.showgui),
+		visuals(args.base_station_count, args.field_size[0], args.field_size[1]),
 		debug(args.debug),
 		bs_tx_requested_power_watts(args.bs_tx_power_dBm.value().data),
 		bs_requested_scan_alpha_rad(args.bs_scan_alpha_deg.value().data),
