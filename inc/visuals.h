@@ -26,7 +26,7 @@
 namespace graphics
 {
     using namespace std;
-
+    using vertex_v = std::vector<sf::VertexArray>;
 
     struct HeatGrid
     {
@@ -70,10 +70,10 @@ namespace graphics
         void update_heat(const double_v& tx_raw_sigdata)
         {
             size_t index = 0;
-            for (size_t row_idx = bounds_upper.x - 1; row_idx >= bounds_lower.x; --row_idx)
+            for (size_t row_idx = data_rows - 1; row_idx >= 0; --row_idx)
             {
                 auto row_offset = row_idx * data_cols;
-                for (size_t cols_idx = bounds_lower.y; cols_idx < bounds_upper.y; ++cols_idx)
+                for (size_t cols_idx = 0; cols_idx < data_cols; ++cols_idx)
                 {
                     size_t v_index = (row_offset + cols_idx) << 2;
 
@@ -89,15 +89,15 @@ namespace graphics
             }
         }
 
-        void init_vertexes(const sf::Vector2u& ibounds_lower, const sf::Vector2u& ibounds_upper)
+        void init(const sf::Vector2u& ibounds_lower, const sf::Vector2u& ibounds_upper)
         {
             bounds_lower = ibounds_lower;
             bounds_upper = ibounds_upper;
 
-            for (size_t row_idx = bounds_upper.x - 1; row_idx >= bounds_lower.x; --row_idx)
+            for (size_t row_idx = data_rows - 1; row_idx >= 0; --row_idx)
             {
                 auto row_offset = row_idx * data_cols;
-                for (size_t cols_idx = bounds_lower.y; cols_idx < bounds_upper.y; ++cols_idx)
+                for (size_t cols_idx = 0; cols_idx < data_cols; ++cols_idx)
                 {
                     size_t v_index = (row_offset + cols_idx) << 2;
 
@@ -131,7 +131,7 @@ namespace graphics
             thresholds[1] = 0.55; // Green to Yellow
             thresholds[2] = 0.71; // Yellow to Red
 
-            init_vertexes(bounds_lower, bounds_upper);
+            init(bounds_lower, bounds_upper);
 // last good
             //thresholds[0] = 0.40; // Cyan to Green
             //thresholds[1] = 0.55; // Green to Yellow
@@ -485,7 +485,7 @@ namespace graphics
                     }
                 }
 
-                for (int i =0 ;i < tx_locations.size(); ++i)
+                for (int i =0 ; i < tx_locations.size(); ++i)
                 {
                     auto& loc = tx_locations[i];
                     //if (bounds_lower.x <= loc.x && loc.x <= bounds_upper.x && bounds_lower.y <= loc.y && loc.y <= bounds_upper.y)
@@ -550,7 +550,8 @@ namespace graphics
                         sf::VertexArray line2(sf::Lines, 2);
 
                         // Calculate the beam angle relative to the first line (add scan_angle to direction)
-                        float beam_angle_radians = angle_radians + dir_radians;
+                        float beam_angle_radians = ant_direction[i] + angle_radians;
+                        //cout << beam_angle_radians * (180 / M_PIl) << endl;
                         float beam_length = 25.0f;  // Length of the signal beam line
 
 
@@ -559,8 +560,8 @@ namespace graphics
                         float line2StartY = position.y + size.y / 2;
 
                         // Calculate the endpoint of the second line based on beam angle
-                        float line2EndX = line2StartX - beam_length * cos(beam_angle_radians);
-                        float line2EndY = line2StartY + beam_length * sin(beam_angle_radians);
+                        float line2EndX = line2StartX + beam_length * cos(beam_angle_radians);
+                        float line2EndY = line2StartY - beam_length * sin(beam_angle_radians);
 
                         line2[0].position = sf::Vector2f(line2StartX, line2StartY);  // Starts from the end of the first line
                         line2[1].position = sf::Vector2f(line2EndX, line2EndY);
