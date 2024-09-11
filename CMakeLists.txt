@@ -17,34 +17,40 @@ else() #(CMAKE_BUILD_TYPE STREQUAL "Release")
 	message(STATUS "Release Build")
 endif()
 
-# FetchContent is available from CMake 3.11 onwards
+# FetchContent for SFML, ImGui, and argparse
 include(FetchContent)
 
-# Fetch and build jsoncpp if not found
+# SFML
 FetchContent_Declare(
-    jsoncpp
-    GIT_REPOSITORY https://github.com/open-source-parsers/jsoncpp.git
-    GIT_TAG master
+    SFML
+    GIT_REPOSITORY https://github.com/SFML/SFML.git
+    GIT_TAG 2.5.1
 )
+FetchContent_MakeAvailable(SFML)
 
-FetchContent_GetProperties(jsoncpp)
-if(NOT jsoncpp_POPULATED)
-    FetchContent_Populate(jsoncpp)
-    add_subdirectory(${jsoncpp_SOURCE_DIR} ${jsoncpp_BINARY_DIR})
-endif()
+# ImGui and ImGui-SFML integration
+FetchContent_Declare(
+    ImGui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG v1.89.2
+)
+FetchContent_Declare(
+    ImGui-SFML
+    GIT_REPOSITORY https://github.com/eliasdaler/imgui-sfml.git
+    GIT_TAG v2.5
+)
+FetchContent_MakeAvailable(ImGui ImGui-SFML)
 
-# Fetch and make available argparse
+# argparse
 FetchContent_Declare(
     argparse
     GIT_REPOSITORY https://github.com/morrisfranken/argparse.git
 )
-
 FetchContent_MakeAvailable(argparse)
 
-# Add your source files here
+# Add source files
 set(SOURCES
     source/src/project.cpp
-    # Add other source files here if any
 )
 
 # Create executable
@@ -53,7 +59,8 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 # Link libraries
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
-    jsoncpp_lib
+    sfml-system sfml-window sfml-graphics
+    ImGui-SFML::ImGui-SFML
     argparse
 )
 
@@ -62,6 +69,10 @@ target_include_directories(${PROJECT_NAME}
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/source/inc
 )
+
+# OpenGL support for future use
+find_package(OpenGL REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE OpenGL::GL)
 
 # Optionally, set compiler flags
 if(MSVC)

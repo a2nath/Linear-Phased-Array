@@ -1,514 +1,681 @@
 #pragma once
-#include <SFML/Graphics.hpp>
-#include <string>
 #include <iostream>
-#include <vector>
-#include <chrono>
-#include <unordered_map>
-#include "station.h"
-#include "coordinates.h"
+#include <csignal>
+#include "common.h"
+//#include <limits>
 
-using namespace std;
-using namespace sf;
 
-constexpr unsigned TPS = 60; //ticks per seconds
-const sf::Time     timePerUpdate = sf::seconds(1.0f / float(TPS));
+#include <SFML/Graphics.hpp>
+#include <SFML/OpenGL.hpp>
 
-template<class T>
-using Pattern2D = vector<vector<T>>;
-using Signal2D = Pattern2D<double>;
+#define CONTROLS
 
-struct station_details_t
+#ifdef _DEBUG
+
+//#undef CONTROLS
+
+#endif
+
+#ifdef CONTROLS
+#include "imgui.h"
+#include "imgui-SFML.h"
+#endif
+
+
+
+namespace graphics
 {
-    double ant_spacing;
-    unsigned ant_panel_count;
-    double ant_tx_power;
-    double ant_scan_angle;
-    Placements position;
-};
+    using namespace std;
+    using vertex_v = std::vector<sf::VertexArray>;
 
-int compare(const station_details_t& sta1, const station_details_t& sta2)
-{
-    return (sta1.ant_spacing == sta2.ant_spacing
-        && sta1.ant_panel_count == sta2.ant_panel_count
-        && sta1.ant_tx_power == sta2.ant_tx_power
-        && sta1.ant_scan_angle == sta2.ant_scan_angle
-        && sta1.position.x == sta2.position.x
-        && sta1.position.y == sta2.position.y) == true ? 0 : 1;
-}
-
-
-namespace draw
-{
-    template<class T>
-    Vector2u shape(const std::vector<std::vector<T>>& grid, bool gettotal = false)
+    struct HeatGrid
     {
-        if (gettotal)
-            return { unsigned(grid.size() * grid[0].size()), (unsigned)0 };
-        else
-            return { (unsigned)grid.size(), (unsigned)grid[0].size() };
-    }
-}
+        const size_t& data_rows;
+        const size_t& data_cols;
+        unsigned pixel_height, pixel_width;
 
+        double min_pxl, max_pxl;
+        float thresholds[3];
 
-struct Node
-{
-    enum class Type
-    {
-        handset,
-        base
-    } type;
-    CircleShape shape;
-    Vector2f station_position;
+        sf::Vector2u bounds_lower, bounds_upper, window_size;
 
-    static float scale_factor()
-    {
-        return 5.f;
-    }
+        const placement_v& tx_locations;
+        const placement_v& rx_locations;
+        const double_v& tx_ant_dir;
+        const double_v& tx_scan_angle;
 
-    CircleShape& operator()()
-    {
-        return shape;
-    }
+        sf::VertexArray grid;
+        std::vector<sf::CircleShape> rx_cicles;
+        map<int, vertex_v> data; // lower int means more depth
 
-
-
-    Node(
-        Type station_type,
-        float radius,
-        size_t pointCount = 30)
-        :
-        type(station_type),
-        shape(radius, pointCount)
-    {
-    }
-};
-
-struct Tile
-{
-    RectangleShape shape;
-    const Vector2f og_size;
-
-    void reset()
-    {
-        reshape({ 1, 1 });
-    }
-
-    void reshape(const Vector2f& scale_factor)
-    {
-        if (1 < scale_factor.x && 1 < scale_factor.y)
+        sf::Color colorgrid(const double& raw)
         {
-            shape.setScale(scale_factor);
-        }
-    }
+            double color_value = (max_pxl == min_pxl) ? 0.0 : ((raw - min_pxl) / (max_pxl - min_pxl));
 
-    static float scale_factor()
-    {
-        return 100.f;
-    }
-    Tile(Vector2f size) : og_size(size), shape(size)
-    {
-
-    }
-};
-
-/* Returns timestamp based on whether it is for a filename. Default false */
-inline void getTimeStamp(char* buffer, bool for_filename = false)
-{
-    auto now = std::chrono::system_clock::now();
-    auto now_c = std::chrono::system_clock::to_time_t(now);
-
-    if (for_filename)
-        std::strftime(buffer, sizeof(buffer), "%m%d%y_%H%M%S", std::localtime(&now_c));
-    else
-        std::strftime(buffer, sizeof(buffer), "%m%d%y %H%M%S", std::localtime(&now_c));
-}
-
-class Visuals
-{
-    Vector2u WINDOW_SIZE;
-    Vector2f TILE_SIZE;
-    RenderWindow window;
-    vector<vector<Tile>> tile_grid;
-    vector<Node> nodes;
-
-    /* track the state of the sta to trigger the update function */
-    std::unordered_map<unsigned, station_details_t> state_data;
-
-    // Function to convert HSV to RGB color
-    void hsvToRgb(float h, float s, float v, float& r, float& g, float& b) {
-        int i = int(h * 6);
-        float f = h * 6 - i;
-        float p = v * (1 - s);
-        float q = v * (1 - f * s);
-        float t = v * (1 - (1 - f) * s);
-
-        switch (i % 6) {
-        case 0: r = v, g = t, b = p; break;
-        case 1: r = q, g = v, b = p; break;
-        case 2: r = p, g = v, b = t; break;
-        case 3: r = p, g = q, b = v; break;
-        case 4: r = t, g = p, b = v; break;
-        case 5: r = v, g = p, b = q; break;
-        }
-    }
-
-    // Function to map exponential values to HSV color
-    void mapToColor(float value, float& h, float& s, float& v) {
-        // Normalize value between 0 and 1
-        float normalizedValue = std::min(std::max(value, 0.0f), 1.0f);
-
-        // Map value to hue (blue to green to yellow)
-        h = 0.66f - normalizedValue * 0.66f;
-
-        // Set saturation and value to maximum
-        s = 1.0f;
-        v = 1.0f;
-    }
-
-    /* change the state of the heat map based on the bs_id */
-    //void updateHeatMap(unsigned bs_id)
-    //{
-    //    draw_init(
-    //}
-
-public:
-    /* can be signal from one sta or overall snr map */
-    void show_eirp(Signal2D& signal_strength)
-    {
-        TILE_SIZE = { min(WINDOW_SIZE.x, WINDOW_SIZE.y) / Tile::scale_factor(), min(WINDOW_SIZE.x, WINDOW_SIZE.y) / Tile::scale_factor() };
-        Tile tile({ TILE_SIZE.x, TILE_SIZE.y });
-        tile.shape.setFillColor({ 50, 50, 50, 180 });
-        tile.shape.setOutlineThickness(1.0f);
-        tile.shape.setOutlineColor({ 50, 50, 50, 250 });
-        tile_grid.resize(WINDOW_SIZE.y / TILE_SIZE.y, vector<Tile>(WINDOW_SIZE.x / TILE_SIZE.x, tile));
-
-        for (auto& row : signal_strength)
-        {
-            for (auto& cell : row)
-            {
-                float h, s, v;
-                mapToColor(cell, h, s, v);
-
-                // Convert HSV to RGB
-                float r, g, b;
-                hsvToRgb(h, s, v, r, g, b);
+            // Interpolated Color : Transition from red -> yellow -> green -> blue
+            if (color_value <= thresholds[0]) {
+                return sf::Color(0, static_cast<sf::Uint8>(color_value * 4 * 255), 255); // Blue to Cyan
+            }
+            else if (color_value <= thresholds[1]) {
+                return sf::Color(0, 255, static_cast<sf::Uint8>((1 - (color_value - thresholds[0]) * 4) * 255)); // Cyan to Green
+            }
+            else if (color_value <= thresholds[2]) {
+                return sf::Color(static_cast<sf::Uint8>((color_value - thresholds[1]) * 4 * 255), 255, 0); // Green to Yellow
+            }
+            else {
+                return sf::Color(255, static_cast<sf::Uint8>((1 - (color_value - thresholds[2]) * 4) * 255), 0); // Yellow to Red
             }
         }
 
-        for (auto y = 0; y < tile_grid.size(); ++y)
+        void update_panning(sf::Vector2i& moved_offset)
         {
-            for (auto x = 0; x < tile_grid[0].size(); ++x)
+            bounds_lower = { (unsigned)max((float)moved_offset.x, (float)0.0), (unsigned)max((float)moved_offset.y, (float)0.0) };
+            bounds_upper = { (unsigned)min((float)window_size.x, (float)window_size.x + moved_offset.x), (unsigned)min((float)window_size.y, (float)window_size.y + moved_offset.y) };
+            moved_offset = { 0, 0 };
+        }
+
+        void update_heat(const double_v& tx_raw_sigdata)
+        {
+            size_t index = 0;
+            for (size_t row_idx = data_rows - 1; row_idx >= 0; --row_idx)
             {
-                auto& tile = tile_grid[y][x];
-                tile.shape.setPosition(x * TILE_SIZE.x, y * TILE_SIZE.y);
+                auto row_offset = row_idx * data_cols;
+                for (size_t cols_idx = 0; cols_idx < data_cols; ++cols_idx)
+                {
+                    size_t v_index = (row_offset + cols_idx) << 2;
+
+                    sf::Color v_color = colorgrid(tx_raw_sigdata[index++]);
+                    grid[v_index + 0].color = v_color;
+                    grid[v_index + 1].color = v_color;
+                    grid[v_index + 2].color = v_color;
+                    grid[v_index + 3].color = v_color;
+                }
+
+                if (row_idx == 0)
+                    break;
+            }
+        }
+
+        void init(const sf::Vector2u& ibounds_lower, const sf::Vector2u& ibounds_upper)
+        {
+            bounds_lower = ibounds_lower;
+            bounds_upper = ibounds_upper;
+
+            size_t index = 0;
+            for (size_t row_idx = data_rows - 1; row_idx >= 0; --row_idx)
+            {
+                auto row_offset = row_idx * data_cols;
+                for (size_t cols_idx = 0; cols_idx < data_cols; ++cols_idx)
+                {
+                    size_t v_index = (row_offset + cols_idx) << 2;
+
+                    grid[v_index + 0].position = sf::Vector2f(cols_idx * pixel_width, row_idx * pixel_height);
+                    grid[v_index + 1].position = sf::Vector2f((cols_idx + 1) * pixel_width, row_idx * pixel_height);
+                    grid[v_index + 2].position = sf::Vector2f((cols_idx + 1) * pixel_width, (row_idx + 1) * pixel_height);
+                    grid[v_index + 3].position = sf::Vector2f(cols_idx * pixel_width, (row_idx + 1) * pixel_height);
+                }
+
+                if (row_idx == 0)
+                    break;
+            }
+
+            for (auto& loc : rx_locations)
+            {
+                sf::CircleShape sta(10.0);
+                sta.setFillColor(sf::Color(90, 90, 90));
+                sta.setOutlineColor(sf::Color::Black);
+                sta.setOutlineThickness(2.0f);
+                sta.setPosition(loc.x, window_size.y - loc.y);
+
+                rx_cicles.emplace_back(sta);
+            }
+
+            for (int i = 0; i < tx_locations.size(); ++i)
+            {
+                auto& loc = tx_locations[i];
+
+                sf::Vector2f size(10.0f, 10.0f);
+
+                sf::Vector2f position(loc.x - size.x / 2, window_size.x - loc.y - size.y / 2);
+                auto dir_radians = M_PIl / 2 - tx_ant_dir[i];
+
+                sf::VertexArray transmitter(sf::Quads, 4);
+
+                // Set the four corners of the rectangle
+                transmitter[0].position = position;  // Top-left corner
+                transmitter[1].position = sf::Vector2f(position.x + size.x, position.y);  // Top-right corner
+                transmitter[2].position = sf::Vector2f(position.x + size.x, position.y + size.y);  // Bottom-right corner
+                transmitter[3].position = sf::Vector2f(position.x, position.y + size.y);  // Bottom-left corner
+
+                // Set the colors for each vertex (optional)
+                transmitter[0].color = sf::Color(90, 90, 90);
+                transmitter[1].color = sf::Color(90, 90, 90);
+                transmitter[2].color = sf::Color(90, 90, 90);
+                transmitter[3].color = sf::Color(90, 90, 90);
+
+                data[1].emplace_back(transmitter);
+
+
+
+                /* draw the placement direction indicators for each tower */
+
+
+
+                sf::VertexArray line11(sf::Lines, 2), line12(sf::Lines, 2);
+
+                // Calculate the endpoint of the first line based on direction
+                float length = 30.0f / 2;  // Halfway across the rectangle
+
+                // Line 1's position: calculated from the antenna direction
+                float line1StartX = position.x + size.x / 2; // Middle of the rectangle;
+                float line1StartY = position.y + size.y / 2;
+
+                // Endpoint using the direction to calculate the x and y offset
+                float line11EndX = line1StartX - length * cos(dir_radians);
+                float line11EndY = line1StartY - length * sin(dir_radians);
+
+                float line12EndX = line1StartX + length * cos(dir_radians);
+                float line12EndY = line1StartY + length * sin(dir_radians);
+
+                line11[0].position = sf::Vector2f(line1StartX, line1StartY);
+                line11[1].position = sf::Vector2f(line11EndX, line11EndY);
+
+                line11[0].color = sf::Color::White;
+                line11[1].color = sf::Color::White;
+
+                line12[0].position = sf::Vector2f(line1StartX, line1StartY);
+                line12[1].position = sf::Vector2f(line12EndX, line12EndY);
+
+                line12[0].color = sf::Color::White;
+                line12[1].color = sf::Color::White;
+
+                data[2].emplace_back(line11);
+                data[2].emplace_back(line12);
+
+
+
+                /* draw the scan angle of the linear phase array */
+
+
+
+                sf::VertexArray arrow(sf::Lines, 6);
+
+                // Calculate the beam angle relative to the first line (add scan_angle to direction)
+                float beam_angle_radians = tx_ant_dir[i] + tx_scan_angle[i];;
+                //cout << beam_angle_radians * (180 / M_PIl) << endl;
+                float beam_length = 25.0f;  // Length of the signal beam line
+
+
+                  // Line 1's position: calculated from the antenna direction
+                float line2StartX = position.x + size.x / 2; // Middle of the rectangle
+                float line2StartY = position.y + size.y / 2;
+
+                // Calculate the endpoint of the second line based on beam angle
+                float line2EndX = line2StartX + beam_length * cos(beam_angle_radians);
+                float line2EndY = line2StartY - beam_length * sin(beam_angle_radians);
+
+                arrow[0].position = sf::Vector2f(line2StartX, line2StartY);  // Starts from the end of the first line
+                arrow[1].position = sf::Vector2f(line2EndX, line2EndY);
+
+                arrow[0].color = sf::Color::Blue;
+                arrow[1].color = sf::Color::Blue;
+
+                // Arrowhead parameters
+                float arrowhead_angle = M_PIl / 6;  // 30 degrees for the arrowhead angle
+                float arrowhead_length = 5.0f;    // Length of the arrowhead sides
+
+                // Calculate the points for the arrowhead
+                float left_head_angle = beam_angle_radians + arrowhead_angle;   // Angle for the left arrowhead
+                float right_head_angle = beam_angle_radians - arrowhead_angle;  // Angle for the right arrowhead
+
+                float left_head_x = line2EndX - arrowhead_length * cos(left_head_angle);
+                float left_head_y = line2EndY + arrowhead_length * sin(left_head_angle);
+
+                float right_head_x = line2EndX - arrowhead_length * cos(right_head_angle);
+                float right_head_y = line2EndY + arrowhead_length * sin(right_head_angle);
+
+                // Draw the left side of the arrowhead
+                arrow[2].position = sf::Vector2f(line2EndX, line2EndY);  // From the beam endpoint
+                arrow[3].position = sf::Vector2f(left_head_x, left_head_y);  // To the left side of the arrowhead
+                arrow[2].color = sf::Color::Blue;
+                arrow[3].color = sf::Color::Blue;
+
+                // Draw the right side of the arrowhead
+                arrow[4].position = sf::Vector2f(line2EndX, line2EndY);  // From the beam endpoint
+                arrow[5].position = sf::Vector2f(right_head_x, right_head_y);  // To the right side of the arrowhead
+                arrow[4].color = sf::Color::Blue;
+                arrow[5].color = sf::Color::Blue;
+
+                data[2].emplace_back(arrow);
+            }
+        }
+
+        HeatGrid(const size_t& irows,
+            const size_t& icols,
+            const double& imin,
+            const double& imax,
+            const sf::Vector2u& iwindow_size,
+            const placement_v& irx_locations,
+            const placement_v& itx_locations,
+            const double_v& itx_ant_dir,
+            const double_v& itx_scan_angle)
+            :
+            //raw_values(values),
+            data_rows(irows),
+            data_cols(icols),
+            pixel_height(iwindow_size.y / irows),
+            pixel_width(iwindow_size.x / icols),
+            min_pxl(imin),
+            max_pxl(imax),
+            bounds_lower({0, 0}),
+            bounds_upper(iwindow_size),
+            window_size(iwindow_size),
+            rx_locations(irx_locations),
+            tx_locations(itx_locations),
+            tx_ant_dir(itx_ant_dir),
+            tx_scan_angle(itx_scan_angle),
+
+            grid(sf::Quads, irows * icols * 4)
+            //vertices(sf::Quads, values.size() * 4)
+        {
+            thresholds[0] = 0.40; // Cyan to Green
+            thresholds[1] = 0.55; // Green to Yellow
+            thresholds[2] = 0.71; // Yellow to Red
+
+            init(bounds_lower, bounds_upper);
+// last good
+            //thresholds[0] = 0.40; // Cyan to Green
+            //thresholds[1] = 0.55; // Green to Yellow
+            //thresholds[2] = 0.71; // Yellow to Red
+            //thresholds[0] = 0.50; // Cyan to Green
+            //thresholds[1] = 0.60; // Green to Yellow
+            //thresholds[2] = 0.70; // Yellow to Red
+            //thresholds[0] = 0.40; // Cyan to Green
+            //thresholds[1] = 0.50; // Green to Yellow
+            //thresholds[2] = 0.70; // Yellow to Red
+        }
+    };
+
+    // Function to handle Ctrl + C
+    void sig_handler(int signal)
+    {
+        if (signal == SIGINT)
+        {
+            std::cout << "Ctrl + C pressed, exiting...\n";
+            std::exit(0);
+        }
+    }
+
+    /* write to a file: loggerfile, string, debug-print */
+    void printerr(Logger& logger, const string& str, bool debug = true)
+    {
+        logger.write(str);
+        if (debug)
+            cerr << str << endl;
+    }
+
+    void print(Logger& logger, const string& str, bool debug = true)
+    {
+        logger.write(str);
+        if (debug)
+            cout << str << endl;
+    }
+
+    /* look for a non-inf number */
+    inline void validate_ite(const double_v& raw_values, double_v::iterator& iminmax)
+    {
+        while (std::isinf(*iminmax))
+        {
+            if (iminmax != raw_values.begin())
+            {
+                iminmax -= 1;
+            }
+            else if (iminmax != raw_values.end() - 1)
+            {
+                iminmax += 1;
             }
         }
     }
 
+   // inline void change_zoom(zoom()
 
-    void set_nodes(vector<Placements>& base, vector<Placements>& clients, Dimensions<float> field_size)
+    inline void zoom_in(sf::RenderWindow& window, sf::View& view, float& zoom, const float& adjustent)
     {
-        nodes.resize(clients.size(), { Node::Type::handset, TILE_SIZE.x / Node::scale_factor() });
-        nodes.resize(clients.size() + base.size(), { Node::Type::base, TILE_SIZE.x / Node::scale_factor() });
-
-        unsigned idx = 0;
-
-        for (auto& station : base)
-        {
-            auto& node = nodes[idx++];
-            node.station_position = { float(station.x / field_size.x), float(station.y / field_size.y) };
-            cout << "x " << node.station_position.x << " y " << node.station_position.y << endl;
-            node.shape.setPosition(node.station_position.x * WINDOW_SIZE.x, node.station_position.y * WINDOW_SIZE.y);
-            node.shape.setFillColor({ 255,255,255 });
-            node.shape.setOutlineColor(sf::Color::Transparent);
-            node.shape.setOutlineThickness(0.f);
-        }
-
-        for (auto& station : clients)
-        {
-            auto& node = nodes[idx++];
-            node.station_position = { float(station.x / field_size.x), float(station.y / field_size.y) };
-            cout << "x " << node.station_position.x << " y " << node.station_position.y << endl;
-            node.shape.setPosition(node.station_position.x * WINDOW_SIZE.x, node.station_position.y * WINDOW_SIZE.y);
-            node.shape.setFillColor({ 150,150,255 });
-            node.shape.setOutlineColor(sf::Color::Transparent);
-            node.shape.setOutlineThickness(0.f);
-        }
+        zoom /= adjustent;
+        view.setSize(window.getDefaultView().getSize());
+        view.zoom(zoom);
+        window.setView(view);
     }
 
-    unsigned run()
+    inline void zoom_out(sf::RenderWindow& window, sf::View& view, float& zoom, const float& adjustent)
     {
-        window.setPosition(sf::Vector2i{ window.getPosition().x, 0 });
-
-        bool is_focused = false;
-        auto view = window.getDefaultView();
-        auto speed = 100.f;
-
-        sf::Clock clock;
-        sf::Time timeSinceLastUpdate = sf::Time::Zero;
-        sf::Time FrameTime = sf::seconds(1.f / 60.f);
-
-        /* background tile when there is no signal */
-        Tile bg_tile({ TILE_SIZE.x, TILE_SIZE.y });
-        bg_tile.shape.setFillColor({ 50, 50, 50, 180 });
-        bg_tile.shape.setOutlineThickness(1.0f);
-        bg_tile.shape.setOutlineColor({ 50, 50, 50, 250 });
-
-
-        while (window.isOpen())
-        {
-            sf::Time dt = clock.restart();
-            timeSinceLastUpdate += dt;
-
-            sf::Event event{};
-            while (window.pollEvent(event))
-            {
-                if (event.type == sf::Event::Closed || event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape)
-                    window.close();
-
-                switch (event.type)
-                {
-                case sf::Event::KeyPressed:
-                {
-                    switch (event.key.code)
-                    {
-                    case sf::Keyboard::Enter:
-                    {
-                        std::cout << "Enter Pressed\n";
-                        break;
-                    }
-                    case sf::Keyboard::Space:
-                    {
-                        std::cout << "Space Pressed\n";
-                        break;
-                    }
-                    case sf::Keyboard::S:
-                    {
-                        if (event.key.control)
-                        {
-                            sf::Texture texture;
-                            const auto& size = window.getSize();
-                            texture.create(size.x, size.y);
-                            texture.update(window);
-                            sf::Image screenshot = texture.copyToImage();
-
-                            //char buffer[80]; // set a timestamp to avoid overwriting
-                            //auto name = "screenshot_" + string(buffer) + ".png";
-
-                            string name;
-                            name.reserve(95);
-                            name = "screenshot_";
-                            char* buffer = name.data();
-                            buffer += name.size();
-
-                            getTimeStamp(buffer, true);
-                            name += ".png";
-
-                            // Save the screenshot to a file
-                            if (screenshot.saveToFile(name))
-                            {
-                                std::cout << "Screenshot saved " << name << std::endl;
-                            }
-                            else
-                            {
-                                std::cerr << "Failed to save screenshot" << std::endl;
-                            }
-                        }
-                        break;
-                    }
-                    }
-                    break;
-                }
-                case sf::Event::Resized:
-                {
-                    window.clear({ Color(100,100,100) }); // called every fame
-                    // update the view to the new size of the window
-                    ;
-                    //cout << "old viewport " << viewport.left << "," << viewport.top << endl;
-                    view.setSize(static_cast<float>(event.size.width), static_cast<float>(event.size.height));
-
-                    //cout << " new viewport " << viewport.left << "," << viewport.top << endl;
-                    //sf::FloatRect visibleArea(0, 0, event.size.width, event.size.height);
-
-                    //cout << "Window size {" << WINDOW_SIZE.x << "," << WINDOW_SIZE.y << "}, ";
-                    //Vector2f scale_size = { float(event.size.width / WINDOW_SIZE.x), float(event.size.height / WINDOW_SIZE.y) };
-                    WINDOW_SIZE = { event.size.width, event.size.height };
-                    FloatRect visibleArea(0, 0, event.size.width, event.size.height);
-                    window.setView(sf::View(visibleArea));
-                    view = window.getDefaultView();
-                    //cout << "new size {" << WINDOW_SIZE.x << "," << WINDOW_SIZE.y << "}, ";
-
-                    //cout << "tile size {" << TILE_SIZE.x << "," << TILE_SIZE.y << "}, ";
-
-                    cout << "grid size {" << tile_grid.size() << "," << tile_grid[0].size() << "}, ";
-                    tile_grid.clear();
-                    tile_grid.resize(WINDOW_SIZE.y / TILE_SIZE.y, vector<Tile>(WINDOW_SIZE.x / TILE_SIZE.x, bg_tile));
-                    cout << "new size {" << tile_grid.size() << "," << tile_grid[0].size() << "}" << endl;
-
-                    for (auto y = 0; y < tile_grid.size(); ++y)
-                    {
-                        //cout << "row " << y << ": ";
-                        for (auto x = 0; x < tile_grid[0].size(); ++x)
-                        {
-                            auto& tile = tile_grid[y][x];
-                            tile.shape.setPosition(x * TILE_SIZE.x, y * TILE_SIZE.y);
-                            //cout << x * TILE_SIZE.x << "," << y * TILE_SIZE.y << ", ";
-                            //tile.reshape(scale_size);
-                        }
-                        //cout << endl;
-                    }
-
-                    for (auto& node : nodes)
-                    {
-                        node.shape.setPosition(node.station_position.x * WINDOW_SIZE.x, node.station_position.y * WINDOW_SIZE.y);
-                    }
-
-                    break;
-                }
-                case sf::Event::LostFocus:
-                {
-                    is_focused = false;
-                    break;
-                }
-                case sf::Event::GainedFocus:
-                {
-                    is_focused = true;
-                    break;
-                }
-                }
-            }
-
-            if (is_focused)
-            {
-                auto mousePos = sf::Mouse::getPosition(window);
-                auto mouseWorldPos = window.mapPixelToCoords(mousePos, view);
-
-                //window.setTitle("Mouse Position: (" + std::to_string(int(mouseWorldPos.x / 64.f)) + ", " +
-                //    std::to_string(int(mouseWorldPos.y / 64.f)) + ")");
-
-                if (sf::Mouse::isButtonPressed(sf::Mouse::Left)) {
-                    if (mouseWorldPos.x >= 0 && mouseWorldPos.y >= 0 &&
-                        mouseWorldPos.x < WINDOW_SIZE.x && mouseWorldPos.y < WINDOW_SIZE.y)
-                    {
-                        auto position = mousePos;
-                        position.x /= TILE_SIZE.x;
-                        position.y /= TILE_SIZE.y;
-                        tile_grid[position.y][position.x].shape.setFillColor(sf::Color::Red);
-                    }
-                }
-                //! ** INPUT SECTION **
-                //if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) {
-                //    shape.move(0.f, -speed * timePerUpdate.asSeconds());
-                //}
-                //if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) {
-                //    shape.move(-speed * timePerUpdate.asSeconds(), 0.f);
-                //}
-                //if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) {
-                //    shape.move(0.f, speed * timePerUpdate.asSeconds());
-                //}
-                //if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) {
-                //    shape.move(speed * timePerUpdate.asSeconds(), 0.f);
-                //}
-
-                while (timeSinceLastUpdate > FrameTime) {
-                    timeSinceLastUpdate -= FrameTime;
-
-                    while (timeSinceLastUpdate > FrameTime) {
-                        timeSinceLastUpdate -= FrameTime;
-                        //! ** UPDATE SECTION**
-                    }
-                }
-            }
-
-            //view.setCenter(shape.getPosition());
-            //window.setView(view);
-
-            //! ** DRAW SECTION **
-            window.clear(); // called every fame
-
-            for (auto& row : tile_grid)
-                for (auto& tile : row)
-                    window.draw(tile.shape);
-
-            for (auto& node : nodes)
-                window.draw(node.shape);
-
-            window.setView(view);
-            window.display();
-        }
-
-        return EXIT_SUCCESS;
+        zoom *= adjustent;
+        view.setSize(window.getDefaultView().getSize());
+        view.zoom(zoom);
+        window.setView(view);
     }
 
-    static void test()
+    inline void pan_window(sf::RenderWindow& window, sf::View& view, sf::Vector2f& curr_pos, const sf::Vector2i& offset)
     {
-        unsigned window_width = 200;
-        unsigned window_height = 200;
+        sf::Vector2f delta = { (float)offset.x, (float)offset.y };
+        view.move(delta);  // Move the view by the delta
+        window.setView(view);
+        curr_pos += delta;
+    }
 
-        sf::RenderWindow window(sf::VideoMode(window_width, window_height), "SFML works!");
+    /*    G U I    */
+    int render(
+        Logger& logger,
+        const placement_v& rx_locations,
+        const placement_v& tx_locations,
+        std::vector<double_v>& raw_values,
+        const double_v& ant_direction,
+        const double_v& scan_angle,
+        const size_t& rows,
+        const size_t& cols,
+        const double& min_ptx,
+        const double& max_ptx)
+    {
+        std::signal(SIGINT, sig_handler);
 
 
-        sf::CircleShape shape(100.f);
-        shape.setFillColor(sf::Color::Green);
-        shape.setPosition(10.f, 50.f);
+        sf::RenderWindow window(sf::VideoMode(rows, cols), "SFML Grid Plot");
+        window.setVerticalSyncEnabled(true);
 
+        auto window_size = window.getSize();
+
+
+        sf::Vector2f curr_position;
+        sf::Vector2i panning_view;
+        sf::Vector2i moved_offset;
+
+        sf::Clock delta_clock;
+        sf::View view = window.getDefaultView();
+
+        bool state_changed = true;
+        bool panning = false;
+        float zoomLevel = 1.0f;
+        float mouse_delta_thresh = 0.01f;
+        float zoom_change_factor = 1.1f;
+        long pan_adj_factor = 10;
+        int render_cow_id = 0;
+        auto tx_count = tx_locations.size();
+
+        /* heat data contains vertices too */
+        HeatGrid griddata(rows, cols, min_ptx, max_ptx, window_size, rx_locations, tx_locations, ant_direction, scan_angle);
+
+
+
+        /* init the heatmap to display heat from TX id */
+        griddata.update_heat(raw_values[render_cow_id]);
+
+
+#ifdef CONTROLS
+        ImGui::SFML::Init(window);
+#endif
+
+
+        // Main loop
         while (window.isOpen())
         {
             sf::Event event;
+
             while (window.pollEvent(event))
             {
-                if (event.type == sf::Event::Closed)
+                // OpenGL rendering here
+                //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+#ifdef CONTROLS
+                ImGui::SFML::ProcessEvent(event);
+#endif
+                switch (event.type)
+                {
+                case sf::Event::Closed:
+                {
                     window.close();
+                    break;
+                }
+                case sf::Event::MouseWheelScrolled:
+                {
+                    if (event.mouseWheelScroll.delta - mouse_delta_thresh > 0)
+                    {
+                        zoom_in(window, view, zoomLevel, zoom_change_factor);
+                    }
+                    else if (event.mouseWheelScroll.delta - mouse_delta_thresh < 0)
+                    {
+                        zoom_out(window, view, zoomLevel, zoom_change_factor);
+                    }
+                    break;
+                }
+                case sf::Event::MouseButtonPressed:
+                {
+                    if (event.mouseButton.button == sf::Mouse::Right)
+                    {
+                        panning_view = sf::Mouse::getPosition(window);
+                        panning = true;
+                    }
+                    break;
+                }
+                case sf::Event::MouseButtonReleased:
+                {
+                    if (event.mouseButton.button == sf::Mouse::Right)
+                    {
+                        griddata.update_panning(moved_offset);
+
+                        //auto newpos = sf::Mouse::getPosition(window);
+                        //moved_offset = newpos - panning_view;
+                        //
+                        //if (moved_offset.x - mouse_delta_thresh != 0 || moved_offset.y != 0)
+                        //{
+                        //    pan_window(window, view, curr_position, moved_offset);
+                        //    griddata.update_panning(moved_offset);
+                        //}
+                        panning = false;
+                    }
+                    break;
+                }
+                case sf::Event::MouseMoved:
+                {
+                    if (panning)
+                    {
+                        auto new_view = sf::Mouse::getPosition(window);
+                        moved_offset = new_view - panning_view;
+
+                        if (abs(panning_view.x - mouse_delta_thresh) > 0 || abs(panning_view.y - mouse_delta_thresh) > 0)
+                        {
+                            pan_window(window, view, curr_position, moved_offset);
+                            panning_view = new_view;
+                        }
+                    }
+                    break;
+                }
+                case sf::Event::KeyPressed:
+                {
+                    switch (event.key.scancode)
+                    {
+                    case sf::Keyboard::Scan::R:
+                    {
+                        zoomLevel = 1.0f;  // Reset zoom level
+                        view = window.getDefaultView();
+                        window.setView(view);
+                        break;
+                    }
+                    case sf::Keyboard::Scan::Tab:
+                    {
+                        render_cow_id = (render_cow_id + 1) % tx_count;
+                        griddata.update_heat(raw_values[render_cow_id]);
+                        break;
+                    }
+                    case sf::Keyboard::Scan::Left:
+                    {
+                        moved_offset = { 0 + pan_adj_factor, 0 };
+                        pan_window(window, view, curr_position, moved_offset);
+                        griddata.update_panning(moved_offset);
+                        break;
+                    }
+                    case sf::Keyboard::Scan::Up:
+                    {
+                        moved_offset = { 0, 0 + pan_adj_factor };
+                        pan_window(window, view, curr_position, moved_offset);
+                        griddata.update_panning(moved_offset);
+                        break;
+                    }
+                    case sf::Keyboard::Scan::Right:
+                    {
+                        moved_offset = { -pan_adj_factor, 0 };
+                        pan_window(window, view, curr_position, moved_offset);
+                        griddata.update_panning(moved_offset);
+                        break;
+                    }
+                    case sf::Keyboard::Scan::Down:
+                    {
+                        moved_offset = { 0, 0 - pan_adj_factor };
+                        pan_window(window, view, curr_position, moved_offset);
+                        griddata.update_panning(moved_offset);
+                        break;
+                    }
+                    }
+
+                }
+                default:
+                    break;
+                }
+            } // end while pollEvent
+
+#ifdef CONTROLS
+            // ImGui logic for GUI buttons
+            ImGui::SFML::Update(window, delta_clock.restart());
+            ImGui::Begin("Control Panel");
+
+            if (ImGui::Button("Zoom In"))
+            {
+                zoom_in(window, view, zoomLevel, zoom_change_factor);
             }
+            else if (ImGui::Button("Zoom Out"))
+            {
+                zoom_out(window, view, zoomLevel, zoom_change_factor);
+            }
+            else if (ImGui::Button("Reset View"))
+            {
+                zoomLevel = 1.0f;  // Reset zoom level
+                window.setView(window.getDefaultView());
+            }
+            else if (ImGui::Button("Left"))
+            {
+                moved_offset = { 0 + pan_adj_factor, 0 };
+                pan_window(window, view, curr_position, moved_offset);
+                griddata.update_panning(moved_offset);
+            }
+            else if (ImGui::Button("Up"))
+            {
+                moved_offset = { 0, 0 + pan_adj_factor };
+                pan_window(window, view, curr_position, moved_offset);
+                griddata.update_panning(moved_offset);
+
+            }
+            else if (ImGui::Button("Right"))
+            {
+                moved_offset = { -pan_adj_factor, 0 };
+                pan_window(window, view, curr_position, moved_offset);
+                griddata.update_panning(moved_offset);
+
+            }
+            else if (ImGui::Button("Down"))
+            {
+                moved_offset = { 0, 0 - pan_adj_factor };
+                pan_window(window, view, curr_position, moved_offset);
+                griddata.update_panning(moved_offset);
+            }
+
+            ImGui::End();
+#endif
+
+
             window.clear();
-            window.draw(shape);
+
+            window.draw(griddata.grid);
+
+            for (auto& circle : griddata.rx_cicles)
+            {
+                window.draw(circle);
+            }
+
+            for (auto& data : griddata.data)
+            {
+                for (auto& objects : data.second)
+                {
+                    window.draw(objects);
+                }
+            }
+
+#ifdef CONTROLS
+            ImGui::SFML::Render(window);  // Render ImGui over SFML content
+#endif
             window.display();
         }
+
+#ifdef CONTROLS
+        ImGui::SFML::Shutdown();
+#endif
+        return 0;
     }
 
-    void draw_init(const std::vector<double>& spacings, const double& lambda, Cow& cow, Signal2D& signal_data)
+    /*    G U I    */
+    void plot(
+        Logger& logger,
+        const string& filename,
+        const placement_v& rx_locations,
+        const placement_v& tx_locations,
+        double_v& raw_values,
+        const double_v& ant_direction,
+        const double_v& scan_angle,
+        const size_t& rows,
+        const size_t& cols,
+        const double& min_ptx,
+        const double& max_ptx)
     {
-        auto& current_state = state_data[cow.sid()];
+        float pixel_height = 1;
+        float pixel_width = 1;
 
-        station_details_t next;
-        cow.details(next.ant_spacing, next.ant_panel_count, next.ant_tx_power, next.ant_scan_angle, next.position);
+        sf::RenderTexture renderTexture;
 
-        if (compare(current_state, next)) // if changed, then update
+        if (renderTexture.create(cols * pixel_width, rows * pixel_height))
         {
-            std::unordered_map<unsigned, std::vector<double>> constants_table; // stores constants calculation
+            renderTexture.clear();
 
-            auto shape = draw::shape(tile_grid, false); // get the total elements and use param(1)
-            std::vector<double> signalHeat(shape.x * shape.y);
+            HeatGrid griddata(rows, cols, min_ptx, max_ptx, renderTexture.getSize(), rx_locations, tx_locations, ant_direction, scan_angle);
 
-            cow.setHighResMatrix(spacings[cow.sid()], lambda, constants_table, shape.x, shape.y);
-            cow.getHeatMapData(signalHeat);
-
-            signal_data.resize(shape.x, std::vector<double>(shape.y));
-
-            size_t i = 0;
-            size_t offset = 0;
-            size_t size = signalHeat.size();
+            // Draw the grid
             size_t index = 0;
-
-            while (signalHeat.begin() + offset < signalHeat.end())
+            for (size_t row_idx = rows - 1; row_idx >= 0; --row_idx)
             {
-                signal_data[index++].assign(signalHeat.begin() + offset, signalHeat.begin() + offset + size);
-                offset += size;
+                for (size_t cols_idx = 0; cols_idx < cols; ++cols_idx)
+                {
+                    sf::Color color = griddata.colorgrid(raw_values[index++]);
+
+                    sf::RectangleShape cell(sf::Vector2f(pixel_height, pixel_width));
+                    cell.setPosition(cols_idx * pixel_height, row_idx * pixel_width);
+                    cell.setFillColor(color);
+
+                    renderTexture.draw(cell);  // Draw the cell onto the renderTextur
+                }
+
+                if (row_idx == 0)
+                    break;
             }
 
-            current_state = next;
-        }
-        //signal heat map on grid ready to present
-    }
+            renderTexture.display();
 
-    Visuals(
-        unsigned width,
-        unsigned height,
-        string title
-    ) :
-    WINDOW_SIZE(width, height),
-    window(VideoMode(WINDOW_SIZE.x, WINDOW_SIZE.y), title)
-    {
+            // Save the render texture to a file
+            sf::Texture texture = renderTexture.getTexture();
+            sf::Image image = texture.copyToImage();
+            if (!image.saveToFile(filename))
+            {
+                printerr(logger, "Failed to save image!");
+            }
+
+            return;
+        }
+
+        print(logger, "Failed to create render texture!");
     }
-};
+}

@@ -1,5 +1,6 @@
 #pragma once
 #include <cmath>
+#include <vector>
 #include <cstring>
 
 template<class Width>
@@ -58,6 +59,7 @@ struct Coordinates : public Dimensions<Type>
     Coordinates() {}
 };
 using Placements = Coordinates<unsigned>;
+using placement_v = std::vector<Placements>;
 
 struct Polar_Coordinates : private Coordinates<double>
 {

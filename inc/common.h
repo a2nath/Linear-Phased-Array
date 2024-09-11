@@ -10,14 +10,14 @@
 #include <chrono>
 #include <sstream>
 
+#define GRAPHICS
+
+
 #define C_SPEED 3e8L /* speed of light */
 #define M_PIl   3.141592653589793238462643383279502884L /* pi */
 
 
 #ifdef _WIN32
-#include <process.h>
-/* get process id and attach to process */
-#define GetCurrentProcessId getpid
 #define localtime(current_time, local_time) localtime_s(local_time, current_time);
 #else
 #define localtime(current_time, local_time) localtime_r(&current_time, &local_time);
@@ -28,7 +28,8 @@ extern std::string sim_error;
 
 template<class T> std::string str(const T& input) { return std::to_string(input); }
 template<class U, class V> using Pair = std::pair<U, V>;
-
+using unsigned_v = std::vector<unsigned>;
+using double_v = std::vector<double>;
 
 std::string timestamp() {
 	// Get the current time as a time_point
@@ -119,19 +120,21 @@ class Logger
 	using path = std::filesystem::path;
 	std::ofstream stream;
 public:
-	inline void write(const std::string& str)
+	template<class T>
+	inline void write(const T& contents)
 	{
 		if (stream.is_open())
 		{
-			stream << str;
+			stream << contents;
 		}
 	}
 
-	void writeline(const std::string& str)
+	template<class T>
+	void writeline(const T& contents)
 	{
 		if (stream.is_open())
 		{
-			write(str);
+			write(contents);
 			stream << std::endl;
 		}
 	}
