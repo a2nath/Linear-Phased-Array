@@ -175,7 +175,7 @@ This output can now be integrated into **Deep Q-Learning Networks (DQN)** or **R
 
 #### Plot GUI heatgraphs from each tranmitters
 
-<details>
+<details open>
 Tx1
 <p align="center">
 <img src="images/transmitter_0.png?raw=true" width="800" alt="1000 meters x 1000 meters field">
@@ -183,12 +183,12 @@ Tx1
 
 Tx2
 <p align="center">
-<img src="images/transmitter_0.png?raw=true" width="800" alt="1000 meters x 1000 meters field">
+<img src="images/transmitter_1.png?raw=true" width="800" alt="1000 meters x 1000 meters field">
 </p>
 
 Tx3
 <p align="center">
-<img src="images/transmitter_0.png?raw=true" width="800" alt="1000 meters x 1000 meters field">
+<img src="images/transmitter_2.png?raw=true" width="800" alt="1000 meters x 1000 meters field">
 </p>
 </details>
 
