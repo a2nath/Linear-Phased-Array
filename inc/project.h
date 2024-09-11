@@ -115,7 +115,17 @@ struct GraphicsHelper
 
 		for (auto& cow : cows)
 		{
-			graphics::plot(logger, "transmitter_" + str(cow.sid()) + ".png", raw_data[cow.sid()], rows, cols, double_min, double_max);
+			graphics::plot(logger,
+				"transmitter_" + str(cow.sid()) + ".png",
+				mobile_stations_loc,
+				base_stations_loc,
+				raw_data[cow.sid()],
+				bs_theta_c,
+				scan_alpha_list,
+				rows,
+				cols,
+				double_min,
+				double_max);
 		}
 	}
 
