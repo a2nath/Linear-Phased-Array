@@ -9,6 +9,8 @@
 #include <vector>
 #include <chrono>
 #include <sstream>
+#include <cmath>
+#include <cstring>
 
 #define GRAPHICS
 
@@ -258,4 +260,211 @@ namespace cached
 		return cached::sin((M_PIl / 2.0) - rads);
 	}
 
+}
+
+
+
+template<class Width>
+struct Dimensions
+{
+	Width x, y;
+
+	Dimensions& operator=(const Dimensions& ref)
+	{
+		x = ref.x;
+		y = ref.y;
+		return *this;
+	}
+	Dimensions& operator=(const Width& ref)
+	{
+		x = ref;
+		y = ref;
+		return *this;
+	}
+
+	bool operator==(const Dimensions& ref)
+	{
+		return x == ref.x && y == ref.y;
+	}
+
+	bool operator!=(const Dimensions& ref)
+	{
+		return !operator==(ref);
+	}
+	Dimensions(const Width& i, const Width& j) : x(i), y(j) {}
+	Dimensions() : x(0), y(0) {}
+};
+
+template<class Type>
+struct Coordinates : public Dimensions<Type>
+{
+	Coordinates& operator-(const Coordinates& a)
+	{
+		Coordinates temp = *this;
+
+		if ((long double)temp.x - (long double)a.x < 0
+			|| (long double)temp.y - (long double)a.y < 0)
+		{
+			throw std::runtime_error("Tried to subtract too much from coordinates data structure leading to less than zero");
+		}
+		else
+		{
+			temp.x -= a.x;
+			temp.y -= a.y;
+		}
+
+		return temp;
+	}
+
+	Coordinates(Type _x, Type _y) : Dimensions<Type>(_x, _y) {}
+	Coordinates() {}
+};
+using Placements = Coordinates<unsigned>;
+using placement_v = std::vector<Placements>;
+
+struct Polar_Coordinates : private Coordinates<double>
+{
+	double& theta;
+	double& hype;
+	Polar_Coordinates& operator=(const Polar_Coordinates& input)
+	{
+		theta = input.theta;
+		hype = input.hype;
+		return *this;
+	}
+	Polar_Coordinates(double i, double j) : Coordinates(i, j), theta(x), hype(y) {}
+	Polar_Coordinates() : Coordinates(), theta(x), hype(y) {}
+};
+
+inline Polar_Coordinates cart2pol(const double& x, const double& y)
+{
+	double theta = atan2(y, x);
+	double hype = hypot(x, y);
+	return Polar_Coordinates(theta, hype);
+}
+
+template<class T>
+inline Polar_Coordinates cart2pol(const Coordinates<T>& c)
+{
+	return cart2pol(c.x, c.y);
+}
+
+inline Coordinates<double> pol2cart(const double& theta, const double& hype)
+{
+	auto x = cos(theta) * hype;
+	auto y = sin(theta) * hype;
+	return Coordinates<double>(x, y);
+}
+
+inline Coordinates<double> pol2cart(const Polar_Coordinates& c)
+{
+	return pol2cart(c.theta, c.hype);
+}
+
+#include <thread>
+#include <future>
+#include <condition_variable>
+
+namespace graphics
+{
+	std::mutex queue_mutex;          // Mutex to protect the shared queue
+	std::mutex finished_mutex;
+	std::condition_variable consig;      // Condition variable to signal the consumer thread
+
+	struct State
+	{
+		int tx_idx;
+		double ant_power, ant_dir, ant_angle;
+		long row, col;
+		Placements location;
+
+		State(const int& id, const long& irow, const long& icol, const double& power, const double& dir, const double& scan, const long& x, const long& y) :
+			tx_idx(id), row(irow), col(icol), ant_power(power), ant_dir(dir), ant_angle(scan), location({ (unsigned)x, (unsigned)y }) {}
+		State() : tx_idx(-1) {}
+	};
+
+	struct DataSync
+	{
+		/* signal the tx number */
+		int finished;
+		long size;
+		std::queue<State> mainq;
+		std::vector<std::queue<State*>> pending;
+
+
+		auto& front()
+		{
+			std::lock_guard<std::mutex> lock(queue_mutex);  // Lock the mutex
+
+			auto state = mainq.front();
+			State new_state;
+
+			/* is this in the pending references */
+			while (pending[state.tx_idx].front() != &state)
+			{
+				mainq.pop();
+
+				if (mainq.size())
+				{
+					state = mainq.front();
+				}
+				else
+				{
+					state = new_state;
+				}
+			}
+
+			/* the newest valid request for that tx */
+			return state;
+		}
+
+		void pop()
+		{
+			std::lock_guard<std::mutex> lock(queue_mutex);  // Lock the mutex
+
+			if (mainq.size())
+			{
+				auto& state = mainq.front();
+				pending[state.tx_idx].pop();
+				mainq.pop();
+
+				std::unique_lock<std::mutex> lock(graphics::finished_mutex);
+				finished = state.tx_idx;
+
+				size--;
+
+				consig.notify_one();
+			}
+		}
+
+		void emplace(const int& idx, const long& row, const long& col, const double& power, const double& dir, const double& scan, const long& x, const long& y)
+		{
+			std::lock_guard<std::mutex> lock(queue_mutex);  // Lock the mutex
+
+			/* queue the latest request from tx */
+			mainq.emplace(idx, row, col, power, dir, scan, x, y);
+
+			pending[idx].emplace(&mainq.back());
+
+
+			/* just process the newest request from other tx */
+			for (int i = 0; i < pending.size(); ++i)
+			{
+				if (i != idx && pending[i].size() > 1)
+				{
+					std::queue<State*> empty_queue({ pending[i].back() });
+					std::swap(pending[i], empty_queue);
+				}
+			}
+
+			size++;
+
+			consig.notify_one();  // Notify the consumer thread that there's new data
+		}
+
+		DataSync(int num_tx) : size(0), finished(-1), pending(num_tx)
+		{
+
+		}
+	};
 }
