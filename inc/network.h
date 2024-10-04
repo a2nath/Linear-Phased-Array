@@ -224,29 +224,29 @@ namespace network_package
 		{
 			if (theta_c != ant_direction)
 			{
-			const double& pioverlambda = M_PIl / lambda;
-			const double& phee_temp = 2 * spacing * pioverlambda;
-			const double& pl_temp_meters = 4 * pioverlambda;
-			const double& antenna_dim_factor = 10 * antenna_dims.x * antenna_dims.y / pow(lambda, 2);
-			double m_factor = antenna_dims.x * pioverlambda;
+				const double& pioverlambda = M_PIl / lambda;
+				const double& phee_temp = 2 * spacing * pioverlambda;
+				const double& pl_temp_meters = 4 * pioverlambda;
+				const double& antenna_dim_factor = 10 * antenna_dims.x * antenna_dims.y / pow(lambda, 2);
+				double m_factor = antenna_dims.x * pioverlambda;
 
-			for (size_t idx = 0; idx < polar_data.size(); ++idx)
-			{
-				auto& cell_polar_data = polar_data[idx];
-
-				double theta_minus_thetaC = cell_polar_data.theta - ant_direction;
-				double m = m_factor * cached::sin(theta_minus_thetaC);
-				double singleant_gain = antenna_dim_factor * pow((1 + cached::cos(theta_minus_thetaC)) / 2, 2);
-
-				if (m != 0)
+				for (size_t idx = 0; idx < polar_data.size(); ++idx)
 				{
-					singleant_gain *= pow(cached::sin(m) / m, 2);
-				}
+					auto& cell_polar_data = polar_data[idx];
 
-				calculations.phee_minus_alpha_list[idx] = phee_temp * cached::sin(theta_minus_thetaC);
-				calculations.pathloss_list[idx]         = pow(pl_temp_meters * cell_polar_data.hype, 2);
-				calculations.gain_RX_grid[idx]          = singleant_gain * panel_count;
-			}
+					double theta_minus_thetaC = cell_polar_data.theta - ant_direction;
+					double m = m_factor * cached::sin(theta_minus_thetaC);
+					double singleant_gain = antenna_dim_factor * pow((1 + cached::cos(theta_minus_thetaC)) / 2, 2);
+
+					if (m != 0)
+					{
+						singleant_gain *= pow(cached::sin(m) / m, 2);
+					}
+
+					calculations.phee_minus_alpha_list[idx] = phee_temp * cached::sin(theta_minus_thetaC);
+					calculations.pathloss_list[idx]         = pow(pl_temp_meters * cell_polar_data.hype, 2);
+					calculations.gain_RX_grid[idx]          = singleant_gain * panel_count;
+				}
 
 			theta_c = ant_direction;
 			}
