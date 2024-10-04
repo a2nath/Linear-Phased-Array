@@ -220,8 +220,10 @@ namespace network_package
 		}
 
 		/* re-calc the signal outs to handsets only (before calling update!) */
-		inline void init(const std::vector<Polar_Coordinates>& polar_data, Calculations& calculations)
+		inline void init(const std::vector<Polar_Coordinates>& polar_data, const double& ant_direction, Calculations& calculations)
 		{
+			if (theta_c != ant_direction)
+			{
 			const double& pioverlambda = M_PIl / lambda;
 			const double& phee_temp = 2 * spacing * pioverlambda;
 			const double& pl_temp_meters = 4 * pioverlambda;
@@ -232,7 +234,7 @@ namespace network_package
 			{
 				auto& cell_polar_data = polar_data[idx];
 
-				double theta_minus_thetaC = cell_polar_data.theta - theta_c;
+				double theta_minus_thetaC = cell_polar_data.theta - ant_direction;
 				double m = m_factor * cached::sin(theta_minus_thetaC);
 				double singleant_gain = antenna_dim_factor * pow((1 + cached::cos(theta_minus_thetaC)) / 2, 2);
 
@@ -245,22 +247,26 @@ namespace network_package
 				calculations.pathloss_list[idx]         = pow(pl_temp_meters * cell_polar_data.hype, 2);
 				calculations.gain_RX_grid[idx]          = singleant_gain * panel_count;
 			}
+
+			theta_c = ant_direction;
+			}
 		}
 
 		/* for GUI simulation in the whole grid */
-		void graphics_init(const std::vector<Polar_Coordinates>& polar_data)
+		void graphics_init(const double& antenna_dir, const std::vector<Polar_Coordinates>& polar_data)
 		{
 			power = 0;
 			alpha = -1;
+			theta_c = -1;
 			graphic.resize(polar_data.size());
-			init(polar_data, graphic);
+			init(polar_data, antenna_dir, graphic);
 		}
 
 		/* for bare-minimum numerical calculations needed at the mobile_stations only */
 		void numerical_init(const std::vector<Polar_Coordinates>& polar_data)
 		{
 			simulation.resize(polar_data.size());
-			init(polar_data, simulation);
+			init(polar_data, theta_c, simulation);
 		}
 
 		AAntenna(

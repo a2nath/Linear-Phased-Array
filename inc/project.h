@@ -20,7 +20,7 @@ struct GraphicsHelper
 	const size_t cols;
 	std::vector<double_v> raw_data;
 
-	void setup_cow_heat(Logger& logger, Cow& cow, const double_v& scan_alpha_lut)
+	void setup_cow_heat(Logger& logger, Cow& cow)
 	{
 		/* IMPORTANT need to set this before iterating over cows again */
 		// also for GUI i think it makes sense to reset to the parameters in the test case
@@ -55,6 +55,7 @@ struct GraphicsHelper
 		cow_v& cows,
 		const placement_v& mobile_stations_loc,
 		const placement_v& base_stations_loc,
+		const double_v& bs_txpower,
 		const double_v& bs_theta_c,
 		const double_v& scan_alpha_list)
 	{
@@ -62,7 +63,7 @@ struct GraphicsHelper
 
 		for (auto& cow : cows)
 		{
-			setup_cow_heat(logger, cow, scan_alpha_list);
+			setup_cow_heat(logger, cow);
 			auto& cow_raw_data = raw_data[cow.sid()];
 			auto [imin, imax] = std::minmax_element(cow_raw_data.begin(), cow_raw_data.end());
 
@@ -80,6 +81,7 @@ struct GraphicsHelper
 			mobile_stations_loc,
 			base_stations_loc,
 			raw_data,
+			bs_txpower,
 			bs_theta_c,
 			scan_alpha_list,
 			rows,
@@ -92,6 +94,7 @@ struct GraphicsHelper
 		cow_v& cows,
 		const placement_v& mobile_stations_loc,
 		const placement_v& base_stations_loc,
+		const double_v& bs_txpower,
 		const double_v& bs_theta_c,
 		const double_v& scan_alpha_list)
 	{
@@ -99,7 +102,7 @@ struct GraphicsHelper
 
 		for (auto& cow : cows)
 		{
-			setup_cow_heat(logger, cow, scan_alpha_list);
+			setup_cow_heat(logger, cow);
 			auto& cow_raw_data = raw_data[cow.sid()];
 			auto [imin, imax] = std::minmax_element(cow_raw_data.begin(), cow_raw_data.end());
 
@@ -120,6 +123,7 @@ struct GraphicsHelper
 				mobile_stations_loc,
 				base_stations_loc,
 				raw_data[cow.sid()],
+				bs_txpower,
 				bs_theta_c,
 				scan_alpha_list,
 				rows,
@@ -136,6 +140,7 @@ struct GraphicsHelper
 	}
 };
 #endif
+
 
 struct SimulationHelper
 {
@@ -210,7 +215,7 @@ struct SimulationHelper
 	}
 
 	/* GUI setup for all cows together, inputs: rows, cols */
-	void setup_tx(const size_t& rows, const size_t& cols)
+	void setup_tx(const size_t& rows, const size_t& cols, const double_v& antenna_dir)
 	{
 		double_v scan_angles, power_nums;
 		get_scana(scan_angles);
@@ -218,7 +223,7 @@ struct SimulationHelper
 
 		for (unsigned c = 0; c < cows.size(); ++c)
 		{
-			cows[c].reset_gui(rows, cols, cows[c].where());
+			cows[c].reset_gui(rows, cols, antenna_dir[c], cows[c].where());
 			cows[c].gui_udpate(scan_angles[c]);
 			cows[c].set_power(power_nums[c]);
 		}
@@ -406,17 +411,17 @@ public:
 		simhelper->printout();
 	}
 
-
 	/* render a scene in a new window and show the simulation */
 	void gui_run()
 	{
 #ifdef GRAPHICS
-		double_v scan_anges;
+		double_v antenna_power, scan_angles;
 
-		simhelper->get_scana(scan_anges);
-		simhelper->setup_tx(visuals.rows, visuals.cols);
+		simhelper->get_power(antenna_power);
+		simhelper->get_scana(scan_angles);
+		simhelper->setup_tx(visuals.rows, visuals.cols, bs_theta_c);
 
-		visuals.render(logger, cows, mobile_stations_loc, base_stations_loc, bs_theta_c, scan_anges);
+		visuals.render(logger, cows, mobile_stations_loc, base_stations_loc, antenna_power, bs_theta_c, scan_angles);
 #endif
 	}
 
@@ -424,12 +429,13 @@ public:
 	void gui_print()
 	{
 #ifdef GRAPHICS
-		double_v scan_anges;
+		double_v antenna_power, scan_angles;
 
-		simhelper->get_scana(scan_anges);
-		simhelper->setup_tx(visuals.rows, visuals.cols);
+		simhelper->get_power(antenna_power);
+		simhelper->get_scana(scan_angles);
+		simhelper->setup_tx(visuals.rows, visuals.cols, bs_theta_c);
 
-		visuals.plot(logger, cows, mobile_stations_loc, base_stations_loc, bs_theta_c, scan_anges);
+		visuals.plot(logger, cows, mobile_stations_loc, base_stations_loc, antenna_power, bs_theta_c, scan_angles);
 #endif
 	}
 
