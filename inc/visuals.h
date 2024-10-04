@@ -2,6 +2,9 @@
 #include <iostream>
 #include <csignal>
 #include "common.h"
+#include <deque>
+#include <tuple>
+#include <future>
 //#include <limits>
 
 
@@ -28,6 +31,51 @@ namespace graphics
     using namespace std;
     using vertex_v = std::vector<sf::VertexArray>;
 
+    struct txvertex
+    {
+        //sf::VertexArray transmitter;
+        int id;
+        vertex_v indicators;
+        sf::Vector2f size;
+        sf::Vector2f position;
+        sf::Color ogcolor;
+
+        sf::Vector2f curr_pos;
+        sf::RectangleShape transmitter;
+
+        void setPosition(const long& new_x, const long& new_y)
+        {
+            auto curloc = transmitter.getPosition();
+            sf::Vector2f offset = { new_x - curloc.x, new_y - curloc.y };
+
+            transmitter.setPosition(new_x, new_y);
+            for (auto& indicator : indicators)
+            {
+                const auto& vertices = indicator.getVertexCount();
+
+                for (int v = 0; v < vertices; ++v)
+                {
+                    indicator[v].position += { offset.x, offset.y };
+                }
+            }
+        }
+
+        txvertex(
+            int iid,
+            const Placements& location,
+            const unsigned& height,
+            sf::Color color)
+            :
+            id(iid),
+            size(10.0f, 10.0f),
+            transmitter(size),
+            position(location.x - size.x / 2, height - location.y - size.y / 2),
+            ogcolor(color)
+        {
+            transmitter.setPosition(position);
+            transmitter.setFillColor(ogcolor);
+        }
+    };
     struct HeatGrid
     {
         const size_t& data_rows;
@@ -46,7 +94,8 @@ namespace graphics
 
         sf::VertexArray grid;
         std::vector<sf::CircleShape> rx_cicles;
-        map<int, vertex_v> data; // lower int means more depth
+
+        std::vector<txvertex> txdata;
 
         sf::Color colorgrid(const double& raw)
         {
@@ -160,15 +209,14 @@ namespace graphics
                 /* draw the placement direction indicators for each tower */
 
 
-
                 sf::VertexArray line11(sf::Lines, 2), line12(sf::Lines, 2);
 
                 // Calculate the endpoint of the first line based on direction
                 float length = 30.0f / 2;  // Halfway across the rectangle
 
                 // Line 1's position: calculated from the antenna direction
-                float line1StartX = position.x + size.x / 2; // Middle of the rectangle;
-                float line1StartY = position.y + size.y / 2;
+                float line1StartX = position.x + 5.0f; // Middle of the rectangle;
+                float line1StartY = position.y + 5.0f;
 
                 // Endpoint using the direction to calculate the x and y offset
                 float line11EndX = line1StartX - length * cos(dir_radians);
@@ -189,8 +237,8 @@ namespace graphics
                 line12[0].color = sf::Color::White;
                 line12[1].color = sf::Color::White;
 
-                data[2].emplace_back(line11);
-                data[2].emplace_back(line12);
+                txdata.back().indicators.emplace_back(line11);
+                txdata.back().indicators.emplace_back(line12);
 
 
 
@@ -207,8 +255,8 @@ namespace graphics
 
 
                   // Line 1's position: calculated from the antenna direction
-                float line2StartX = position.x + size.x / 2; // Middle of the rectangle
-                float line2StartY = position.y + size.y / 2;
+                float line2StartX = position.x + 5.0f; // Middle of the rectangle
+                float line2StartY = position.y + 5.0f;
 
                 // Calculate the endpoint of the second line based on beam angle
                 float line2EndX = line2StartX + beam_length * cos(beam_angle_radians);
@@ -246,7 +294,7 @@ namespace graphics
                 arrow[4].color = sf::Color::Blue;
                 arrow[5].color = sf::Color::Blue;
 
-                data[2].emplace_back(arrow);
+                txdata.back().indicators.emplace_back(arrow);
             }
         }
 
@@ -371,15 +419,15 @@ namespace graphics
         std::vector<double_v>& raw_values,
         const double_v& ant_direction,
         const double_v& scan_angle,
-        const size_t& rows,
-        const size_t& cols,
+        const size_t& irows,
+        const size_t& icols,
         const double& min_ptx,
         const double& max_ptx)
     {
         std::signal(SIGINT, sig_handler);
 
 
-        sf::RenderWindow window(sf::VideoMode(rows, cols), "SFML Grid Plot");
+        sf::RenderWindow window(sf::VideoMode(irows, icols), "SFML Grid Plot");
         window.setVerticalSyncEnabled(true);
 
         auto window_size = window.getSize();
@@ -392,6 +440,7 @@ namespace graphics
         sf::Clock delta_clock;
         sf::View view = window.getDefaultView();
 
+        /* init variables */
         bool state_changed = true;
         bool panning = false;
         float zoomLevel = 1.0f;
@@ -401,10 +450,10 @@ namespace graphics
         int render_cow_id = 0;
         auto tx_count = tx_locations.size();
 
+        sf::Vector2f startpos, mouseoffset;
+        txvertex* tx_dragging = nullptr;
         /* heat data contains vertices too */
-        HeatGrid griddata(rows, cols, min_ptx, max_ptx, window_size, rx_locations, tx_locations, ant_direction, scan_angle);
-
-
+        HeatGrid griddata(irows, icols, min_ptx, max_ptx, window_size, rx_locations, tx_locations, ant_direction, scan_angle);
 
         /* init the heatmap to display heat from TX id */
         griddata.update_heat(raw_values[render_cow_id]);
@@ -592,18 +641,22 @@ namespace graphics
 
             window.clear();
 
+            /* draw the grid */
             window.draw(griddata.grid);
 
+            /* draw the receivers */
             for (auto& circle : griddata.rx_cicles)
             {
                 window.draw(circle);
             }
 
-            for (auto& data : griddata.data)
+            /* draw the transmitters */
+            for (auto& data : griddata.txdata)
             {
-                for (auto& objects : data.second)
+                window.draw(data.transmitter);
+                for (auto& element : data.indicators)
                 {
-                    window.draw(objects);
+                    window.draw(element);
                 }
             }
 
