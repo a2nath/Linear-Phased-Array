@@ -123,6 +123,7 @@ namespace graphics
             moved_offset = { 0, 0 };
         }
 
+        /* update the heat colors from raw calculations */
         void update_heat(const double_v& tx_raw_sigdata)
         {
             size_t index = 0;
@@ -209,6 +210,7 @@ namespace graphics
                 /* draw the placement direction indicators for each tower */
 
 
+                auto& position = txdata.back().position;
                 sf::VertexArray line11(sf::Lines, 2), line12(sf::Lines, 2);
 
                 // Calculate the endpoint of the first line based on direction
@@ -305,6 +307,7 @@ namespace graphics
             const sf::Vector2u& iwindow_size,
             const placement_v& irx_locations,
             const placement_v& itx_locations,
+            const double_v& itx_ant_pwr,
             const double_v& itx_ant_dir,
             const double_v& itx_scan_angle)
             :
@@ -320,6 +323,7 @@ namespace graphics
             window_size(iwindow_size),
             rx_locations(irx_locations),
             tx_locations(itx_locations),
+            tx_ant_pwr(itx_ant_pwr),
             tx_ant_dir(itx_ant_dir),
             tx_scan_angle(itx_scan_angle),
 
@@ -452,8 +456,9 @@ namespace graphics
 
         sf::Vector2f startpos, mouseoffset;
         txvertex* tx_dragging = nullptr;
+
         /* heat data contains vertices too */
-        HeatGrid griddata(irows, icols, min_ptx, max_ptx, window_size, rx_locations, tx_locations, ant_direction, scan_angle);
+        HeatGrid griddata(irows, icols, min_ptx, max_ptx, window_size, rx_locations, tx_locations, ant_txpower, ant_direction, ant_scan_angle);
 
         /* init the heatmap to display heat from TX id */
         griddata.update_heat(raw_values[render_cow_id]);
@@ -497,29 +502,45 @@ namespace graphics
                 }
                 case sf::Event::MouseButtonPressed:
                 {
-                    if (event.mouseButton.button == sf::Mouse::Right)
+                    // Mouse press: check if the click was inside the object
+                    switch (event.mouseButton.button)// == sf::Mouse::Left)
+                    {
+                    case sf::Mouse::Left:
+                    {
+                        break;
+                    }
+                    case sf::Mouse::Right:
                     {
                         panning_view = sf::Mouse::getPosition(window);
                         panning = true;
+                        break;
                     }
+                    default:
+                        break;
+                    }
+
                     break;
                 }
                 case sf::Event::MouseButtonReleased:
                 {
-                    if (event.mouseButton.button == sf::Mouse::Right)
+                    // Mouse press: check if the click was inside the object
+                    switch (event.mouseButton.button)
+                    {
+                    case sf::Mouse::Left:
+                    {
+                        break;
+                    }
+                    case sf::Mouse::Right:
                     {
                         griddata.update_panning(moved_offset);
 
-                        //auto newpos = sf::Mouse::getPosition(window);
-                        //moved_offset = newpos - panning_view;
-                        //
-                        //if (moved_offset.x - mouse_delta_thresh != 0 || moved_offset.y != 0)
-                        //{
-                        //    pan_window(window, view, curr_position, moved_offset);
-                        //    griddata.update_panning(moved_offset);
-                        //}
                         panning = false;
+                        break;
                     }
+                    default:
+                        break;
+                    } // end switch
+
                     break;
                 }
                 case sf::Event::MouseMoved:
@@ -535,6 +556,7 @@ namespace graphics
                             panning_view = new_view;
                         }
                     }
+
                     break;
                 }
                 case sf::Event::KeyPressed:
@@ -588,6 +610,7 @@ namespace graphics
                 default:
                     break;
                 }
+
             } // end while pollEvent
 
 #ifdef CONTROLS
@@ -679,6 +702,7 @@ namespace graphics
         const placement_v& rx_locations,
         const placement_v& tx_locations,
         double_v& raw_values,
+        const double_v& ant_power,
         const double_v& ant_direction,
         const double_v& scan_angle,
         const size_t& rows,
@@ -695,7 +719,7 @@ namespace graphics
         {
             renderTexture.clear();
 
-            HeatGrid griddata(rows, cols, min_ptx, max_ptx, renderTexture.getSize(), rx_locations, tx_locations, ant_direction, scan_angle);
+            HeatGrid griddata(rows, cols, min_ptx, max_ptx, renderTexture.getSize(), rx_locations, tx_locations, ant_power, ant_direction, scan_angle);
 
             // Draw the grid
             size_t index = 0;

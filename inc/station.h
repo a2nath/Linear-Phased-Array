@@ -185,11 +185,12 @@ public:
 		}
 	}
 
+	/* move the transmitter */
 	void relocate(const Placements& new_location)
 	{
 		if (location != new_location)
 		{
-			set_polar_data(new_location, polar_data);
+			set_polar_data(new_location, polar_data);   // before sinr calc. need to setup polar data on new_loc
 			location = new_location;
 		}
 	}
@@ -198,6 +199,7 @@ public:
 	void reset_gui(
 		const size_t& rows,
 		const size_t& cols,
+		const double& antenna_dir,
 		const Placements& new_location)
 	{
 		/* recalculate entire antenna + grid based on the exact config change(s) */
@@ -207,7 +209,7 @@ public:
 			gui_grid_size = { rows, cols };
 		}
 
-		antenna.graphics_init(gui_polar_data); // always calculates based on the above
+		antenna.graphics_init(antenna_dir, gui_polar_data); // always calculates based on the above
 	}
 
 	/* when user resets all the changes in the simulation */
