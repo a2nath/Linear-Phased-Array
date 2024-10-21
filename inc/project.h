@@ -5,6 +5,7 @@
 #include <any>
 #include <ostream>
 #include <limits>
+#include <queue>
 #include "common.h"
 #include "network.h"
 #include "station.h"
@@ -19,6 +20,17 @@ struct GraphicsHelper
 	const size_t rows;
 	const size_t cols;
 	std::vector<double_v> raw_data;
+
+	graphics::DataSync synced_state;
+	std::queue<std::future<int>> thread_queue;
+	bool is_rendering;
+
+	/* GUI setup for all cows together, inputs: rows, cols */
+	void setup_tx(Cow& cow, const double& power, const double& antenna_dir, const double& scan_angle, const size_t& rows, const size_t& cols, const Placements& placement)
+	{
+		cow.reset_gui(rows, cols, power, antenna_dir, placement);
+		cow.gui_udpate(scan_angle);
+	}
 
 	void setup_cow_heat(Logger& logger, Cow& cow)
 	{
@@ -215,7 +227,7 @@ struct SimulationHelper
 	}
 
 	/* GUI setup for all cows together, inputs: rows, cols */
-	void setup_tx(const size_t& rows, const size_t& cols, const double_v& antenna_dir)
+	void setup_tx(const size_t& rows, const size_t& cols)
 	{
 		double_v scan_angles, power_nums;
 		get_scana(scan_angles);
@@ -223,7 +235,7 @@ struct SimulationHelper
 
 		for (unsigned c = 0; c < cows.size(); ++c)
 		{
-			cows[c].reset_gui(rows, cols, antenna_dir[c], cows[c].where());
+			cows[c].init_gui(rows, cols);
 			cows[c].gui_udpate(scan_angles[c]);
 			cows[c].set_power(power_nums[c]);
 		}
@@ -419,7 +431,7 @@ public:
 
 		simhelper->get_power(antenna_power);
 		simhelper->get_scana(scan_angles);
-		simhelper->setup_tx(visuals.rows, visuals.cols, bs_theta_c);
+		simhelper->setup_tx(visuals.rows, visuals.cols);
 
 		visuals.render(logger, cows, mobile_stations_loc, base_stations_loc, antenna_power, bs_theta_c, scan_angles);
 #endif
@@ -433,7 +445,7 @@ public:
 
 		simhelper->get_power(antenna_power);
 		simhelper->get_scana(scan_angles);
-		simhelper->setup_tx(visuals.rows, visuals.cols, bs_theta_c);
+		simhelper->setup_tx(visuals.rows, visuals.cols);
 
 		visuals.plot(logger, cows, mobile_stations_loc, base_stations_loc, antenna_power, bs_theta_c, scan_angles);
 #endif

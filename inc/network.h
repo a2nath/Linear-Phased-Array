@@ -58,14 +58,19 @@ namespace network_package
 	/* Linear Phase Array Antenna */
 	class AAntenna
 	{
-		//typedef void (*FuncPtr)(double);
-		double     power;              // array power
-		double     alpha;              // scan angle
-		unsigned   panel_count;        // number of panels
-		double     lambda;             // wavelength of the RF signal
-		double     spacing;            // wavelength of the RF signal
-		double     theta_c;            // antenna array direction
-		antennadim antenna_dims;
+		struct Settings
+		{
+			double     power; // -30 to +30 dBm, default value is 0
+			double     alpha; // -90 to +90, default value is 91 or 1.58825
+			unsigned   panel_count;
+			double     lambda;
+			double     spacing;
+			double     theta_c;
+			antennadim antenna_dims;
+		};
+
+		const Settings initial;
+		Settings current;
 
 		struct Calculations
 		{
@@ -88,6 +93,12 @@ namespace network_package
 		Calculations simulation, graphic;
 
 	public:
+		const Settings& settings() const
+		{
+			return current;
+		}
+
+
 		/* accepts a RX station ID with respect to THIS station
 		   and returns the coefficient
 		*/
@@ -105,97 +116,97 @@ namespace network_package
 		/* set power in watts */
 		void set_power(const double& power_watts)
 		{
-			power = power_watts;
+			current.power = power_watts;
 		}
 
 		/* get power in watts */
 		const double& get_power() const
 		{
-			return power;
+			return current.power;
 		}
 
 		/* get alpha in rads */
 		const double& getAlpha() const
 		{
-			return alpha;
+			return current.alpha;
 		}
 
 		/* sett panel count in the antenna array */
 		void set_antpanelcount(const unsigned& count)
 		{
-			panel_count = count;
+			current.panel_count = count;
 		}
 
 		/* get panel count in the antenna array */
 		const unsigned& antpanelcount() const
 		{
-			return panel_count;
+			return current.panel_count;
 		}
 
 		/* set wavelength in meters */
 		void set_antlambda(const double& meters_lambda)
 		{
-			lambda = meters_lambda;
+			current.lambda = meters_lambda;
 		}
 
 		/* get wavelength in meters */
 		const double& antlambda() const
 		{
-			return lambda;
+			return current.lambda;
 		}
 
 		/* set the physical antenna panel spacing in meters */
 		void set_antspacing(const double& meters_separation)
 		{
-			spacing = meters_separation;
+			current.spacing = meters_separation;
 		}
 
 		/* get the physical antenna panel spacing in meters */
 		const double& antspacing() const
 		{
-			return spacing;
+			return current.spacing;
 		}
 
-		/* get the physical antenna direction in rads */
-		void set_beamdir(const double& rads_direction)
+		/* set the physical antenna direction in rads */
+		void rotate_cow_at(const double& rads_direction)
 		{
-			theta_c = rads_direction;
+			current.theta_c = rads_direction;
 		}
 
 		/* get the physical antenna direction */
 		const double& beamdir() const
 		{
-			return theta_c;
+			return current.theta_c;
 		}
 
 		/* set the physical size in meters */
 		void set_antdim(const antennadim& meters_dim)
 		{
-			antenna_dims = meters_dim;
+			current.antenna_dims = meters_dim;
 		}
 
 		/* get the physical size in meters */
 		const antennadim antdim() const
 		{
-			return antenna_dims;
+			return current.antenna_dims;
 		}
 
 		/* update the antenna array from updated power and scan angle */
 		inline void update(const double& new_alpha, Calculations& calculations)
 		{
-			if (new_alpha != alpha)
+			if (new_alpha != current.alpha)
 			{
 				/* update the antenna gain Gtx */
 				for (unsigned idx = 0; idx < calculations.phee_minus_alpha_list.size(); ++idx)
 				{
 					double phee = (calculations.phee_minus_alpha_list[idx] + new_alpha) / 2;
 
-					double sin_term = panel_count * sin(phee);
+					double sin_term = current.panel_count * sin(phee);
 					double gain_factor_antenna_system = calculations.gain_RX_grid[idx]; // xN antennas already
 
 					if (sin_term != 0)
 					{
-						gain_factor_antenna_system *= pow(cached::sin(panel_count * phee) / sin_term, 2);
+						gain_factor_antenna_system *= pow(cached::sin(current.panel_count * phee) / sin_term, 2);
 					}
 
 					/* update the channel matrix */
@@ -203,7 +214,7 @@ namespace network_package
 				}
 
 				/* update the scan angle of the antenna array */
-				alpha = new_alpha;
+				current.alpha = new_alpha;
 			}
 		}
 
@@ -220,21 +231,21 @@ namespace network_package
 		}
 
 		/* re-calc the signal outs to handsets only (before calling update!) */
-		inline void init(const std::vector<Polar_Coordinates>& polar_data, const double& ant_direction, Calculations& calculations)
+		inline void init(const std::vector<Polar_Coordinates>& polar_data, Calculations& calculations)
 		{
-			if (theta_c != ant_direction)
+			if (current.theta_c != new_theta_c)
 			{
-				const double& pioverlambda = M_PIl / lambda;
-				const double& phee_temp = 2 * spacing * pioverlambda;
+				const double& pioverlambda = M_PIl / current.lambda;
+				const double& phee_temp = 2 * current.spacing * pioverlambda;
 				const double& pl_temp_meters = 4 * pioverlambda;
-				const double& antenna_dim_factor = 10 * antenna_dims.x * antenna_dims.y / pow(lambda, 2);
-				double m_factor = antenna_dims.x * pioverlambda;
+				const double& antenna_dim_factor = 10 * current.antenna_dims.x * current.antenna_dims.y / pow(current.lambda, 2);
+				double m_factor = current.antenna_dims.x * pioverlambda;
 
 				for (size_t idx = 0; idx < polar_data.size(); ++idx)
 				{
 					auto& cell_polar_data = polar_data[idx];
 
-					double theta_minus_thetaC = cell_polar_data.theta - ant_direction;
+					double theta_minus_thetaC = cell_polar_data.theta - current.theta_c;
 					double m = m_factor * cached::sin(theta_minus_thetaC);
 					double singleant_gain = antenna_dim_factor * pow((1 + cached::cos(theta_minus_thetaC)) / 2, 2);
 
@@ -245,28 +256,31 @@ namespace network_package
 
 					calculations.phee_minus_alpha_list[idx] = phee_temp * cached::sin(theta_minus_thetaC);
 					calculations.pathloss_list[idx]         = pow(pl_temp_meters * cell_polar_data.hype, 2);
-					calculations.gain_RX_grid[idx]          = singleant_gain * panel_count;
+					calculations.gain_RX_grid[idx]          = singleant_gain * current.panel_count;
 				}
 
-			theta_c = ant_direction;
+				current.theta_c = new_theta_c;
 			}
 		}
 
 		/* for GUI simulation in the whole grid */
-		void graphics_init(const double& antenna_dir, const std::vector<Polar_Coordinates>& polar_data)
+		void graphics_init(const std::vector<Polar_Coordinates>& polar_data)
 		{
-			power = 0;
-			alpha = -1;
-			theta_c = -1;
 			graphic.resize(polar_data.size());
-			init(polar_data, antenna_dir, graphic);
+			init(polar_data, graphic);
 		}
 
 		/* for bare-minimum numerical calculations needed at the mobile_stations only */
 		void numerical_init(const std::vector<Polar_Coordinates>& polar_data)
 		{
 			simulation.resize(polar_data.size());
-			init(polar_data, theta_c, simulation);
+			init(polar_data, simulation);
+
+		}
+
+		void reset()
+		{
+			current = initial;
 		}
 
 		AAntenna(
@@ -276,14 +290,9 @@ namespace network_package
 			const double& init_antenna_orientation_rads,
 			const antennadim& init_antdims)
 			:
-			power(0),
-			alpha(-1),
-			panel_count(init_panel_count),
-			lambda(init_lambda),
-			spacing(init_antenna_spacing),
-			theta_c(init_antenna_orientation_rads),
-			antenna_dims(init_antdims)
-		{}
+			initial{ 0, 1.58825, init_panel_count, init_lambda, init_antenna_spacing, init_antenna_orientation_rads, init_antdims } // constant initial setup
+		{
+		}
 	};
 
 	inline double rad2deg(double rad)
