@@ -55,6 +55,77 @@ namespace network_package
 		throw std::invalid_argument("Bandwidth cannot be zero or when setting system noise factor");
 	}
 
+	/* keep track of sinr and note the configurations and bindings in decreasing order of SINR */
+	struct dataitem_t
+	{
+		unsigned tslot_id;
+		double power;
+		double alpha;
+		Placements pos;
+		unsigned cow_id;
+		unsigned sta_id;
+		double sinr;
+
+		friend std::ostream& operator<<(std::ostream& out, const dataitem_t& item)
+		{
+			out
+				<< std::fixed
+				<< std::setprecision(2)
+				<< std::setprecision(2)
+				<< std::fixed
+				<< std::fixed
+				<< std::fixed
+				<< std::fixed
+				<< std::setprecision(2);
+			out
+				<< "timeslot: " << item.tslot_id << "\t"
+				<< "power: " << watt2dBm(item.power) << "\t"
+				<< "alpha: " << rad2deg(item.alpha) << "\t"
+				<< "placement: " << item.pos.x << ","
+				<< item.pos.y << "\t"
+				<< "cow_id: " << item.cow_id << "\t"
+				<< "sta_id: " << item.sta_id << "\t"
+				<< "sinr: " << lin2dB(item.sinr);
+
+			return out;
+		}
+
+		// Deleted copy constructor and copy assignment operator
+		dataitem_t(const dataitem_t&) = delete;
+		dataitem_t& operator=(const dataitem_t&) = delete;
+
+		// Defaulted move constructor and move assignment operator
+		dataitem_t(dataitem_t&&) noexcept = default;
+		dataitem_t& operator=(dataitem_t&& other) noexcept = default;
+
+		dataitem_t(
+			const unsigned& itslot_id,
+			const double& ipower,
+			const double& ialpha,
+			const Placements& ipos,
+			const unsigned& icow_id,
+			const unsigned& ista_id,
+			const double& isinr)
+			:
+			tslot_id(itslot_id),
+			power(ipower),
+			alpha(ialpha),
+			pos(ipos),
+			cow_id(icow_id),
+			sta_id(ista_id),
+			sinr(isinr)
+		{}
+	};
+
+	struct data_comparator
+	{
+		bool operator()(const dataitem_t& p1, const dataitem_t& p2) const
+		{
+			return p1.sinr < p2.sinr; // descending order
+		}
+	};
+
+
 	/* Linear Phase Array Antenna */
 	class AAntenna
 	{
@@ -292,97 +363,6 @@ namespace network_package
 			:
 			initial{ 0, 1.58825, init_panel_count, init_lambda, init_antenna_spacing, init_antenna_orientation_rads, init_antdims } // constant initial setup
 		{
-		}
-	};
-
-	inline double rad2deg(double rad)
-	{
-		return rad * 180.0 / M_PIl;
-	}
-	inline double deg2rad(double deg)
-	{
-		return deg * M_PIl / 180.0;
-	}
-	inline double log2lin(double log)
-	{
-		return pow(10, log / 10);
-	}
-	inline double lin2dB(double lin)
-	{
-		return 10 * log10(lin);
-	}
-	inline double dBm2watt(double dBm)
-	{
-		return log2lin(dBm - 30);
-	}
-
-	/* keep track of sinr and note the configurations and bindings in decreasing order of SINR */
-	struct dataitem_t
-	{
-		unsigned tslot_id;
-		double power;
-		double alpha;
-		Placements pos;
-		unsigned cow_id;
-		unsigned sta_id;
-		double sinr;
-
-		friend std::ostream& operator<<(std::ostream& out, const dataitem_t& item)
-		{
-			out
-				<< std::fixed
-				<< std::setprecision(2)
-				<< std::setprecision(2)
-				<< std::fixed
-				<< std::fixed
-				<< std::fixed
-				<< std::fixed
-				<< std::setprecision(2);
-			out
-				<< "timeslot: " << item.tslot_id << "\t"
-				<< "power: " << watt2dBm(item.power) << "\t"
-				<< "alpha: " << rad2deg(item.alpha) << "\t"
-				<< "placement: " << item.pos.x << ","
-				<< item.pos.y << "\t"
-				<< "cow_id: " << item.cow_id << "\t"
-				<< "sta_id: " << item.sta_id << "\t"
-				<< "sinr: " << lin2dB(item.sinr);
-
-			return out;
-		}
-
-		// Deleted copy constructor and copy assignment operator
-		dataitem_t(const dataitem_t&) = delete;
-		dataitem_t& operator=(const dataitem_t&) = delete;
-
-		// Defaulted move constructor and move assignment operator
-		dataitem_t(dataitem_t&&) noexcept = default;
-		dataitem_t& operator=(dataitem_t&& other) noexcept = default;
-
-		dataitem_t(
-			const unsigned& itslot_id,
-			const double& ipower,
-			const double& ialpha,
-			const Placements& ipos,
-			const unsigned& icow_id,
-			const unsigned& ista_id,
-			const double& isinr)
-			:
-			tslot_id(itslot_id),
-			power(ipower),
-			alpha(ialpha),
-			pos(ipos),
-			cow_id(icow_id),
-			sta_id(ista_id),
-			sinr(isinr)
-		{}
-	};
-
-	struct data_comparator
-	{
-		bool operator()(const dataitem_t& p1, const dataitem_t& p2) const
-		{
-			return p1.sinr < p2.sinr; // descending order
 		}
 	};
 
