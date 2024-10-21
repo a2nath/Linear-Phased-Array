@@ -304,34 +304,34 @@ namespace network_package
 		/* re-calc the signal outs to handsets only (before calling update!) */
 		inline void init(const std::vector<Polar_Coordinates>& polar_data, Calculations& calculations)
 		{
-			if (current.theta_c != new_theta_c)
+			//if (current.theta_c != new_theta_c)
+			//{
+			const double& pioverlambda = M_PIl / current.lambda;
+			const double& phee_temp = 2 * current.spacing * pioverlambda;
+			const double& pl_temp_meters = 4 * pioverlambda;
+			const double& antenna_dim_factor = 10 * current.antenna_dims.x * current.antenna_dims.y / pow(current.lambda, 2);
+			double m_factor = current.antenna_dims.x * pioverlambda;
+
+			for (size_t idx = 0; idx < polar_data.size(); ++idx)
 			{
-				const double& pioverlambda = M_PIl / current.lambda;
-				const double& phee_temp = 2 * current.spacing * pioverlambda;
-				const double& pl_temp_meters = 4 * pioverlambda;
-				const double& antenna_dim_factor = 10 * current.antenna_dims.x * current.antenna_dims.y / pow(current.lambda, 2);
-				double m_factor = current.antenna_dims.x * pioverlambda;
+				auto& cell_polar_data = polar_data[idx];
 
-				for (size_t idx = 0; idx < polar_data.size(); ++idx)
+				double theta_minus_thetaC = cell_polar_data.theta - current.theta_c;
+				double m = m_factor * cached::sin(theta_minus_thetaC);
+				double singleant_gain = antenna_dim_factor * pow((1 + cached::cos(theta_minus_thetaC)) / 2, 2);
+
+				if (m != 0)
 				{
-					auto& cell_polar_data = polar_data[idx];
-
-					double theta_minus_thetaC = cell_polar_data.theta - current.theta_c;
-					double m = m_factor * cached::sin(theta_minus_thetaC);
-					double singleant_gain = antenna_dim_factor * pow((1 + cached::cos(theta_minus_thetaC)) / 2, 2);
-
-					if (m != 0)
-					{
-						singleant_gain *= pow(cached::sin(m) / m, 2);
-					}
-
-					calculations.phee_minus_alpha_list[idx] = phee_temp * cached::sin(theta_minus_thetaC);
-					calculations.pathloss_list[idx]         = pow(pl_temp_meters * cell_polar_data.hype, 2);
-					calculations.gain_RX_grid[idx]          = singleant_gain * current.panel_count;
+					singleant_gain *= pow(cached::sin(m) / m, 2);
 				}
 
-				current.theta_c = new_theta_c;
+				calculations.phee_minus_alpha_list[idx] = phee_temp * cached::sin(theta_minus_thetaC);
+				calculations.pathloss_list[idx] = pow(pl_temp_meters * cell_polar_data.hype, 2);
+				calculations.gain_RX_grid[idx] = singleant_gain * current.panel_count;
 			}
+
+			//current.theta_c = new_theta_c;
+		//}
 		}
 
 		/* for GUI simulation in the whole grid */
