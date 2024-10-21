@@ -24,8 +24,6 @@
 #include "imgui-SFML.h"
 #endif
 
-
-
 namespace graphics
 {
     using namespace std;
@@ -89,6 +87,7 @@ namespace graphics
 
         const placement_v& tx_locations;
         const placement_v& rx_locations;
+        const double_v& tx_ant_pwr;
         const double_v& tx_ant_dir;
         const double_v& tx_scan_angle;
 
@@ -183,28 +182,9 @@ namespace graphics
             for (int i = 0; i < tx_locations.size(); ++i)
             {
                 auto& loc = tx_locations[i];
-
-                sf::Vector2f size(10.0f, 10.0f);
-
-                sf::Vector2f position(loc.x - size.x / 2, window_size.x - loc.y - size.y / 2);
                 auto dir_radians = M_PIl / 2 - tx_ant_dir[i];
 
-                sf::VertexArray transmitter(sf::Quads, 4);
-
-                // Set the four corners of the rectangle
-                transmitter[0].position = position;  // Top-left corner
-                transmitter[1].position = sf::Vector2f(position.x + size.x, position.y);  // Top-right corner
-                transmitter[2].position = sf::Vector2f(position.x + size.x, position.y + size.y);  // Bottom-right corner
-                transmitter[3].position = sf::Vector2f(position.x, position.y + size.y);  // Bottom-left corner
-
-                // Set the colors for each vertex (optional)
-                transmitter[0].color = sf::Color(90, 90, 90);
-                transmitter[1].color = sf::Color(90, 90, 90);
-                transmitter[2].color = sf::Color(90, 90, 90);
-                transmitter[3].color = sf::Color(90, 90, 90);
-
-                data[1].emplace_back(transmitter);
-
+                txdata.emplace_back(i, loc, window_size.y, sf::Color(90, 90, 90));
 
 
                 /* draw the placement direction indicators for each tower */
@@ -421,12 +401,15 @@ namespace graphics
         const placement_v& rx_locations,
         const placement_v& tx_locations,
         std::vector<double_v>& raw_values,
+        const double_v& ant_txpower,
         const double_v& ant_direction,
-        const double_v& scan_angle,
+        const double_v& ant_scan_angle,
         const size_t& irows,
         const size_t& icols,
         const double& min_ptx,
-        const double& max_ptx)
+        const double& max_ptx,
+        DataSync& synced_state,
+        bool& is_rendering)
     {
         std::signal(SIGINT, sig_handler);
 
@@ -461,16 +444,40 @@ namespace graphics
         HeatGrid griddata(irows, icols, min_ptx, max_ptx, window_size, rx_locations, tx_locations, ant_txpower, ant_direction, ant_scan_angle);
 
         /* init the heatmap to display heat from TX id */
-        griddata.update_heat(raw_values[render_cow_id]);
+        //griddata.update_heat(raw_values[render_cow_id]);
 
 
 #ifdef CONTROLS
         ImGui::SFML::Init(window);
 #endif
+        //griddata.update_heat(raw_values[render_cow_id]);
 
+        /* only update the heat when INIT or moving MOVING tx on the map */
+
+        std::thread heat_checker([&]()
+            {
+                while (is_rendering)
+                {
+                    std::unique_lock<std::mutex> lock(graphics::finished_mutex);  // Lock the mutex
+                    graphics::consig.wait(lock, [&]()
+                        {
+                            return synced_state.finished >= 0 || !is_rendering;
+                        }
+                    );
+
+                    if (!is_rendering) break;
+
+                    griddata.update_heat(raw_values[synced_state.finished]);
+                    synced_state.finished = -1;
+                }
+            }
+        );
+
+        synced_state.finished = render_cow_id;
+        consig.notify_one();
 
         // Main loop
-        while (window.isOpen())
+        while (window.isOpen() && is_rendering)
         {
             sf::Event event;
 
@@ -507,6 +514,20 @@ namespace graphics
                     {
                     case sf::Mouse::Left:
                     {
+                        auto& txvertex = griddata.txdata;
+                        for (auto& tx : txvertex)
+                        {
+                            if (tx.transmitter.getGlobalBounds().contains(event.mouseButton.x, event.mouseButton.y))
+                            {   // found it
+                                tx_dragging = &tx;
+
+                                //startpos = tx.transmitter.getPosition();
+
+                                //tx_dragging->curr_pos = sf::Vector2f(event.mouseButton.x, event.mouseButton.y);
+                                break;
+                            }
+                        }
+
                         break;
                     }
                     case sf::Mouse::Right:
@@ -528,6 +549,11 @@ namespace graphics
                     {
                     case sf::Mouse::Left:
                     {
+                        if (tx_dragging)
+                        {
+                            /* mouse release causes heat update */
+                            tx_dragging = nullptr;
+                        }
                         break;
                     }
                     case sf::Mouse::Right:
@@ -545,6 +571,15 @@ namespace graphics
                 }
                 case sf::Event::MouseMoved:
                 {
+                    if (tx_dragging)
+                    {
+                        auto size = window.getSize();
+                        auto& idx = tx_dragging->id;
+
+                        /* mouse drag causes just the calculations */
+                        synced_state.emplace(idx, (long)size.x, (long)size.y, ant_txpower[idx], ant_direction[idx], ant_scan_angle[idx], event.mouseMove.x, event.mouseMove.y);
+                        tx_dragging->setPosition(event.mouseMove.x, event.mouseMove.y);
+                    }
                     if (panning)
                     {
                         auto new_view = sf::Mouse::getPosition(window);
@@ -692,6 +727,12 @@ namespace graphics
 #ifdef CONTROLS
         ImGui::SFML::Shutdown();
 #endif
+
+        is_rendering = false; // Set rendering to false
+        consig.notify_all(); // Notify all threads waiting on the condition variable
+
+        heat_checker.join();
+
         return 0;
     }
 

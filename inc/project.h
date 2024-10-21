@@ -14,11 +14,27 @@
 #ifdef GRAPHICS
 #include "visuals.h"
 
+#include <future>
+#include <thread>
+
 struct GraphicsHelper
 {
 	const size_t rows;
 	const size_t cols;
 	std::vector<double_v> raw_data;
+
+	graphics::DataSync synced_state;
+	std::queue<std::future<int>> thread_queue;
+	bool is_rendering;
+
+	/* GUI setup for all cows together, inputs: rows, cols */
+	void setup_tx(Cow& cow, const double& power, const double& antenna_dir, const double& scan_angle, const size_t& rows, const size_t& cols, const Placements& placement)
+	{
+		cow.relocate(placement);  // recompute everything
+		cow.reset_gui(rows, cols, antenna_dir, cow.where());
+		cow.gui_udpate(scan_angle);
+		cow.set_power(power);
+	}
 
 	void setup_cow_heat(Logger& logger, Cow& cow)
 	{
@@ -49,6 +65,33 @@ struct GraphicsHelper
 			}
 			logger.write("\n");
 		}
+	}
+
+	std::thread gui_async_detect(Logger& logger, cow_v& cows)
+	{
+		return std::thread([&]()
+			{
+				while (is_rendering)
+				{
+					std::unique_lock<std::mutex> lock(graphics::queue_mutex);  // Lock the mutex
+					graphics::consig.wait(lock, [&]()
+						{
+							return synced_state.size > 0 || !is_rendering;
+						}
+					);  // Wait for new data or rendering to stop
+
+					if (!is_rendering) break;
+
+					auto& state = synced_state.front();
+					if (state.tx_idx >= 0)
+					{
+						setup_tx(cows[state.tx_idx], state.ant_dir, state.ant_angle, state.ant_power, state.row, state.col, state.location);
+						setup_cow_heat(logger, cows[state.tx_idx]);
+						synced_state.pop();
+					}
+				}
+			}
+		);
 	}
 
 	void render(Logger& logger,
@@ -87,7 +130,9 @@ struct GraphicsHelper
 			rows,
 			cols,
 			double_min,
-			double_max);
+			double_max,
+			synced_state,
+			is_rendering);
 	}
 
 	void plot(Logger& logger,
@@ -134,7 +179,7 @@ struct GraphicsHelper
 	}
 
 	GraphicsHelper(const size_t num_transmitters, const size_t& pixel_rows, const size_t& pixel_cols)
-		: rows(pixel_rows), cols(pixel_cols)
+		: rows(pixel_rows), cols(pixel_cols), synced_state(num_transmitters), is_rendering(true)
 	{
 		raw_data.resize(num_transmitters, double_v(pixel_rows * pixel_cols));
 	}
@@ -421,7 +466,12 @@ public:
 		simhelper->get_scana(scan_angles);
 		simhelper->setup_tx(visuals.rows, visuals.cols, bs_theta_c);
 
+		auto queue_thread = visuals.gui_async_detect(logger, cows);
+
 		visuals.render(logger, cows, mobile_stations_loc, base_stations_loc, antenna_power, bs_theta_c, scan_angles);
+
+		queue_thread.join();
+
 #endif
 	}
 
