@@ -18,33 +18,7 @@ class Cow
 	AAntenna   antenna;
 
 	/* more antenna tracking for gui reset */
-	const struct Init_Antenna
-	{
-		const Placements& location;
-		const unsigned& panel_count;
-		const double& lambda;
-		const double& antenna_spacing;
-		const double& antenna_orientation;
-		const network_package::antennadim& antenna_dim;
-
-		Init_Antenna(
-			const Placements& init_bs_location,
-			const unsigned& init_panel_count,
-			const double& init_lambda,
-			const double& init_antenna_spacing,
-			const double& init_antenna_orientation,
-			const network_package::antennadim& init_antenna_dim)
-			:
-			location(init_bs_location),
-			panel_count(init_panel_count),
-			lambda(init_lambda),
-			antenna_spacing(init_antenna_spacing),
-			antenna_orientation(init_antenna_orientation),
-			antenna_dim(init_antenna_dim)
-		{}
-
-	} init;
-
+	const Placements& init_location;
 	Placements location;
 	Dimensions<size_t> gui_grid_size;
 
@@ -185,43 +159,66 @@ public:
 		}
 	}
 
-	/* move the transmitter */
-	void relocate(const Placements& new_location)
-	{
-		if (location != new_location)
-		{
-			set_polar_data(new_location, polar_data);   // before sinr calc. need to setup polar data on new_loc
-			location = new_location;
-		}
-	}
 
 	/* signal heat map for cells in the GUI for one "cow" */
 	void reset_gui(
 		const size_t& rows,
 		const size_t& cols,
-		const double& antenna_dir,
+		const double& new_antpower_watts,
+		const double& new_theta_c,
 		const Placements& new_location)
 	{
-		/* recalculate entire antenna + grid based on the exact config change(s) */
-		if (rows != gui_grid_size.x || cols != gui_grid_size.y || location != new_location)
+
+		bool antenna_phy_changes = false;
+
+		antenna.set_power(new_antpower_watts);
+
+		if (rows != gui_grid_size.x || cols != gui_grid_size.y)
 		{
+			gui_grid_size = { rows, cols };
+			antenna_phy_changes = true;
+		}
+
+		if (location != new_location)
+		{
+			location = new_location;
+			antenna_phy_changes = true;
+		}
+
+		if (antenna.settings().theta_c != new_theta_c)
+		{
+			antenna.rotate_cow_at(new_theta_c);
+			antenna_phy_changes = true;
+		}
+
+		if (antenna_phy_changes)
+		{
+			set_polar_data(new_location, polar_data);   // before sinr calc. need to setup polar data on new_loc
 			set_polar_data(rows, cols, new_location, gui_polar_data);
+			antenna.graphics_init(gui_polar_data); // always calculates based on the above
+		}
+	}
+
+	/* initialize */
+	void init_gui(const size_t& rows, const size_t& cols)
+	{
+		antenna.reset();
+
+		if (rows != gui_grid_size.x || cols != gui_grid_size.y)
+		{
 			gui_grid_size = { rows, cols };
 		}
 
-		antenna.graphics_init(antenna_dir, gui_polar_data); // always calculates based on the above
+		set_polar_data(rows, cols, location, gui_polar_data);
+		antenna.graphics_init(gui_polar_data); // always calcu
 	}
 
 	/* when user resets all the changes in the simulation */
 	void reset()
 	{
-		antenna.set_power(0);
-		antenna.set_antpanelcount(init.panel_count);
-		antenna.set_antlambda(init.lambda);
-		antenna.set_antspacing(init.antenna_spacing);
-		antenna.set_beamdir(init.antenna_orientation);
-		antenna.set_antdim(init.antenna_dim);
-		set_polar_data(init.location, polar_data);
+		antenna.reset();
+		location = init_location;
+		set_polar_data(location, polar_data);
 		antenna.numerical_init(polar_data);
 	}
 
@@ -237,15 +234,13 @@ public:
 		const network_package::antennadim& antenna_dim)
 		:
 		station_id(id),
-		init(bs_location, panel_count, lambda, antenna_spacing, antenna_orientation, antenna_dim),
-		location(init.location),
+		init_location(bs_location),
 		ms_station_loc(ms_pos_list),
 		ms_stations(ms_pos_list.size()),
 		antenna(panel_count, lambda, antenna_spacing, antenna_orientation, antenna_dim),
 		power_idx(0)
 	{
-		set_polar_data(init.location, polar_data);
-		antenna.numerical_init(polar_data);
+		reset();
 	}
 };
 
