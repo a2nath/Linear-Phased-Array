@@ -1,13 +1,52 @@
 # README #
 
 ## Table of Contents
--   [Problem statement](#problem-statement)
--   [Parameters](#parameters)
--   [Matlab Solution](#matlab-solution)
--   [CPP Solution and Simulation Output](#cpp-solution-and-simulation-output)
--   [Building and Integrating](#building-and-integrating)
+-   [Introduction](#-introduction)
+-   [Example Scenario](#-example-scenario)
+-   [Parameters](#-parameters)
+-   [Matlab Solution](#-solution)
+-   [CPP Solution and Simulation Output](#cpp-solution-and-simulation-output-%EF%B8%8F)
+-   [Building and Integrating](#building-and-integrating-%EF%B8%8F)
 
-## 👥 Problem statement 
+
+## 👥 Introduction
+In the age of rapid digital transformation, reliable wireless communication is essential for connecting people, communities, and critical services worldwide. *Cellular on Wheels (COW)* 🐄 technology, also known as mobile base stations, plays a vital role in extending cellular coverage in areas where traditional, fixed base stations are insufficient, or infrastructure is lacking. This project leverages a linear phased array for enhancing the functionality and efficiency of COW units, enabling robust and flexible coverage solutions.
+
+### 🐮 Why Cellular on Wheels (COW) Matters
+COWs bring essential mobile connectivity in situations where permanent installations are impractical. Here’s why they make a meaningful difference:
+
+* ### Emergency Response & Disaster Recovery
+
+  * **COWs** provide rapid, temporary cellular coverage in disaster-stricken areas, supporting emergency responders, enabling critical communications, and reconnecting displaced populations.
+  * **Example**: After natural disasters like hurricanes, earthquakes, or wildfires, COWs can be deployed within hours to restore cellular connectivity, allowing for immediate coordination and life-saving operations.
+
+* ### Event & Crowd Coverage
+
+  * Large events, such as **concerts**, **sports** such as the Olympics, or **festivals**, experience significant surges in cellular demand, often exceeding local infrastructure capacity.
+  * COWs augment the network in these high-demand situations, improving connection reliability and data speeds for thousands of attendees.
+
+* ### Expanding Coverage in Rural & Remote Areas:
+
+  * COWs can provide temporary coverage in hard-to-reach or underserved areas, allowing for cellular service where permanent towers may be cost-prohibitive.
+  * They are also essential for extending services during infrastructure projects or for seasonal agricultural activities.
+
+* ### Technical Advantages of Using COWs with Phased Arrays:
+
+  * **Dynamic Coverage**: Phased array technology enables COWs to dynamically steer beams, maximizing signal strength and efficiently targeting areas of demand.
+  * **Enhanced Data Rates**: By focusing beams precisely, phased arrays reduce interference and improve data throughput, especially in high-density settings.
+  * **Faster Deployment & Adaptability**: Lightweight and modular, COWs with phased arrays can be deployed within hours and adjusted to provide optimal coverage as needed.
+  * **Improved Energy Efficiency**: Phased arrays in COW systems can direct energy precisely where needed, lowering power consumption compared to traditional omnidirectional antennas.
+
+### 🏕️ Real-World Impact
+
+  * **Increased Connectivity**: Studies show that even a temporary COW deployment can enhance network performance by up to 50% in high-traffic scenarios.
+  * **Operational Efficiency**: Phased array COWs provide up to 30% better spectrum efficiency by reducing signal interference, crucial for rural areas with limited bandwidth.
+
+Following this, you’ll find a specific example that demonstrates how a phased array setup can enhance the flexibility and effectiveness of COW technology, providing tangible improvements in coverage and capacity for real-world applications.
+
+
+## 🔥 Example Scenario
+
 There are **3 "Cellular on Wheels (COWs)"** portable base stations, each equipped to drive a **linear scan antenna array** with up to **8 elements**. The layout consists of **12 non-VIP** spectator zones and **3 VIP** spectator zones. The goal 🎯 is to ensure all clients in the simulation receive at least **24 dB of SINR** ("SNR") signal quality or at least **3 VIP** zones are above the cut off if there exists no solution to the specific scenario. 📶
 
 More details on the linear scan antenna array as [follows.](https://en.wikipedia.org/wiki/Phased_array)
@@ -62,6 +101,8 @@ Overall antenna antenna patterns from using Linear Phase Array, 5 panels each of
 
 #### Input 📥
 
+<div align="center">
+      
 | Parameter  | Value |
 | :---         |          ---: |
 | signal frequency  | 1.9 GHz |
@@ -80,6 +121,8 @@ Overall antenna antenna patterns from using Linear Phase Array, 5 panels each of
 | base_station_scan_angle_range  | -90 to +90 degrees | 
 | panel-spacing for each tx  | 30 cm, 40 cm, 30 cm | 
 | antenna_dims  | 20 cm x 40 cm |
+
+</div>
 
 ```python
 arguments as follows:
