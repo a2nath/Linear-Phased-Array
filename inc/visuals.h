@@ -74,6 +74,7 @@ namespace graphics
             transmitter.setFillColor(ogcolor);
         }
     };
+
     struct HeatGrid
     {
         const size_t& data_rows;
@@ -96,9 +97,9 @@ namespace graphics
 
         std::vector<txvertex> txdata;
 
-        sf::Color colorgrid(const double& raw)
+        sf::Color colorgrid(const double& raw, const double& minval, const double& maxval)
         {
-            double color_value = (max_pxl == min_pxl) ? 0.0 : ((raw - min_pxl) / (max_pxl - min_pxl));
+            double color_value = (maxval == minval) ? 0.0 : ((raw - minval) / (maxval - minval));
 
             // Interpolated Color : Transition from red -> yellow -> green -> blue
             if (color_value <= thresholds[0]) {
@@ -126,22 +127,19 @@ namespace graphics
         void update_heat(const double_v& tx_raw_sigdata)
         {
             size_t index = 0;
-            for (size_t row_idx = data_rows - 1; row_idx >= 0; --row_idx)
+            for (long long row_idx = data_rows - 1; row_idx >= 0; --row_idx)
             {
                 auto row_offset = row_idx * data_cols;
-                for (size_t cols_idx = 0; cols_idx < data_cols; ++cols_idx)
+                for (long long cols_idx = 0; cols_idx < data_cols; ++cols_idx)
                 {
                     size_t v_index = (row_offset + cols_idx) << 2;
 
-                    sf::Color v_color = colorgrid(tx_raw_sigdata[index++]);
+                    sf::Color v_color = colorgrid(tx_raw_sigdata[index++], min_pxl[0], max_pxl[0]);
                     grid[v_index + 0].color = v_color;
                     grid[v_index + 1].color = v_color;
                     grid[v_index + 2].color = v_color;
                     grid[v_index + 3].color = v_color;
                 }
-
-                if (row_idx == 0)
-                    break;
             }
         }
 
@@ -151,10 +149,10 @@ namespace graphics
             bounds_upper = ibounds_upper;
 
             size_t index = 0;
-            for (size_t row_idx = data_rows - 1; row_idx >= 0; --row_idx)
+            for (long long row_idx = data_rows - 1; row_idx >= 0; --row_idx)
             {
                 auto row_offset = row_idx * data_cols;
-                for (size_t cols_idx = 0; cols_idx < data_cols; ++cols_idx)
+                for (long long cols_idx = 0; cols_idx < data_cols; ++cols_idx)
                 {
                     size_t v_index = (row_offset + cols_idx) << 2;
 
@@ -356,6 +354,7 @@ namespace graphics
     /* look for a non-inf number */
     inline void validate_ite(const double_v& raw_values, double_v::iterator& iminmax)
     {
+		std::cout << "There are " << *iminmax << " values in the calculations" << std::endl;
         while (std::isinf(*iminmax))
         {
             if (iminmax != raw_values.begin())
@@ -400,14 +399,14 @@ namespace graphics
         Logger& logger,
         const placement_v& rx_locations,
         const placement_v& tx_locations,
-        std::vector<double_v>& raw_values,
+        std::vector<double_v>& raw_cow_data,
         const double_v& ant_txpower,
         const double_v& ant_direction,
         const double_v& ant_scan_angle,
         const size_t& irows,
         const size_t& icols,
-        const double& min_ptx,
-        const double& max_ptx,
+        const double& min_color_span,
+        const double& max_color_span,
         DataSync& synced_state,
         bool& is_rendering)
     {
@@ -441,7 +440,7 @@ namespace graphics
         txvertex* tx_dragging = nullptr;
 
         /* heat data contains vertices too */
-        HeatGrid griddata(irows, icols, min_ptx, max_ptx, window_size, rx_locations, tx_locations, ant_txpower, ant_direction, ant_scan_angle);
+        HeatGrid griddata(irows, icols, min_color_span, max_color_span, window_size, rx_locations, tx_locations, ant_txpower, ant_direction, ant_scan_angle);
 
         /* init the heatmap to display heat from TX id */
         //griddata.update_heat(raw_values[render_cow_id]);
@@ -453,7 +452,6 @@ namespace graphics
         //griddata.update_heat(raw_values[render_cow_id]);
 
         /* only update the heat when INIT or moving MOVING tx on the map */
-
         std::thread heat_checker([&]()
             {
                 while (is_rendering)
@@ -467,7 +465,7 @@ namespace graphics
 
                     if (!is_rendering) break;
 
-                    griddata.update_heat(raw_values[synced_state.finished]);
+                    griddata.update_heat(raw_cow_data[synced_state.finished]);
                     synced_state.finished = -1;
                 }
             }
@@ -580,6 +578,7 @@ namespace graphics
                         synced_state.emplace(idx, (long)size.x, (long)size.y, ant_txpower[idx], ant_direction[idx], ant_scan_angle[idx], event.mouseMove.x, event.mouseMove.y);
                         tx_dragging->setPosition(event.mouseMove.x, event.mouseMove.y);
                     }
+
                     if (panning)
                     {
                         auto new_view = sf::Mouse::getPosition(window);
@@ -608,7 +607,7 @@ namespace graphics
                     case sf::Keyboard::Scan::Tab:
                     {
                         render_cow_id = (render_cow_id + 1) % tx_count;
-                        griddata.update_heat(raw_values[render_cow_id]);
+                        griddata.update_heat(raw_cow_data[render_cow_id]);
                         break;
                     }
                     case sf::Keyboard::Scan::Left:
@@ -737,7 +736,7 @@ namespace graphics
     }
 
     /*    G U I    */
-    void plot(
+    void capture_plot(
         Logger& logger,
         const string& filename,
         const placement_v& rx_locations,
@@ -748,8 +747,8 @@ namespace graphics
         const double_v& scan_angle,
         const size_t& rows,
         const size_t& cols,
-        const double& min_ptx,
-        const double& max_ptx)
+        const double& min_color_span,
+        const double& max_color_span)
     {
         float pixel_height = 1;
         float pixel_width = 1;
@@ -760,25 +759,27 @@ namespace graphics
         {
             renderTexture.clear();
 
-            HeatGrid griddata(rows, cols, min_ptx, max_ptx, renderTexture.getSize(), rx_locations, tx_locations, ant_power, ant_direction, scan_angle);
+            HeatGrid griddata(rows, cols, min_color_span, max_color_span, renderTexture.getSize(), rx_locations, tx_locations, ant_power, ant_direction, scan_angle);
 
-            // Draw the grid
-            size_t index = 0;
-            for (size_t row_idx = rows - 1; row_idx >= 0; --row_idx)
+
+            /* draw the grid */
+            griddata.update_heat(raw_values);
+            renderTexture.draw(griddata.grid);
+
+            /* draw the receivers */
+            for (auto& circle : griddata.rx_cicles)
             {
-                for (size_t cols_idx = 0; cols_idx < cols; ++cols_idx)
+                renderTexture.draw(circle);
+            }
+
+            /* draw the transmitters */
+            for (auto& data : griddata.txdata)
+            {
+                renderTexture.draw(data.transmitter);
+                for (auto& element : data.indicators)
                 {
-                    sf::Color color = griddata.colorgrid(raw_values[index++]);
-
-                    sf::RectangleShape cell(sf::Vector2f(pixel_height, pixel_width));
-                    cell.setPosition(cols_idx * pixel_height, row_idx * pixel_width);
-                    cell.setFillColor(color);
-
-                    renderTexture.draw(cell);  // Draw the cell onto the renderTextur
+                    renderTexture.draw(element);
                 }
-
-                if (row_idx == 0)
-                    break;
             }
 
             renderTexture.display();
