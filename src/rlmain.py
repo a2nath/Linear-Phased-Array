@@ -95,7 +95,8 @@ def main():
 	parser.add_argument("-t", "--num_steps", help="Number of steps in each episodes taken by an agent", default=num_steps)
 	parser.add_argument("-n", "--dtype", help=f"ML precision for Q table", default=np.zeros(1).dtype)#{','.join(supported_precisions)}",\
 	#	default=np.zeros(1).dtype, choices=supported_precisions)
-	parser.add_argument("--compile", help="Recompile the binary and run the script", action='store_true')
+	parser.add_argument("--plot", help="Plot the simulation output", action='store_true')
+	parser.add_argument("--compile", help="Recompile the binary and run the script. Can be helpful if you made some quick edits to the C++ code", action='store_true')
 	parser.add_argument("--quiet", help="Debug print off", action='store_true')
 
 	args = parser.parse_args()
