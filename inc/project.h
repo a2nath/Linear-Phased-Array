@@ -164,13 +164,18 @@ struct GraphicsHelper
 				double_max = *imax;
 		}
 
-		for (auto& cow : txlist)
+		std::vector<unsigned> tx_ids(txlist.size() + 1);
+		std::iota(tx_ids.begin(), tx_ids.end(), 0);
+
+		for (auto& id : tx_ids)
 		{
+			std::string num = id == tx_ids.back() ? "combined" : str(id);
+
 			graphics::plot(logger,
 				"transmitter_" + str(cow.sid()) + ".png",
 				mobile_stations_loc,
 				base_stations_loc,
-				raw_data[cow.sid()],
+				raw_cow_data[id],
 				bs_txpower,
 				bs_theta_c,
 				scan_alpha_list,
@@ -182,7 +187,12 @@ struct GraphicsHelper
 	}
 
 	GraphicsHelper(const size_t num_transmitters, const size_t& pixel_rows, const size_t& pixel_cols)
-		: rows(pixel_rows), cols(pixel_cols), synced_state(num_transmitters), is_rendering(true), raw_cow_data(num_transmitters)
+		:
+		rows(pixel_rows),
+		cols(pixel_cols),
+		synced_state(num_transmitters),
+		is_rendering(true),
+		raw_cow_data(num_tx + 1),
 	{
 	}
 };
