@@ -19,8 +19,8 @@ class Cow
 
 	/* more antenna tracking for gui reset */
 	const Placements& init_location;
-	Placements location;
-	Dimensions<size_t> gui_grid_size;
+	Placements prev_location, location;
+	Dimensions<size_t> init_gui_grid_size, prev_gui_grid_size, gui_grid_size;
 
 	const std::vector<Placements>& ms_station_loc;
 	const unsigned& ms_stations;
@@ -122,9 +122,12 @@ public:
 
 	void heatmap(std::vector<double>& output)
 	{
-		for (size_t pixel_idx = 0; pixel_idx < gui_polar_data.size(); ++pixel_idx)
+		if (antenna.state_changed())
 		{
-			g_signal_power(pixel_idx, output[pixel_idx]);
+			for (size_t pixel_idx = 0; pixel_idx < gui_polar_data.size(); ++pixel_idx)
+			{
+				g_signal_power(pixel_idx, output[pixel_idx]);
+			}
 		}
 	}
 
@@ -160,54 +163,54 @@ public:
 	}
 
 
-	/* signal heat map for cells in the GUI for one "cow" */
+	/* checks if [antenna.graphics_init] and [antenna.numerical_init] is needed based on what changed */
 	void reset_gui(
 		const size_t& rows,
 		const size_t& cols,
-		const double& new_antpower_watts,
 		const double& new_theta_c,
 		const Placements& new_location)
 	{
+		gui_grid_size = { rows, cols };
+		location = new_location;
+		antenna.rotate_cow_at(new_theta_c);
 
-		bool antenna_phy_changes = false;
-
-		antenna.set_power(new_antpower_watts);
-
-		if (rows != gui_grid_size.x || cols != gui_grid_size.y)
+		if (location != prev_location && antenna.state_changed())
 		{
-			gui_grid_size = { rows, cols };
-			antenna_phy_changes = true;
+			set_polar_data(rows, cols, location, gui_polar_data);
+			antenna.graphics_init(gui_polar_data);
+
+			set_polar_data(location, polar_data);   // before sinr calc. need to setup polar data on new_loc
+			antenna.numerical_init(polar_data);
+		}
+		else if (antenna.state_changed())
+		{
+			antenna.graphics_init(gui_polar_data);
+			antenna.numerical_init(polar_data);
+		}
+		else if (gui_grid_size != prev_gui_grid_size)
+		{
+			set_polar_data(rows, cols, location, gui_polar_data);
+			antenna.graphics_init(gui_polar_data);
 		}
 
-		if (location != new_location)
-		{
-			location = new_location;
-			antenna_phy_changes = true;
-		}
+		prev_location = location;
+		prev_gui_grid_size = gui_grid_size;
+	}
 
-		if (antenna.settings().theta_c != new_theta_c)
-		{
-			antenna.rotate_cow_at(new_theta_c);
-			antenna_phy_changes = true;
-		}
-
-		if (antenna_phy_changes)
-		{
-			set_polar_data(new_location, polar_data);   // before sinr calc. need to setup polar data on new_loc
-			set_polar_data(rows, cols, new_location, gui_polar_data);
-			antenna.graphics_init(gui_polar_data); // always calculates based on the above
-		}
+	/* return state is [true]=init done, else [false]=not called "init_gui" yet */
+	const bool gui_state() const
+	{
+		return gui_polar_data.size() > 0;
 	}
 
 	/* initialize */
 	void init_gui(const size_t& rows, const size_t& cols)
 	{
-		antenna.reset();
+		antenna.reset(); // antenna reset does not reset the location. See reset()
 
-		if (rows != gui_grid_size.x || cols != gui_grid_size.y)
-		{
-			gui_grid_size = { rows, cols };
-		}
+		init_gui_grid_size = { rows, cols };
+		prev_gui_grid_size = init_gui_grid_size;
+		gui_grid_size = init_gui_grid_size;
 
 		set_polar_data(rows, cols, location, gui_polar_data);
 		antenna.graphics_init(gui_polar_data); // always calcu
@@ -217,9 +220,13 @@ public:
 	void reset()
 	{
 		antenna.reset();
+		prev_location = init_location;
 		location = init_location;
+
 		set_polar_data(location, polar_data);
 		antenna.numerical_init(polar_data);
+
+		gui_polar_data.clear();
 	}
 
 	//antennadim dim_meters, double theta, double spacing, int antenna_count,
@@ -289,3 +296,4 @@ public:
 	{}
 };
 using cow_v = std::vector<Cow>;
+using sta_v = std::vector<Station>;
