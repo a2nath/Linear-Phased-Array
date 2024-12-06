@@ -17,11 +17,11 @@
 
 struct GraphicsHelper
 {
-	const size_t rows;
-	const size_t cols;
-	std::vector<double_v> raw_data;
+	size_t rows;
+	size_t cols;
+	graphics::DataSync       synced_state;
+	std::vector<double_v>    raw_cow_data; // raw split data that shows signal strength of each COW
 
-	graphics::DataSync synced_state;
 	std::queue<std::future<int>> thread_queue;
 	bool is_rendering;
 	double noise_factor;
@@ -51,31 +51,56 @@ struct GraphicsHelper
 
 		auto& cow_idx = cow.sid();
 
-		cow.heatmap(raw_data[cow_idx]);
+		cow.heatmap(raw_cow_data[cow_idx]);
 
 		size_t index = 0;
 
 		for (size_t row = 0; row < rows; ++row)
 		{
-			logger.write("cow " + str(cow.sid()) + '\n');
+			//logger.write("cow " + str(cow.sid()) + '\n');
 
 			for (size_t col = 0; col < cols; ++col)
 			{
 				//logger.write(" ");
 				//logger.setprec(2);
-				double num = lin2dB(raw_data[cow_idx][index]);
-				raw_data[cow_idx][index] = num;
+				double num = lin2dB(raw_cow_data[cow_idx][index]);
+				raw_cow_data[cow_idx][index] = num;
 				logger.write(" ");
 				logger.write(num);
 
 				++index;
 			}
-			logger.write("\n");
 		}
 	}
 
-	void render(Logger& logger,
-		cow_v& cows,
+	std::thread gui_change_detect(Logger& logger, cow_v& cows)
+	{
+		return std::thread([&]()
+			{
+				while (is_rendering)
+				{
+					std::unique_lock<std::mutex> lock(graphics::queue_mutex);  // Lock the mutex
+					graphics::consig.wait(lock, [&]()
+						{
+							return synced_state.size > 0 || !is_rendering;
+						}
+					);  // Wait for new data or rendering to stop
+
+					if (!is_rendering) break;
+
+					auto& state = synced_state.front();
+					if (state.tx_idx >= 0)
+					{
+						setup_tx(cows[state.tx_idx], state.ant_dir, state.ant_angle, state.ant_power, state.row, state.col, state.location);
+						setup_cow_heat(logger, cows[state.tx_idx]);
+						synced_state.pop();
+					}
+				}
+			}
+		);
+	}
+
+	void render(Logger& logger, cow_v& txlist,
 		const placement_v& mobile_stations_loc,
 		const placement_v& base_stations_loc,
 		const double_v& bs_txpower,
@@ -84,10 +109,10 @@ struct GraphicsHelper
 	{
 		auto double_min = std::numeric_limits<double>::lowest(), double_max = std::numeric_limits<double>::lowest();
 
-		for (auto& cow : cows)
+		for (auto& cow : txlist)
 		{
 			setup_cow_heat(logger, cow);
-			auto& cow_raw_data = raw_data[cow.sid()];
+			auto& cow_raw_data = raw_cow_data[cow.sid()];
 			auto [imin, imax] = std::minmax_element(cow_raw_data.begin(), cow_raw_data.end());
 
 			graphics::validate_ite(cow_raw_data, imin);
@@ -103,7 +128,7 @@ struct GraphicsHelper
 		graphics::render(logger,
 			mobile_stations_loc,
 			base_stations_loc,
-			raw_data,
+			raw_cow_data,
 			bs_txpower,
 			bs_theta_c,
 			scan_alpha_list,
@@ -114,7 +139,7 @@ struct GraphicsHelper
 	}
 
 	void plot(Logger& logger,
-		cow_v& cows,
+		cow_v& txlist,
 		const placement_v& mobile_stations_loc,
 		const placement_v& base_stations_loc,
 		const double_v& bs_txpower,
@@ -123,10 +148,10 @@ struct GraphicsHelper
 	{
 		auto double_min = std::numeric_limits<double>::lowest(), double_max = std::numeric_limits<double>::lowest();
 
-		for (auto& cow : cows)
+		for (auto& cow : txlist)
 		{
 			setup_cow_heat(logger, cow);
-			auto& cow_raw_data = raw_data[cow.sid()];
+			auto& cow_raw_data = raw_cow_data[cow.sid()];
 			auto [imin, imax] = std::minmax_element(cow_raw_data.begin(), cow_raw_data.end());
 
 			graphics::validate_ite(cow_raw_data, imin);
@@ -139,7 +164,7 @@ struct GraphicsHelper
 				double_max = *imax;
 		}
 
-		for (auto& cow : cows)
+		for (auto& cow : txlist)
 		{
 			graphics::plot(logger,
 				"transmitter_" + str(cow.sid()) + ".png",
@@ -157,7 +182,7 @@ struct GraphicsHelper
 	}
 
 	GraphicsHelper(const size_t num_transmitters, const size_t& pixel_rows, const size_t& pixel_cols)
-		: rows(pixel_rows), cols(pixel_cols)
+		: rows(pixel_rows), cols(pixel_cols), synced_state(num_transmitters), is_rendering(true), raw_cow_data(num_transmitters)
 	{
 	}
 };
@@ -194,7 +219,7 @@ struct SimulationHelper
 	}
 
 	/* get antenna array power level in each timeslot */
-	inline void get_power(double_v& output) const
+	inline void get_lut_tx_power(double_v& output) const
 	{
 		output = powers_lut[timeslot_idx % timeslots];
 	}
@@ -207,7 +232,7 @@ struct SimulationHelper
 	}
 
 	/* set antenna array directivity before starting each simulation */
-	inline void get_scana(double_v& output) const
+	inline void get_lut_scan_angle(double_v& output) const
 	{
 		output = alphas_lut[timeslot_idx % timeslots];
 	}
@@ -227,8 +252,8 @@ struct SimulationHelper
 	{
 		std::cout << "Initializating " << str(cows.size()) << " transmitters for simulation" << std::endl;
 		double_v scan_angles, power_nums;
-		get_scana(scan_angles);
-		get_power(power_nums);
+		get_lut_scan_angle(scan_angles);
+		get_lut_tx_power(power_nums);
 
 		for (unsigned c = 0; c < cows.size(); ++c)
 		{
@@ -394,7 +419,7 @@ class Simulator
 		{
 			/* create a new list of power nums and run calculations on its permutations */
 			std::vector<double> power_list;
-			simhelper->get_power(power_list);
+			simhelper->get_lut_tx_power(power_list);
 
 			bool permutation_state_power = true;
 			while (permutation_state_power)
@@ -443,6 +468,8 @@ public:
 
 		simhelper->get_power(antenna_power);
 		simhelper->get_scana(scan_angles);
+
+		auto queue_thread = visuals.gui_change_detect(logger, cows);
 
 		visuals.render(logger, cows, mobile_stations_loc, base_stations_loc, antenna_power, bs_theta_c, scan_angles);
 #endif
