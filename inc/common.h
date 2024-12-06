@@ -8,12 +8,16 @@
 #include <fstream>
 #include <vector>
 #include <chrono>
+#include <iomanip>
 #include <sstream>
 #include <cmath>
 #include <cstring>
+#include <queue>
+#include <iostream>
+
+
 
 #define GRAPHICS
-
 
 #define C_SPEED 3e8L /* speed of light */
 #define M_PIl   3.141592653589793238462643383279502884L /* pi */
@@ -28,12 +32,26 @@
 
 extern std::string sim_error;
 
-template<class T> std::string str(const T& input) { return std::to_string(input); }
+template<typename T>
+std::string str(const T& input, int precision = std::numeric_limits<T>::digits10 + 1)
+{
+	// For floating-point types, apply precision
+	if constexpr (std::is_floating_point<T>::value)
+	{
+		std::ostringstream ss;
+		ss << std::setprecision(precision) << input;
+		return ss.str();
+	}
+
+	// For non-floating-point types, no special formatting
+	return std::to_string(input);
+}
+
 template<class U, class V> using Pair = std::pair<U, V>;
 using unsigned_v = std::vector<unsigned>;
 using double_v = std::vector<double>;
 
-std::string timestamp() {
+inline std::string timestamp() {
 	// Get the current time as a time_point
 	auto now = std::chrono::system_clock::now();
 
@@ -46,10 +64,10 @@ std::string timestamp() {
 	localtime(&currentTime, &localTime);
 
 	// Use a stringstream to format the timestamp
-	std::ostringstream timestamp;
-	timestamp << std::put_time(&localTime, "%Y%m%d_%H%M%S");
+	std::ostringstream tstamp;
+	tstamp << std::put_time(&localTime, "%Y%m%d_%H%M%S");
 
-	return timestamp.str();
+	return tstamp.str();
 }
 
 template<class T>
@@ -72,7 +90,7 @@ bool is_unique(std::vector<T>& vec, Compare comp = Compare())
 
 namespace common
 {
-	bool mkdir(const std::string& path)
+	inline bool mkdir(const std::string& path)
 	{
 		if (!(std::filesystem::exists(path) && std::filesystem::is_directory(path)))
 		{
@@ -114,8 +132,6 @@ struct revmap_t
 	}
 	revmap_t(size_t _size) : size(size) {}
 };
-
-
 
 class Logger
 {
@@ -184,11 +200,24 @@ namespace cached
 {
 	template<class U, class V> using Cache = std::unordered_map<U, V>;
 	template<class U> using HashSet        = std::unordered_set<U>;
-	Cache<double, double> cache_sin, cache_dbm2w, cache_db2lin;
+	extern Cache<double, double> cache_sin, cache_dbm2w, cache_db2lin, cache_pow;
 
 	inline double deg2rad(const double& deg)
 	{
 		return deg * M_PIl / 180.0;
+	}
+
+	inline double pow_2(const double& base)
+	{
+		auto ite = cache_pow.find(base);
+		if (ite == cache_pow.end())
+		{
+			double answer = pow(base, 2);
+			cache_pow.emplace(base, answer);
+			return answer;
+		}
+
+		return ite->second;
 	}
 
 	inline double log2lin(double log)
@@ -291,6 +320,18 @@ struct Dimensions
 	{
 		return !operator==(ref);
 	}
+
+	friend bool operator==(const Dimensions& d1, const Dimensions& d2)
+	{
+		return d1.x == d2.x && d1.y == d2.y;
+	}
+
+	friend bool operator!=(const Dimensions& d1, const Dimensions& d2)
+	{
+		return !operator==(d1, d2);
+	}
+
+
 	Dimensions(const Width& i, const Width& j) : x(i), y(j) {}
 	Dimensions() : x(0), y(0) {}
 };
@@ -367,9 +408,9 @@ inline Coordinates<double> pol2cart(const Polar_Coordinates& c)
 
 namespace graphics
 {
-	std::mutex queue_mutex;          // Mutex to protect the shared queue
-	std::mutex finished_mutex;
-	std::condition_variable consig;      // Condition variable to signal the consumer thread
+	extern std::mutex queue_mutex;          // Mutex to protect the shared queue
+	extern std::mutex finished_mutex;
+	extern std::condition_variable consig;      // Condition variable to signal the consumer thread
 
 	struct State
 	{
@@ -380,7 +421,7 @@ namespace graphics
 
 		State(const int& id, const long& irow, const long& icol, const double& power, const double& dir, const double& scan, const long& x, const long& y) :
 			tx_idx(id), row(irow), col(icol), ant_power(power), ant_dir(dir), ant_angle(scan), location({ (unsigned)x, (unsigned)y }) {}
-		State() : tx_idx(-1) {}
+		State() : tx_idx(-1), row(-1), col(-1), ant_power(-1), ant_dir(-1), ant_angle(-1), location() {}
 	};
 
 	struct DataSync
@@ -392,7 +433,7 @@ namespace graphics
 		std::vector<std::queue<State*>> pending;
 
 
-		auto& front()
+		State front()
 		{
 			std::lock_guard<std::mutex> lock(queue_mutex);  // Lock the mutex
 
