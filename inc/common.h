@@ -433,7 +433,7 @@ namespace graphics
 		std::vector<std::queue<State*>> pending;
 
 
-		State front()
+		auto& front()
 		{
 			std::lock_guard<std::mutex> lock(queue_mutex);  // Lock the mutex
 
