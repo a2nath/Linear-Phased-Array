@@ -507,7 +507,6 @@ namespace graphics
         auto tx_count = tx_locations.size();
 
         sf::Vector2f startpos, mouseoffset;
-        txvertex* tx_dragging = nullptr;
 
         /* heat data contains vertices too */
         HeatGrid griddata(irows, icols, min_color_span, max_color_span, window_size, rx_locations, tx_locations, ant_txpower, ant_direction, ant_scan_angle);
@@ -520,27 +519,6 @@ namespace graphics
         ImGui::SFML::Init(window);
 #endif
 
-        /* only update the heat when INIT or moving MOVING tx on the map */
-        std::thread heat_checker([&]()
-            {
-                while (is_rendering)
-                {
-                    std::unique_lock<std::mutex> lock(graphics::finished_mutex);  // Lock the mutex
-                    graphics::consig.wait(lock, [&]()
-                        {
-                            return synced_state.finished >= 0 || !is_rendering;
-                        }
-                    );
-
-                    if (!is_rendering) break;
-
-                    griddata.update_heat(raw_cow_data[synced_state.finished]);
-                    synced_state.finished = -1;
-                }
-            }
-        );
-
-        synced_state.finished = render_cow_id;
         consig.notify_one();
 
         // Main loop
@@ -619,16 +597,6 @@ namespace graphics
                 }
                 case sf::Event::MouseMoved:
                 {
-                    if (tx_dragging)
-                    {
-                        auto size = window.getSize();
-                        auto& idx = tx_dragging->id;
-
-                        /* mouse drag causes just the calculations */
-                        synced_state.emplace(idx, (long)size.x, (long)size.y, ant_txpower[idx], ant_direction[idx], ant_scan_angle[idx], event.mouseMove.x, event.mouseMove.y);
-                        tx_dragging->setPosition(event.mouseMove.x, event.mouseMove.y);
-                    }
-
                     if (panning)
                     {
                         auto new_view = sf::Mouse::getPosition(window);

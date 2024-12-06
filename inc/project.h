@@ -134,7 +134,7 @@ struct GraphicsHelper
 
 	}
 
-	void render(Logger& logger, cow_v& txlist,
+	void render(cow_v& txlist,
 		const placement_v& mobile_stations_loc,
 		const placement_v& base_stations_loc,
 		const double_v& bs_txpower,
@@ -244,8 +244,7 @@ struct GraphicsHelper
 			is_rendering);
 	}
 
-	void plot(Logger& logger,
-		cow_v& txlist,
+	void plot(cow_v& txlist,
 		const placement_v& mobile_stations_loc,
 		const placement_v& base_stations_loc,
 		const double_v& bs_txpower,
@@ -298,7 +297,8 @@ struct GraphicsHelper
 		synced_state(num_transmitters),
 		is_rendering(true),
 		raw_cow_data(num_tx + 1),
-		raw_mrg_data(raw_cow_data.back())
+		raw_mrg_data(raw_cow_data.back()),
+		logger(ilogger)
 	{
 	}
 };
@@ -566,8 +566,7 @@ public:
 
 		simhelper->get_lut_tx_power(antenna_power);
 		simhelper->get_lut_scan_angle(scan_angles);
-
-		visuals.render(logger, cows, mobile_stations_loc, base_stations_loc, antenna_power, bs_theta_c, scan_angles);
+		visuals.render(cows, mobile_stations_loc, base_stations_loc, antenna_power, bs_theta_c, scan_angles);
 #endif
 	}
 
@@ -580,7 +579,7 @@ public:
 		simhelper->get_lut_tx_power(antenna_power);
 		simhelper->get_lut_scan_angle(scan_angles);
 
-		visuals.plot(logger, cows, mobile_stations_loc, base_stations_loc, antenna_power, bs_theta_c, scan_angles);
+		visuals.plot(cows, mobile_stations_loc, base_stations_loc, antenna_power, bs_theta_c, scan_angles);
 #endif
 	}
 
@@ -613,7 +612,7 @@ public:
 		scan_angle_range(args.scan_angle_range),
 		antenna_spacing(args.antenna_spacing),
 		antenna_dims(args.antenna_dims),
-		visuals(args.base_station_count, args.mobile_station_count, args.field_size[0], args.field_size[1]),
+		visuals(args.base_station_count, args.mobile_station_count, args.field_size[0], args.field_size[1], ilogger),
 		bs_tx_requested_power_watts(args.tx_powerlist().data),
 		bs_requested_scan_alpha_rad(args.tx_alphalist().data),
 		ms2bs_requested_bindings(args.ms_id_selections.binding_data)
