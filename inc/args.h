@@ -324,10 +324,10 @@ struct MyArgs : public argparse::Args
 	std::optional<Power_Values>& bs_tx_power_dBm   = kwarg("antenna_txpower", "Base station transmit TX power in dBm (list or a lut)");
 	std::optional<Scan_Values>& bs_scan_alpha_deg  = kwarg("scan_angle", "Base station scan angle in degrees (list or a lut)");
 
-	Binding_Values& ms_id_selections        = kwarg("ms_selection", "Base station_ID - handset_ID binding. \
+	Binding_Values& ms_id_selections   = kwarg("ms_selection", "Base station_ID - handset_ID binding. \
 											   		Syntax is for 1 timeslot as: 2:3,3:4 or for 2+ timeslots as: 2:3,3:4 4:6,5:7");
-	bool& showgui                           = flag("g", "Show gui of the simulation").set_default(false);
-	bool& debug                             = flag("q,quiet", "Supress output").set_default(true);
+	bool& nogui                        = flag("nogui", "Log only simulation").set_default(false);
+	bool& plot                         = flag("plot", "Print the simulation results for a timeslot, and skip real-time render").set_default(false);
 
 	const std::string& get_input_filename()
 	{
@@ -346,6 +346,8 @@ struct MyArgs : public argparse::Args
 
 	void init()
 	{
+		std::cout << "init args" << std::endl;
+
 		if (!i_json_file.empty())
 		{
 			load_from_json();
@@ -412,6 +414,8 @@ struct MyArgs : public argparse::Args
 		assert(ms_id_selections.data.size() == timeslots);
 		assert(ms_id_selections.data[0].size() == base_station_count);
 		assert(ms_id_selections.is_valid_and_convert(Pair<unsigned, unsigned>{base_station_count, mobile_station_count}) == true); // gets converted into rads after this
+
+		std::cout << "args built" << std::endl;
 	}
 
 	void load_from_json()
