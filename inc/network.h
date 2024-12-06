@@ -138,10 +138,21 @@ namespace network_package
 			double     spacing;
 			double     theta_c;
 			antennadim antenna_dims;
+
+			friend bool operator==(const Settings& settings1, const Settings& settings2)
+			{
+				return settings1.power == settings2.power &&
+					settings1.alpha == settings2.alpha &&
+					settings1.panel_count == settings2.panel_count &&
+					settings1.lambda == settings2.lambda &&
+					settings1.spacing == settings2.spacing &&
+					settings1.theta_c == settings2.theta_c &&
+					settings1.antenna_dims == settings2.antenna_dims;
+			}
 		};
 
 		const Settings initial;
-		Settings current;
+		Settings prev, current;
 
 		struct Calculations
 		{
@@ -164,6 +175,19 @@ namespace network_package
 		Calculations simulation, graphic;
 
 	public:
+
+		/* return if antenna phy parameters changed */
+		void undo_change()
+		{
+			current = prev;
+		}
+
+		/* return if antenna phy parameters changed */
+		const bool state_changed() const
+		{
+			return current == prev;
+		}
+
 		const Settings& settings() const
 		{
 			return current;
@@ -268,7 +292,7 @@ namespace network_package
 			if (new_alpha != current.alpha)
 			{
 				/* update the antenna gain Gtx */
-				for (unsigned idx = 0; idx < calculations.phee_minus_alpha_list.size(); ++idx)
+				for (long long idx = 0; idx < calculations.phee_minus_alpha_list.size(); ++idx)
 				{
 					double phee = (calculations.phee_minus_alpha_list[idx] + new_alpha) / 2;
 
@@ -277,7 +301,7 @@ namespace network_package
 
 					if (sin_term != 0)
 					{
-						gain_factor_antenna_system *= pow(cached::sin(current.panel_count * phee) / sin_term, 2);
+						gain_factor_antenna_system *= cached::pow_2(cached::sin(current.panel_count * phee) / sin_term);
 					}
 
 					/* update the channel matrix */
@@ -309,7 +333,7 @@ namespace network_package
 			const double& pioverlambda = M_PIl / current.lambda;
 			const double& phee_temp = 2 * current.spacing * pioverlambda;
 			const double& pl_temp_meters = 4 * pioverlambda;
-			const double& antenna_dim_factor = 10 * current.antenna_dims.x * current.antenna_dims.y / pow(current.lambda, 2);
+			const double& antenna_dim_factor = 10 * current.antenna_dims.x * current.antenna_dims.y / cached::pow_2(current.lambda);
 			double m_factor = current.antenna_dims.x * pioverlambda;
 
 			for (size_t idx = 0; idx < polar_data.size(); ++idx)
@@ -318,15 +342,15 @@ namespace network_package
 
 				double theta_minus_thetaC = cell_polar_data.theta - current.theta_c;
 				double m = m_factor * cached::sin(theta_minus_thetaC);
-				double singleant_gain = antenna_dim_factor * pow((1 + cached::cos(theta_minus_thetaC)) / 2, 2);
+				double singleant_gain = antenna_dim_factor * cached::pow_2((1 + cached::cos(theta_minus_thetaC)) / 2);
 
 				if (m != 0)
 				{
-					singleant_gain *= pow(cached::sin(m) / m, 2);
+					singleant_gain *= cached::pow_2(cached::sin(m) / m);
 				}
 
 				calculations.phee_minus_alpha_list[idx] = phee_temp * cached::sin(theta_minus_thetaC);
-				calculations.pathloss_list[idx] = pow(pl_temp_meters * cell_polar_data.hype, 2);
+				calculations.pathloss_list[idx] = cached::pow_2(pl_temp_meters * cell_polar_data.hype);
 				calculations.gain_RX_grid[idx] = singleant_gain * current.panel_count;
 			}
 
@@ -346,11 +370,11 @@ namespace network_package
 		{
 			simulation.resize(polar_data.size());
 			init(polar_data, simulation);
-
 		}
 
 		void reset()
 		{
+			prev = current;
 			current = initial;
 		}
 
@@ -361,7 +385,7 @@ namespace network_package
 			const double& init_antenna_orientation_rads,
 			const antennadim& init_antdims)
 			:
-			initial{ 0, 1.58825, init_panel_count, init_lambda, init_antenna_spacing, init_antenna_orientation_rads, init_antdims } // constant initial setup
+			initial{ 0, std::numeric_limits<double>::min(), init_panel_count, init_lambda, init_antenna_spacing, init_antenna_orientation_rads, init_antdims } // constant initial setup
 		{
 		}
 	};

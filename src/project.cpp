@@ -8,13 +8,23 @@
 #include <set>
 #include "project.h"
 
-
 #ifdef _WIN32
 #include <windows.h>
 #define getpid GetCurrentProcessId
 #endif
 
 using namespace std;
+
+/* define externs */
+std::mutex graphics::queue_mutex;
+std::mutex graphics::finished_mutex;
+std::condition_variable graphics::consig;
+
+cached::Cache<double, double> cached::cache_sin;
+cached::Cache<double, double> cached::cache_dbm2w;
+cached::Cache<double, double> cached::cache_db2lin;
+cached::Cache<double, double> cached::cache_pow;
+
 
 void close(Logger& logger)
 {
@@ -43,7 +53,10 @@ int main(int argc, char** argv, char** envp)
 
     sim.run();
     sim.print();
-    sim.gui_run();
+
+    if (!args.plot)
+        sim.gui_run();
+
     sim.gui_print();
 
     close(logger);
