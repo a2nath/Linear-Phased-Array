@@ -15,6 +15,7 @@
 #include <queue>
 #include <iostream>
 
+#include "spdlog/spdlog.h"
 
 
 #define GRAPHICS

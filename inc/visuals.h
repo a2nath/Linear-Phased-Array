@@ -81,7 +81,7 @@ namespace graphics
         const size_t& data_cols;
         unsigned pixel_height, pixel_width;
 
-        double min_pxl, max_pxl;
+        double_v min_pxl, max_pxl;
         float thresholds[3];
 
         sf::Vector2u bounds_lower, bounds_upper, window_size;
@@ -96,6 +96,46 @@ namespace graphics
         std::vector<sf::CircleShape> rx_cicles;
 
         std::vector<txvertex> txdata;
+
+
+        //sf::Color monocolorgrid(const double& raw, unsigned& tx_id)
+        //{
+        //    double color_value = (max_pxl == min_pxl) ? 0.0 : ((raw - min_pxl) / (max_pxl - min_pxl));
+        //
+        //    // Interpolated Color : Transition from red -> yellow -> green -> blue
+        //    if (color_value <= thresholds[0]) {
+        //        return sf::Color(tx_id & 0b11 ? 255 : 0, static_cast<sf::Uint8>(color_value * 4 * 255), 255); // Blue to Cyan
+        //    }
+        //    else if (color_value <= thresholds[1]) {
+        //        return sf::Color(0, 255, static_cast<sf::Uint8>((1 - (color_value - thresholds[0]) * 4) * 255)); // Cyan to Green
+        //    }
+        //    else if (color_value <= thresholds[2]) {
+        //        return sf::Color(static_cast<sf::Uint8>((color_value - thresholds[1]) * 4 * 255), 255, 0); // Green to Yellow
+        //    }
+        //    else {
+        //        return sf::Color(255, static_cast<sf::Uint8>((1 - (color_value - thresholds[2]) * 4) * 255), 0); // Yellow to Red
+        //    }
+        //}
+
+
+        sf::Color colorgrid(const size_t& tx_id, const double& minval, const double& maxval)
+        {
+            double color_value = (maxval == minval) ? 0.0 : (double(tx_id - minval) / double(maxval - minval));
+
+            // Interpolated Color : Transition from red -> yellow -> green -> blue
+            if (color_value <= thresholds[0]) {
+                return sf::Color(0, static_cast<sf::Uint8>(color_value * 4 * 255), 255); // Blue to Cyan
+            }
+            else if (color_value <= thresholds[1]) {
+                return sf::Color(0, 255, static_cast<sf::Uint8>((1 - (color_value - thresholds[0]) * 4) * 255)); // Cyan to Green
+            }
+            else if (color_value <= thresholds[2]) {
+                return sf::Color(static_cast<sf::Uint8>((color_value - thresholds[1]) * 4 * 255), 255, 0); // Green to Yellow
+            }
+            else {
+                return sf::Color(255, static_cast<sf::Uint8>((1 - (color_value - thresholds[2]) * 4) * 255), 0); // Yellow to Red
+            }
+        }
 
         sf::Color colorgrid(const double& raw, const double& minval, const double& maxval)
         {
@@ -124,6 +164,30 @@ namespace graphics
         }
 
         /* update the heat colors from raw calculations */
+        void update_heat(const std::vector<size_t>& tx_max_sig_ids)
+        {
+            size_t index = 0;
+
+            for (long long row_idx = data_rows - 1; row_idx >= 0; --row_idx)
+            {
+                auto row_offset = row_idx * data_cols;
+                for (size_t cols_idx = 0; cols_idx < data_cols; ++cols_idx)
+                {
+                    size_t v_index = (row_offset + cols_idx) << 2;
+
+                    sf::Color v_color = colorgrid(tx_max_sig_ids[index++], 0, tx_locations.size() - 1);
+                    grid[v_index + 0].color = v_color;
+                    grid[v_index + 1].color = v_color;
+                    grid[v_index + 2].color = v_color;
+                    grid[v_index + 3].color = v_color;
+                }
+
+                //if (row_idx == 0)
+                //    break;
+            }
+        }
+
+        /* update the heat colors from raw calculations */
         void update_heat(const double_v& tx_raw_sigdata)
         {
             size_t index = 0;
@@ -140,6 +204,9 @@ namespace graphics
                     grid[v_index + 2].color = v_color;
                     grid[v_index + 3].color = v_color;
                 }
+
+                //if (row_idx == 0)
+                //    break;
             }
         }
 
@@ -280,8 +347,8 @@ namespace graphics
 
         HeatGrid(const size_t& irows,
             const size_t& icols,
-            const double& imin,
-            const double& imax,
+            const double_v& imin,
+            const double_v& imax,
             const sf::Vector2u& iwindow_size,
             const placement_v& irx_locations,
             const placement_v& itx_locations,
@@ -311,6 +378,10 @@ namespace graphics
             thresholds[0] = 0.40; // Cyan to Green
             thresholds[1] = 0.55; // Green to Yellow
             thresholds[2] = 0.71; // Yellow to Red
+
+            //thresholds[0] = 0.25; // Cyan to Green
+            //thresholds[1] = 0.50; // Green to Yellow
+            //thresholds[2] = 0.75; // Yellow to Red
 
             init(bounds_lower, bounds_upper);
 // last good
@@ -354,7 +425,7 @@ namespace graphics
     /* look for a non-inf number */
     inline void validate_ite(const double_v& raw_values, double_v::iterator& iminmax)
     {
-		std::cout << "There are " << *iminmax << " values in the calculations" << std::endl;
+        cout << "There are " << *iminmax << " values in the calculations" << endl;
         while (std::isinf(*iminmax))
         {
             if (iminmax != raw_values.begin())
@@ -400,13 +471,14 @@ namespace graphics
         const placement_v& rx_locations,
         const placement_v& tx_locations,
         std::vector<double_v>& raw_cow_data,
+        std::vector<size_t>& cow_sigids,
         const double_v& ant_txpower,
         const double_v& ant_direction,
         const double_v& ant_scan_angle,
         const size_t& irows,
         const size_t& icols,
-        const double& min_color_span,
-        const double& max_color_span,
+        const double_v& min_color_span,
+        const double_v& max_color_span,
         DataSync& synced_state,
         bool& is_rendering)
     {
@@ -597,6 +669,11 @@ namespace graphics
                 {
                     switch (event.key.scancode)
                     {
+                    case sf::Keyboard::Scan::Q:
+                    {
+                        griddata.update_heat(cow_sigids);
+                        break;
+                    }
                     case sf::Keyboard::Scan::R:
                     {
                         zoomLevel = 1.0f;  // Reset zoom level
@@ -741,7 +818,7 @@ namespace graphics
         const string& filename,
         const placement_v& rx_locations,
         const placement_v& tx_locations,
-        double_v& raw_values,
+        double_v& raw_cow_data,
         const double_v& ant_power,
         const double_v& ant_direction,
         const double_v& scan_angle,
@@ -759,11 +836,11 @@ namespace graphics
         {
             renderTexture.clear();
 
-            HeatGrid griddata(rows, cols, min_color_span, max_color_span, renderTexture.getSize(), rx_locations, tx_locations, ant_power, ant_direction, scan_angle);
+            HeatGrid griddata(rows, cols, { min_color_span }, { max_color_span }, renderTexture.getSize(), rx_locations, tx_locations, ant_power, ant_direction, scan_angle);
 
 
             /* draw the grid */
-            griddata.update_heat(raw_values);
+            griddata.update_heat(raw_cow_data);
             renderTexture.draw(griddata.grid);
 
             /* draw the receivers */
