@@ -27,6 +27,17 @@ struct GraphicsHelper
 	graphics::DataSync synced_state;
 	std::queue<std::future<int>> thread_queue;
 	bool is_rendering;
+	double noise_factor;
+
+	void init(const double& inoise_factor)
+	{
+		raw_cow_data.assign(raw_cow_data.size(), double_v(rows * cols)); // resize the part with individual cow heat data (1.)
+		noise_factor = inoise_factor;
+	}
+
+	void init_late()
+	{
+	}
 
 	/* GUI setup for all cows together, inputs: rows, cols */
 	void setup_tx(Cow& cow, const double& power, const double& antenna_dir, const double& scan_angle, const size_t& rows, const size_t& cols, const Placements& placement)
@@ -180,7 +191,6 @@ struct GraphicsHelper
 	GraphicsHelper(const size_t num_transmitters, const size_t& pixel_rows, const size_t& pixel_cols)
 		: rows(pixel_rows), cols(pixel_cols), synced_state(num_transmitters), is_rendering(true)
 	{
-		raw_data.resize(num_transmitters, double_v(pixel_rows * pixel_cols));
 	}
 };
 #endif
@@ -247,6 +257,7 @@ struct SimulationHelper
 	/* need to update all coefficients before getting rx power in any 1 station */
 	void setup_tx()
 	{
+		std::cout << "Initializating " << str(cows.size()) << " transmitters for simulation" << std::endl;
 		double_v scan_angles, power_nums;
 		get_scana(scan_angles);
 		get_power(power_nums);
@@ -364,6 +375,7 @@ class Simulator
 				);
 		}
 
+		/* initialize the simulation helper */
 		simhelper = new SimulationHelper(
 			cows,
 			timeslot,
@@ -463,7 +475,6 @@ public:
 
 		simhelper->get_power(antenna_power);
 		simhelper->get_scana(scan_angles);
-		simhelper->setup_tx(visuals.rows, visuals.cols);
 
 		auto queue_thread = visuals.gui_async_detect(logger, cows);
 
@@ -482,7 +493,6 @@ public:
 
 		simhelper->get_power(antenna_power);
 		simhelper->get_scana(scan_angles);
-		simhelper->setup_tx(visuals.rows, visuals.cols);
 
 		visuals.plot(logger, cows, mobile_stations_loc, base_stations_loc, antenna_power, bs_theta_c, scan_angles);
 #endif
@@ -518,12 +528,18 @@ public:
 		antenna_spacing(args.antenna_spacing),
 		antenna_dims(args.antenna_dims),
 		visuals(args.base_station_count, args.field_size[0], args.field_size[1]),
-		debug(args.debug),
 		bs_tx_requested_power_watts(args.tx_powerlist().data),
 		bs_requested_scan_alpha_rad(args.tx_alphalist().data),
 		ms2bs_requested_bindings(args.ms_id_selections.binding_data)
 	{
 		setup(double_v(args.mobile_station_count, cached::log2lin(args.gain_gtrx)),
 			cached::log2lin(getThermalSystemNoise(bandwidth, args.system_noise)));
+
+		if (!args.nogui)
+		{
+			/* initialize the visual helper */
+			cout << "Visualization enabled" << endl;
+			visuals.init(stations[0].get_nf());
+		}
 	}
 };
