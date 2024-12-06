@@ -89,6 +89,10 @@
     {
       "Id": "d0bc3350-7d6c-4489-be29-bdd006175595",
       "Command": "--ms_selection 7,4,10"
+    },
+    {
+      "Id": "d3c41cb8-3eb4-49b5-aff5-27449d6e5320",
+      "Command": "--plot"
     }
   ]
 }

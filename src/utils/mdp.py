@@ -147,6 +147,7 @@ class MDPEnv:
 
 		# validate
 		sim_args = [
+			'--plot',				    str(self.plot),\
 			'--timeslot',				str(self.timeslot),\
 			'--frequency',				str(self.frequency),\
 			'--bandwidth',				str(self.bandwidth),\
