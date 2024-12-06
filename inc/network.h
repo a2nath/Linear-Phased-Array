@@ -174,6 +174,9 @@ namespace network_package
 		/* Calculations needed to create/update the H-matrix coefficient table */
 		Calculations simulation, graphic;
 
+		std::vector<unsigned> indices_with_inf;
+		std::vector<unsigned> indices_with_z;
+
 	public:
 
 		/* return if antenna phy parameters changed */
@@ -294,6 +297,17 @@ namespace network_package
 				/* update the antenna gain Gtx */
 				for (long long idx = 0; idx < calculations.phee_minus_alpha_list.size(); ++idx)
 				{
+					if (calculations.pathloss_list[idx] == 0)
+					{ // this is going to be a inf
+						indices_with_inf.emplace_back(idx);
+						continue;
+					}
+					else if (calculations.gain_RX_grid[idx] == 0)
+					{ // this is going to be a zero
+						indices_with_z.emplace_back(idx);
+						continue;
+					}
+
 					double phee = (calculations.phee_minus_alpha_list[idx] + new_alpha) / 2;
 
 					double sin_term = current.panel_count * sin(phee);
@@ -306,6 +320,35 @@ namespace network_package
 
 					/* update the channel matrix */
 					calculations.hmatrix[idx] = gain_factor_antenna_system / calculations.pathloss_list[idx];
+				}
+
+				for (long i = 0; i < indices_with_inf.size(); ++i)
+				{
+					auto& problem_index = indices_with_inf[i];
+
+					if (0 <= problem_index - 1)
+					{
+						calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index - 1];
+					}
+					else if (problem_index + 1 < calculations.hmatrix.size())
+					{
+						calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index + 1];
+					}
+					// else all of them are infinity
+				}
+
+				for (long i = 0; i < indices_with_z.size(); ++i)
+				{
+					auto& problem_index = indices_with_z[i];
+
+					if (0 <= problem_index - 1)
+					{
+						calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index - 1];
+					}
+					else if (problem_index + 1 < calculations.hmatrix.size())
+					{
+						calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index + 1];
+					}
 				}
 
 				/* update the scan angle of the antenna array */
@@ -352,6 +395,29 @@ namespace network_package
 				calculations.phee_minus_alpha_list[idx] = phee_temp * cached::sin(theta_minus_thetaC);
 				calculations.pathloss_list[idx] = cached::pow_2(pl_temp_meters * cell_polar_data.hype);
 				calculations.gain_RX_grid[idx] = singleant_gain * current.panel_count;
+
+				if (calculations.pathloss_list[idx] == 0)
+				{
+					spdlog::warn("[index:" + str(idx) + "] " + str(calculations.pathloss_list[idx]) + " pathloss_list value is 0. " + \
+						"Possible reason, cell_polar_data {theta,hype}:{" + str(cell_polar_data.theta) + "," + str(cell_polar_data.hype) + "} hype is zero");
+
+				}
+				else if (std::isinf(calculations.pathloss_list[idx]))
+				{
+					spdlog::warn("[index:" + str(idx) + "] " + str(calculations.pathloss_list[idx]) + " pathloss_list value is inf. ");
+				}
+
+				if (calculations.gain_RX_grid[idx] == 0)
+				{
+					spdlog::warn("[index:" + str(idx) + "] " + str(calculations.gain_RX_grid[idx]) + " gain_RX_grid value is 0. " + \
+						"Possible reason, cos(theta_minus_thetaC):" + str(cos(theta_minus_thetaC)) + " + 1 = zero");
+
+				}
+				else if (std::isinf(calculations.gain_RX_grid[idx]))
+				{
+					spdlog::warn("[index:" + str(idx) + "] " + str(calculations.gain_RX_grid[idx]) + " gain_RX_grid value is inf. ");// +\
+						//"Possible reasons cos(theta_minus_thetaC):" + str(cos(theta_minus_thetaC)) + " + 1 = zero");
+				}
 			}
 
 			//current.theta_c = new_theta_c;
