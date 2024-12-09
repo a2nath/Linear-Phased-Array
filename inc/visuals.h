@@ -58,16 +58,12 @@ namespace graphics
             }
         }
 
-        txvertex(
-            int iid,
-            const Placements& location,
-            const unsigned& height,
-            sf::Color color)
+        txvertex(int iid, const Placements& location, sf::Color color)
             :
             id(iid),
             size(10.0f, 10.0f),
             transmitter(size),
-            position(location.x - size.x / 2, height - location.y - size.y / 2),
+            position(location.x - size.x / 2, location.y - size.y / 2),
             ogcolor(color)
         {
             transmitter.setPosition(position);
@@ -202,7 +198,7 @@ namespace graphics
             sf::Text labelMin, labelMax, labelMid;
 
             labelMax.setFont(font);
-            labelMax.setString(str(static_cast<int>(curr_pxl_range[1])) + " dB");
+            labelMax.setString(str(static_cast<int>(curr_pxl_range[1])) + " dB" + (debug_mode ? "m" : ""));
             labelMax.setCharacterSize(15);
             labelMax.setFillColor(sf::Color::White);
             labelMax.setPosition(legendPos.x + legendWidth + 5.f, legendPos.y - 10.f);
@@ -216,13 +212,13 @@ namespace graphics
 
             for (int i = 1; i < steps; ++i)
             {
-                labelMid.setString(str(static_cast<int>(i * range / steps)) + " dB");
+                labelMid.setString(str(static_cast<int>(i * range / steps)) + " dB" + (debug_mode ? "m" : ""));
                 labelMid.setPosition(legendPos.x + legendWidth + 5.f, legendPos.y + i * 100);
                 window.draw(labelMid);
             }
 
             labelMin.setFont(font);
-            labelMin.setString(str(static_cast<int>(curr_pxl_range[0])) + " dB");
+            labelMin.setString(str(static_cast<int>(curr_pxl_range[0])) + " dB" + (debug_mode ? "m" : ""));
             labelMin.setCharacterSize(15);
             labelMin.setFillColor(sf::Color::White);
             labelMin.setPosition(legendPos.x + legendWidth + 5.f, legendPos.y + legendHeight - 10.f);
@@ -276,26 +272,23 @@ namespace graphics
                 }
             }
 
-            sf::CircleShape sta(10.0);
+            sf::CircleShape sta(8.0);
             sta.setFillColor(sf::Color(90, 90, 90));
             sta.setOutlineColor(sf::Color::Black);
             sta.setOutlineThickness(2.0f);
 
             for (auto& loc : rx_locations)
             {
-                sta.setPosition(loc.x + offset_width, data_height - (loc.y + offset_height));
+                sta.setPosition(loc.x - 8.0 + offset_width, data_height - 8.0 - loc.y + offset_height);
                 rx_cicles.emplace_back(sta);
             }
-
-
-            unsigned new_height = data_height + (unsigned)offset_height;
 
             for (int i = 0; i < tx_locations.size(); ++i)
             {
                 auto& loc = tx_locations[i];
                 auto dir_radians = M_PIl / 2 - tx_ant_dir[i];
 
-                txdata.emplace_back(i, Placements{ loc.x + (unsigned)offset_width, loc.y }, new_height, sf::Color(90, 90, 90));
+                txdata.emplace_back(i, Placements{ loc.x + (unsigned)offset_width, unsigned(data_height + offset_height) - loc.y }, sf::Color(90, 90, 90));
 
 
                 /* draw the placement direction indicators for each tower */
