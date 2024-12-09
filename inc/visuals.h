@@ -24,8 +24,6 @@
 #include "imgui-SFML.h"
 #endif
 
-
-
 namespace graphics
 {
     using namespace std;
@@ -79,17 +77,20 @@ namespace graphics
 
     struct HeatGrid
     {
-        const size_t& data_rows;
-        const size_t& data_cols;
+        const float padding;
+        const float offset_height, offset_width;
+        const size_t& data_height;
+        const size_t& data_width;
         unsigned pixel_height, pixel_width;
 
-        double_v min_pxl, max_pxl;
-        float thresholds[3];
+        float init_pxl_range[2], prev_pxl_range[2], curr_pxl_range[2];
+        float init_thresholds[3], prev_thresholds[3], curr_thresholds[3];
 
         sf::Vector2u bounds_lower, bounds_upper, window_size;
 
         const placement_v& tx_locations;
         const placement_v& rx_locations;
+        const double_v& tx_ant_pwr;
         const double_v& tx_ant_dir;
         const double_v& tx_scan_angle;
 
@@ -97,6 +98,7 @@ namespace graphics
         std::vector<sf::CircleShape> rx_cicles;
 
         std::vector<txvertex> txdata;
+        sf::Font font;
 
 
         //sf::Color monocolorgrid(const double& raw, unsigned& tx_id)
@@ -124,37 +126,106 @@ namespace graphics
             double color_value = (maxval == minval) ? 0.0 : (double(tx_id - minval) / double(maxval - minval));
 
             // Interpolated Color : Transition from red -> yellow -> green -> blue
-            if (color_value <= thresholds[0]) {
+            if (color_value <= curr_thresholds[0])
+            {
                 return sf::Color(0, static_cast<sf::Uint8>(color_value * 4 * 255), 255); // Blue to Cyan
             }
-            else if (color_value <= thresholds[1]) {
-                return sf::Color(0, 255, static_cast<sf::Uint8>((1 - (color_value - thresholds[0]) * 4) * 255)); // Cyan to Green
+            else if (color_value <= curr_thresholds[1])
+            {
+                return sf::Color(0, 255, static_cast<sf::Uint8>((1 - (color_value - curr_thresholds[0]) * 4) * 255)); // Cyan to Green
             }
-            else if (color_value <= thresholds[2]) {
-                return sf::Color(static_cast<sf::Uint8>((color_value - thresholds[1]) * 4 * 255), 255, 0); // Green to Yellow
+            else if (color_value <= curr_thresholds[2])
+            {
+                return sf::Color(static_cast<sf::Uint8>((color_value - curr_thresholds[1]) * 4 * 255), 255, 0); // Green to Yellow
             }
-            else {
-                return sf::Color(255, static_cast<sf::Uint8>((1 - (color_value - thresholds[2]) * 4) * 255), 0); // Yellow to Red
+            else
+            {
+                return sf::Color(255, static_cast<sf::Uint8>((1 - (color_value - curr_thresholds[2]) * 4) * 255), 0); // Yellow to Red
             }
         }
 
-        sf::Color colorgrid(const double& raw, const double& minval, const double& maxval)
+        sf::Color colorgrid(const float& raw, const float& minval, const float& maxval)
         {
-            double color_value = (maxval == minval) ? 0.0 : ((raw - minval) / (maxval - minval));
+            float color_value = (maxval == minval) ? 0.0 : ((raw - minval) / (maxval - minval));
 
             // Interpolated Color : Transition from red -> yellow -> green -> blue
-            if (color_value <= thresholds[0]) {
-                return sf::Color(0, static_cast<sf::Uint8>(color_value * 4 * 255), 255); // Blue to Cyan
+            sf::Uint8 r, g, b;
+            if (color_value > curr_thresholds[2])  // Yellow to Red
+            {
+                r = 255; g = static_cast<sf::Uint8>((1.0 - color_value) / (1.0 - curr_thresholds[2]) * 255); b = 0;
             }
-            else if (color_value <= thresholds[1]) {
-                return sf::Color(0, 255, static_cast<sf::Uint8>((1 - (color_value - thresholds[0]) * 4) * 255)); // Cyan to Green
+            else if (color_value > curr_thresholds[1]) // Green to Yellow
+            {
+                r = static_cast<sf::Uint8>((color_value - curr_thresholds[1]) / (curr_thresholds[2] - curr_thresholds[1]) * 255); g = 255; b = 0;
             }
-            else if (color_value <= thresholds[2]) {
-                return sf::Color(static_cast<sf::Uint8>((color_value - thresholds[1]) * 4 * 255), 255, 0); // Green to Yellow
+            else if (color_value > curr_thresholds[0]) // Cyan to Green
+            {
+                r = 0; g = 255; b = static_cast<sf::Uint8>((curr_thresholds[1] - color_value) / (curr_thresholds[1] - curr_thresholds[0]) * 255);
             }
-            else {
-                return sf::Color(255, static_cast<sf::Uint8>((1 - (color_value - thresholds[2]) * 4) * 255), 0); // Yellow to Red
+            else // Blue to Cyan
+            {
+                r = 0; g = static_cast<sf::Uint8>(color_value / curr_thresholds[0] * 255); b = 255;
             }
+
+            return sf::Color(r, g, b);
+        }
+
+        void draw_legend(sf::RenderWindow& window) {
+            // Legend dimensions
+            const float legendWidth = 55.f;
+            const float legendHeight = 400.f;
+            //const float bar_height = legendHeight / 50.f;
+            const sf::Vector2f legendPos(data_width + offset_width + 30.f, offset_height); // Place on the right side
+
+            // Create the legend gradient
+            float range_normalized = (curr_pxl_range[1] - curr_pxl_range[0]) / static_cast<float>(legendHeight - 1);
+            float height_offset = legendPos.y + legendHeight;
+
+            sf::RectangleShape gradientRect(sf::Vector2f(legendWidth, 1.f));
+            for (int i = 0; i < legendHeight; ++i)
+            {
+
+                float signalValue = curr_pxl_range[0] + i * range_normalized;
+                //sf::Color color = ;
+                gradientRect.setFillColor(colorgrid(signalValue, curr_pxl_range[0], curr_pxl_range[1]));
+
+                //std::cout << "[" << i << "] signal:" << signalValue << " colorvalue:" << ((max_pxl == min_pxl) ? 0.0 : ((signalValue - min_pxl) / (max_pxl - min_pxl))) \
+                //   << " color:" << to_string(color) << " is at height:" << height_offset - i << " maxval:" << max_pxl << " minval:" << min_pxl << std::endl;
+
+                gradientRect.setPosition(legendPos.x, height_offset - i);
+                window.draw(gradientRect);
+            }
+
+            // Labels for the legend
+
+            sf::Text labelMin, labelMax, labelMid;
+
+            labelMax.setFont(font);
+            labelMax.setString(str(static_cast<int>(curr_pxl_range[1])) + " dB");
+            labelMax.setCharacterSize(15);
+            labelMax.setFillColor(sf::Color::White);
+            labelMax.setPosition(legendPos.x + legendWidth + 5.f, legendPos.y - 10.f);
+            window.draw(labelMax);
+
+            labelMid.setFont(font);
+            labelMid.setCharacterSize(15);
+            labelMid.setFillColor(sf::Color::White);
+            int steps = legendHeight / 100.0;
+            float range = curr_pxl_range[0] + curr_pxl_range[1];
+
+            for (int i = 1; i < steps; ++i)
+            {
+                labelMid.setString(str(static_cast<int>(i * range / steps)) + " dB");
+                labelMid.setPosition(legendPos.x + legendWidth + 5.f, legendPos.y + i * 100);
+                window.draw(labelMid);
+            }
+
+            labelMin.setFont(font);
+            labelMin.setString(str(static_cast<int>(curr_pxl_range[0])) + " dB");
+            labelMin.setCharacterSize(15);
+            labelMin.setFillColor(sf::Color::White);
+            labelMin.setPosition(legendPos.x + legendWidth + 5.f, legendPos.y + legendHeight - 10.f);
+            window.draw(labelMin);
         }
 
         void update_panning(sf::Vector2i& moved_offset)
@@ -165,38 +236,17 @@ namespace graphics
         }
 
         /* update the heat colors from raw calculations */
-        void update_heat(const std::vector<size_t>& tx_max_sig_ids)
-        {
-            size_t index = 0;
-
-            for (long long row_idx = data_rows - 1; row_idx >= 0; --row_idx)
-            {
-                auto row_offset = row_idx * data_cols;
-                for (size_t cols_idx = 0; cols_idx < data_cols; ++cols_idx)
-                {
-                    size_t v_index = (row_offset + cols_idx) << 2;
-
-                    sf::Color v_color = colorgrid(tx_max_sig_ids[index++], 0, tx_locations.size() - 1);
-                    grid[v_index + 0].color = v_color;
-                    grid[v_index + 1].color = v_color;
-                    grid[v_index + 2].color = v_color;
-                    grid[v_index + 3].color = v_color;
-                }
-            }
-        }
-
-        /* update the heat colors from raw calculations */
         void update_heat(const double_v& tx_raw_sigdata)
         {
-            size_t index = 0;
-            for (long long row_idx = data_rows - 1; row_idx >= 0; --row_idx)
+            long long index = 0;
+            for (long long row_idx = data_height - 1; row_idx >= 0; --row_idx)
             {
-                auto row_offset = row_idx * data_cols;
-                for (long long cols_idx = 0; cols_idx < data_cols; ++cols_idx)
+                auto row_offset = row_idx * data_width;
+                for (long long cols_idx = 0; cols_idx < data_width; ++cols_idx)
                 {
                     size_t v_index = (row_offset + cols_idx) << 2;
 
-                    sf::Color v_color = colorgrid(tx_raw_sigdata[index++], min_pxl[0], max_pxl[0]);
+                    sf::Color v_color = colorgrid(tx_raw_sigdata[index++], curr_pxl_range[0], curr_pxl_range[1]);
                     grid[v_index + 0].color = v_color;
                     grid[v_index + 1].color = v_color;
                     grid[v_index + 2].color = v_color;
@@ -211,59 +261,40 @@ namespace graphics
             bounds_upper = ibounds_upper;
 
             size_t index = 0;
-            for (long long row_idx = data_rows - 1; row_idx >= 0; --row_idx)
+            for (long long row_idx = data_height - 1; row_idx >= 0; --row_idx)
             {
-                auto row_offset = row_idx * data_cols;
-                for (long long cols_idx = 0; cols_idx < data_cols; ++cols_idx)
+                auto row_offset = row_idx * data_width;
+                for (long long cols_idx = 0; cols_idx < data_width; ++cols_idx)
                 {
                     size_t v_index = (row_offset + cols_idx) << 2;
 
-                    grid[v_index + 0].position = sf::Vector2f(cols_idx * pixel_width, row_idx * pixel_height);
-                    grid[v_index + 1].position = sf::Vector2f((cols_idx + 1) * pixel_width, row_idx * pixel_height);
-                    grid[v_index + 2].position = sf::Vector2f((cols_idx + 1) * pixel_width, (row_idx + 1) * pixel_height);
-                    grid[v_index + 3].position = sf::Vector2f(cols_idx * pixel_width, (row_idx + 1) * pixel_height);
+                    grid[v_index + 0].position = sf::Vector2f(offset_width + cols_idx * pixel_width, offset_height + row_idx * pixel_height);
+                    grid[v_index + 1].position = sf::Vector2f(offset_width + (cols_idx + 1) * pixel_width, offset_height + row_idx * pixel_height);
+                    grid[v_index + 2].position = sf::Vector2f(offset_width + (cols_idx + 1) * pixel_width, offset_height + (row_idx + 1) * pixel_height);
+                    grid[v_index + 3].position = sf::Vector2f(offset_width + cols_idx * pixel_width, offset_height + (row_idx + 1) * pixel_height);
                 }
-
-                if (row_idx == 0)
-                    break;
             }
+
+            sf::CircleShape sta(10.0);
+            sta.setFillColor(sf::Color(90, 90, 90));
+            sta.setOutlineColor(sf::Color::Black);
+            sta.setOutlineThickness(2.0f);
 
             for (auto& loc : rx_locations)
             {
-                sf::CircleShape sta(10.0);
-                sta.setFillColor(sf::Color(90, 90, 90));
-                sta.setOutlineColor(sf::Color::Black);
-                sta.setOutlineThickness(2.0f);
-                sta.setPosition(loc.x, window_size.y - loc.y);
-
+                sta.setPosition(loc.x + offset_width, data_height - (loc.y + offset_height));
                 rx_cicles.emplace_back(sta);
             }
+
+
+            unsigned new_height = data_height + (unsigned)offset_height;
 
             for (int i = 0; i < tx_locations.size(); ++i)
             {
                 auto& loc = tx_locations[i];
-
-                sf::Vector2f size(10.0f, 10.0f);
-
-                sf::Vector2f position(loc.x - size.x / 2, window_size.x - loc.y - size.y / 2);
                 auto dir_radians = M_PIl / 2 - tx_ant_dir[i];
 
-                sf::VertexArray transmitter(sf::Quads, 4);
-
-                // Set the four corners of the rectangle
-                transmitter[0].position = position;  // Top-left corner
-                transmitter[1].position = sf::Vector2f(position.x + size.x, position.y);  // Top-right corner
-                transmitter[2].position = sf::Vector2f(position.x + size.x, position.y + size.y);  // Bottom-right corner
-                transmitter[3].position = sf::Vector2f(position.x, position.y + size.y);  // Bottom-left corner
-
-                // Set the colors for each vertex (optional)
-                transmitter[0].color = sf::Color(90, 90, 90);
-                transmitter[1].color = sf::Color(90, 90, 90);
-                transmitter[2].color = sf::Color(90, 90, 90);
-                transmitter[3].color = sf::Color(90, 90, 90);
-
-                data[1].emplace_back(transmitter);
-
+                txdata.emplace_back(i, Placements{ loc.x + (unsigned)offset_width, loc.y }, new_height, sf::Color(90, 90, 90));
 
 
                 /* draw the placement direction indicators for each tower */
@@ -301,12 +332,7 @@ namespace graphics
                 txdata.back().indicators.emplace_back(line11);
                 txdata.back().indicators.emplace_back(line12);
 
-
-
                 /* draw the scan angle of the linear phase array */
-
-
-
                 sf::VertexArray arrow(sf::Lines, 6);
 
                 // Calculate the beam angle relative to the first line (add scan_angle to direction)
@@ -359,10 +385,29 @@ namespace graphics
             }
         }
 
+        void reset()
+        {
+            std::copy(std::begin(curr_thresholds), std::end(curr_thresholds), std::begin(prev_thresholds));
+            std::copy(std::begin(init_thresholds), std::end(init_thresholds), std::begin(curr_thresholds));
+
+            std::copy(std::begin(curr_pxl_range), std::end(curr_pxl_range), std::begin(prev_pxl_range));
+            std::copy(std::begin(init_pxl_range), std::end(init_pxl_range), std::begin(curr_pxl_range));
+        }
+
+        /* undo the action performed */
+        void undo()
+        {
+            std::copy(std::begin(prev_thresholds), std::end(prev_thresholds), std::begin(curr_thresholds));
+            std::copy(std::begin(curr_thresholds), std::end(curr_thresholds), std::begin(prev_thresholds));
+
+            std::copy(std::begin(prev_pxl_range), std::end(prev_pxl_range), std::begin(curr_pxl_range));
+            std::copy(std::begin(curr_pxl_range), std::end(curr_pxl_range), std::begin(prev_pxl_range));
+        }
+
         HeatGrid(const size_t& irows,
             const size_t& icols,
-            const double_v& imin,
-            const double_v& imax,
+            const float& imin,
+            const float& imax,
             const sf::Vector2u& iwindow_size,
             const placement_v& irx_locations,
             const placement_v& itx_locations,
@@ -371,15 +416,15 @@ namespace graphics
             const double_v& itx_scan_angle)
             :
             //raw_values(values),
-            data_rows(irows),
-            data_cols(icols),
+            padding(30.0f),
+            offset_height(padding),
+            offset_width(padding),
+            data_height(irows),
+            data_width(icols),
             pixel_height(iwindow_size.y / irows),
             pixel_width(iwindow_size.x / icols),
-            min_pxl(imin),
-            max_pxl(imax),
             bounds_lower({0, 0}),
             bounds_upper(iwindow_size),
-            window_size(iwindow_size),
             rx_locations(irx_locations),
             tx_locations(itx_locations),
             tx_ant_pwr(itx_ant_pwr),
@@ -389,25 +434,29 @@ namespace graphics
             grid(sf::Quads, irows * icols * 4)
             //vertices(sf::Quads, values.size() * 4)
         {
-            thresholds[0] = 0.40; // Cyan to Green
-            thresholds[1] = 0.55; // Green to Yellow
-            thresholds[2] = 0.71; // Yellow to Red
+            init_thresholds[0] = 0.25; // Cyan to Green
+            init_thresholds[1] = 0.50; // Green to Yellow
+            init_thresholds[2] = 0.81; // Yellow to Red
 
-            //thresholds[0] = 0.25; // Cyan to Green
-            //thresholds[1] = 0.50; // Green to Yellow
-            //thresholds[2] = 0.75; // Yellow to Red
+            init_pxl_range[0] = -147.0;
+            init_pxl_range[1] = -63.0;
+
+            curr_pxl_range[0] = imin;
+            curr_pxl_range[1] = imax;
+
+
+            std::copy(std::begin(init_thresholds), std::end(init_thresholds), std::begin(prev_thresholds));
+            std::copy(std::begin(init_thresholds), std::end(init_thresholds), std::begin(curr_thresholds));
+
+            std::copy(std::begin(init_pxl_range), std::end(init_pxl_range), std::begin(prev_pxl_range));
 
             init(bounds_lower, bounds_upper);
-// last good
-            //thresholds[0] = 0.40; // Cyan to Green
-            //thresholds[1] = 0.55; // Green to Yellow
-            //thresholds[2] = 0.71; // Yellow to Red
-            //thresholds[0] = 0.50; // Cyan to Green
-            //thresholds[1] = 0.60; // Green to Yellow
-            //thresholds[2] = 0.70; // Yellow to Red
-            //thresholds[0] = 0.40; // Cyan to Green
-            //thresholds[1] = 0.50; // Green to Yellow
-            //thresholds[2] = 0.70; // Yellow to Red
+
+            if (!font.loadFromFile("font/OpenSans-Light.ttf"))
+            {
+                std::cout << "current dir:" << system("cd") << endl;
+                spdlog::warn("Font file did not load for SFML library");
+            }
         }
     };
 
@@ -435,9 +484,6 @@ namespace graphics
         if (debug)
             cout << str << endl;
     }
-
-
-   // inline void change_zoom(zoom()
 
     inline void zoom_in(sf::RenderWindow& window, sf::View& view, float& zoom, const float& adjustent)
     {
@@ -468,26 +514,27 @@ namespace graphics
         Logger& logger,
         const placement_v& rx_locations,
         const placement_v& tx_locations,
-        std::vector<double_v>& raw_cow_data,
-        std::vector<size_t>& cow_sigids,
+        const std::vector<double_v>& raw_cow_data,
+        const std::vector<double_v>& mrg_cow_data,
         const double_v& ant_txpower,
         const double_v& ant_direction,
-        const double_v& scan_angle,
-        const size_t& irows,
-        const size_t& icols,
-        const double_v& min_color_span,
-        const double_v& max_color_span,
+        const double_v& ant_scan_angle,
+        const size_t& grid_rows,
+        const size_t& grid_cols,
+        const float& min_color_span,
+        const float& max_color_span,
         DataSync& synced_state,
         bool& is_rendering)
     {
         std::signal(SIGINT, sig_handler);
 
+        size_t render_width = grid_cols + 800;
+        size_t render_height = grid_rows + 500;
 
-        sf::RenderWindow window(sf::VideoMode(irows, icols), "SFML Grid Plot");
+        sf::RenderWindow window(sf::VideoMode(render_width, render_height), "SFML Grid Plot");
         window.setVerticalSyncEnabled(true);
 
         auto window_size = window.getSize();
-
 
         sf::Vector2f curr_position;
         sf::Vector2i panning_view;
@@ -507,22 +554,45 @@ namespace graphics
         auto tx_count = tx_locations.size();
 
         sf::Vector2f startpos, mouseoffset;
+        txvertex* tx_dragging = nullptr;
 
         /* heat data contains vertices too */
-        HeatGrid griddata(irows, icols, min_color_span, max_color_span, window_size, rx_locations, tx_locations, ant_txpower, ant_direction, ant_scan_angle);
+        HeatGrid griddata(grid_rows, grid_cols, min_color_span, max_color_span, window_size, rx_locations, tx_locations, ant_txpower, ant_direction, ant_scan_angle);
 
         /* init the heatmap to display heat from TX id */
-        griddata.update_heat(raw_values[render_cow_id]);
-
+        //griddata.update_heat(raw_values[render_cow_id]);
+        const std::vector<std::vector<double>>* ptr_live_data = &mrg_cow_data;
 
 #ifdef CONTROLS
         ImGui::SFML::Init(window);
 #endif
+        //griddata.update_heat(raw_values[render_cow_id]);
 
+        /* only update the heat when INIT or moving MOVING tx on the map */
+        std::thread heat_checker([&]()
+            {
+                while (is_rendering)
+                {
+                    std::unique_lock<std::mutex> lock(graphics::finished_mutex);  // Lock the mutex
+                    graphics::consig.wait(lock, [&]()
+                        {
+                            return synced_state.finished >= 0 || !is_rendering;
+                        }
+                    );
+
+                    if (!is_rendering) break;
+
+                    griddata.update_heat((*ptr_live_data)[synced_state.finished]);
+                    synced_state.finished = -1;
+                }
+            }
+        );
+
+        synced_state.finished = render_cow_id;
         consig.notify_one();
 
         // Main loop
-        while (window.isOpen())
+        while (window.isOpen() && is_rendering)
         {
             sf::Event event;
 
@@ -559,6 +629,20 @@ namespace graphics
                     {
                     case sf::Mouse::Left:
                     {
+                        auto& txvertex = griddata.txdata;
+                        for (auto& tx : txvertex)
+                        {
+                            if (tx.transmitter.getGlobalBounds().contains(event.mouseButton.x, event.mouseButton.y))
+                            {   // found it
+                                tx_dragging = &tx;
+
+                                //startpos = tx.transmitter.getPosition();
+
+                                //tx_dragging->curr_pos = sf::Vector2f(event.mouseButton.x, event.mouseButton.y);
+                                break;
+                            }
+                        }
+
                         break;
                     }
                     case sf::Mouse::Right:
@@ -580,6 +664,11 @@ namespace graphics
                     {
                     case sf::Mouse::Left:
                     {
+                        if (tx_dragging)
+                        {
+                            /* mouse release causes heat update */
+                            tx_dragging = nullptr;
+                        }
                         break;
                     }
                     case sf::Mouse::Right:
@@ -597,6 +686,16 @@ namespace graphics
                 }
                 case sf::Event::MouseMoved:
                 {
+                    if (tx_dragging)
+                    {
+                        auto size = window.getSize();
+                        auto& idx = tx_dragging->id;
+
+                        /* mouse drag causes just the calculations */
+                        synced_state.emplace(idx, (long)size.x, (long)size.y, ant_txpower[idx], ant_direction[idx], ant_scan_angle[idx], event.mouseMove.x, event.mouseMove.y);
+                        tx_dragging->setPosition(event.mouseMove.x, event.mouseMove.y);
+                    }
+
                     if (panning)
                     {
                         auto new_view = sf::Mouse::getPosition(window);
@@ -617,20 +716,24 @@ namespace graphics
                     {
                     case sf::Keyboard::Scan::Q:
                     {
-                        griddata.update_heat(cow_sigids);
+                        griddata.update_heat((*ptr_live_data)[render_cow_id]);
                         break;
                     }
                     case sf::Keyboard::Scan::R:
                     {
                         zoomLevel = 1.0f;  // Reset zoom level
                         view = window.getDefaultView();
+
+                        griddata.reset();
+                        griddata.update_heat((*ptr_live_data)[render_cow_id]);
+
                         window.setView(view);
                         break;
                     }
                     case sf::Keyboard::Scan::Tab:
                     {
                         render_cow_id = (render_cow_id + 1) % tx_count;
-                        griddata.update_heat(raw_cow_data[render_cow_id]);
+                        griddata.update_heat((*ptr_live_data)[render_cow_id]);
                         break;
                     }
                     case sf::Keyboard::Scan::Left:
@@ -662,7 +765,6 @@ namespace graphics
                         break;
                     }
                     }
-
                 }
                 default:
                     break;
@@ -718,7 +820,6 @@ namespace graphics
             ImGui::End();
 #endif
 
-
             window.clear();
 
             /* draw the grid */
@@ -740,6 +841,9 @@ namespace graphics
                 }
             }
 
+            /* create a legend */
+            griddata.draw_legend(window);
+
 #ifdef CONTROLS
             ImGui::SFML::Render(window);  // Render ImGui over SFML content
 #endif
@@ -749,6 +853,12 @@ namespace graphics
 #ifdef CONTROLS
         ImGui::SFML::Shutdown();
 #endif
+
+        is_rendering = false; // Set rendering to false
+        consig.notify_all(); // Notify all threads waiting on the condition variable
+
+        heat_checker.join();
+
         return 0;
     }
 
@@ -776,7 +886,7 @@ namespace graphics
         {
             renderTexture.clear();
 
-            HeatGrid griddata(rows, cols, { min_color_span }, { max_color_span }, renderTexture.getSize(), rx_locations, tx_locations, ant_power, ant_direction, scan_angle);
+            HeatGrid griddata(rows, cols, min_color_span, max_color_span, renderTexture.getSize(), rx_locations, tx_locations, ant_power, ant_direction, scan_angle);
 
 
             /* draw the grid */
@@ -806,12 +916,12 @@ namespace graphics
             sf::Image image = texture.copyToImage();
             if (!image.saveToFile(filename))
             {
-                printerr(logger, "Failed to save image!");
+                spdlog::error("Failed to save image!");
             }
 
             return;
         }
 
-        print(logger, "Failed to create render texture!");
+        spdlog::error("Failed to create render texture!");
     }
 }

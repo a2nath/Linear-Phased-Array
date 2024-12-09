@@ -15,6 +15,9 @@
 #ifdef GRAPHICS
 #include "visuals.h"
 
+#include <future>
+#include <thread>
+
 struct GraphicsHelper
 {
 	Logger& logger;
@@ -23,22 +26,23 @@ struct GraphicsHelper
 	size_t cols;
 	graphics::DataSync       synced_state;
 	std::vector<double_v>    raw_cow_data; // raw split data that shows signal strength of each COW
-	double_v&    raw_mrg_data; // merged data that shows SINR based on strongest signal
+	std::vector<double_v>    raw_mrg_data; // merged data that shows SINR based on strongest signal
 	std::vector<size_t>  cow_sigids;   // max signal ids for each pixel, to be used with merged
 	std::vector<size_t>      rx_ids_p_idx; // rx index to find the SINR value from the mrg lut data
 
+	std::queue<std::future<int>> thread_queue;
 	bool is_rendering;
 	double noise_factor;
 
 	void init(const double& inoise_factor)
 	{
-		raw_cow_data.assign(raw_cow_data.size(), double_v(rows * cols)); // resize the part with individual cow heat data (1.)
+		raw_cow_data.assign(num_tx, double_v(rows * cols)); // resize the part with individual cow heat data (1.)
 		noise_factor = inoise_factor;
 	}
 
 	void init_late()
 	{
-		raw_mrg_data.resize(rows * cols); // resize the part with merged cow heat data (2.)
+		raw_mrg_data.assign(num_tx, double_v(rows * cols)); // resize the part with merged cow heat data (2.)
 		cow_sigids.resize(rows * cols);   // cow id to use as signal source (3.) - this can be a local variable
 		rx_ids_p_idx.resize(num_rx);      // indices inside the merged cow heat data to represent receiver SINR. See (2.) (4.)
 	}
@@ -109,53 +113,65 @@ struct GraphicsHelper
 		}
 	}
 
-	/* returns min and max sinr for transmitter [tx_id] */
-	inline std::pair<double, double> compute_colorspan(unsigned tx_id)
+	std::thread gui_change_detect(cow_v& cows)
 	{
-		auto& cow_raw_data = raw_cow_data[tx_id];
-		auto [fmin_ite, fmax_ite] = std::minmax_element(cow_raw_data.begin(), cow_raw_data.end());
+		return std::thread([&]()
+			{
+				while (is_rendering)
+				{
+					std::unique_lock<std::mutex> lock(graphics::queue_mutex);  // Lock the mutex
+					graphics::consig.wait(lock, [&]()
+						{
+							return synced_state.size > 0 || !is_rendering;
+						}
+					);  // Wait for new data or rendering to stop
 
-		return { *fmin_ite, *fmax_ite };
+					if (!is_rendering) break;
+
+					auto state = synced_state.front();
+					if (state.tx_idx >= 0)
+					{
+						update_tx(cows[state.tx_idx], state.ant_dir, state.ant_angle, state.ant_power, state.row, state.col, state.location);
+						synced_state.pop();
+					}
+				}
+			}
+		);
 	}
 
-	/* returns relative min and max sinr between transmitters */
-	std::pair<double, double> compute_colorspan(cow_v& txlist)
-	{
-		auto double_min = std::numeric_limits<double>::max(), double_max = std::numeric_limits<double>::lowest();
-		for (auto& cow : txlist)
-		{
-			auto [fmin, fmax] = compute_colorspan(cow.sid());
 
-			double_min = std::min(fmin, double_min);
-			double_max = std::max(fmax, double_max);
+	/* returns relative min and max sinr between transmitters */
+	std::pair<double, double> compute_colorspan(const std::vector<std::vector<double>>& heatdata,
+		double double_min = std::numeric_limits<double>::max(),
+		double double_max = std::numeric_limits<double>::lowest())
+	{
+		for (int tx_id = 0; tx_id < heatdata.size(); ++tx_id)
+		{
+			auto [fmin, fmax] = std::minmax_element(heatdata[tx_id].begin(), heatdata[tx_id].end());
+
+			double_min = std::min(*fmin, double_min);
+			double_max = std::max(*fmax, double_max);
 		}
 
 		return { double_min, double_max };
-
 	}
 
-	void render(cow_v& txlist,
-		const placement_v& mobile_stations_loc,
-		const placement_v& base_stations_loc,
-		const double_v& bs_txpower,
-		const double_v& bs_theta_c,
-		const double_v& scan_alpha_list)
+
+	void debug_mode_max_signal_map(cow_v& txlist,
+		const placement_v& mobile_stations_loc)
 	{
-		if (raw_cow_data[0].empty())
-		{
-			spdlog::critical("Visualization not enabled, exiting render() function");
-			return;
-		}
-
-		init_late();
-
-		setup_tx(txlist, bs_txpower, scan_alpha_list, rows, cols);
-
-		std::pair<double, double> sep_channels = compute_colorspan(txlist);
-
-
-		/*auto& signal_table = raw_cow_data;
-		auto& strongest_sigid = cow_sigids;*/
+		//if (raw_cow_data[0].empty())
+		//{
+		//	spdlog::critical("Visualization not enabled, exiting render() function");
+		//	return;
+		//}
+		//
+		//
+		//init_late();
+		//
+		//setup_tx(txlist, bs_txpower, scan_alpha_list, rows, cols);
+		//
+		std::pair<double, double> sep_channels = compute_colorspan(raw_cow_data);
 
 
 		size_t index = 0;
@@ -188,7 +204,6 @@ struct GraphicsHelper
 		double num = 0;
 
 
-		auto& signal_output = raw_mrg_data;
 		auto& indices_ms = rx_ids_p_idx;
 
 		std::unordered_map<size_t, std::unordered_set<size_t>> rx_coords_hash_lut;
@@ -214,7 +229,7 @@ struct GraphicsHelper
 				}
 
 				num = lin2dB(signal / (interference + noise_factor));
-				signal_output[px_index] = num;
+				raw_mrg_data[cow_idx][px_index] = num;
 
 				// it is not one of the RX station coordinates
 				if (!(rx_coords_hash_lut.find(row) == rx_coords_hash_lut.end() || rx_coords_hash_lut[row].find(col) == rx_coords_hash_lut[row].end()))
@@ -226,20 +241,94 @@ struct GraphicsHelper
 			}
 		}
 
-		std::pair<double, double> com_channels = compute_colorspan(raw_cow_data.size() - 1);
+		std::pair<double, double> com_channels = compute_colorspan({ raw_cow_data.back() });
+
+	}
+
+	void render(cow_v& txlist,
+		const placement_v& mobile_stations_loc,
+		const placement_v& base_stations_loc,
+		const double_v& bs_txpower,
+		const double_v& bs_theta_c,
+		const double_v& scan_alpha_list)
+	{
+		if (raw_cow_data[0].empty())
+		{
+			spdlog::critical("Visualization not enabled, exiting render() function");
+			return;
+		}
+
+		init_late();
+
+		setup_tx(txlist, bs_txpower, scan_alpha_list, rows, cols);
+
+		//std::pair<double, double> sep_channels = compute_colorspan(raw_cow_data);
+
+
+		/*auto& signal_table = raw_cow_data;
+		auto& strongest_sigid = cow_sigids;*/
+
+
+		size_t px_index = 0;
+		double num = 0;
+
+
+
+		auto& indices_ms = rx_ids_p_idx;
+
+		std::unordered_map<size_t, std::unordered_set<size_t>> rx_coords_hash_lut;
+
+		for (auto& loc : mobile_stations_loc)
+		{
+			rx_coords_hash_lut[loc.x].emplace(loc.y);
+		}
+
+		for (size_t row = 0; row < rows; ++row)
+		{
+			for (size_t col = 0; col < cols; ++col)
+			{
+				for (auto& cow : txlist)
+				{
+					auto& cow_idx = cow.sid();
+					const double& signal = raw_cow_data[cow_idx][px_index];
+
+					double interference = 0;
+
+					for (unsigned c = (cow_idx + 1) % txlist.size(); c != cow_idx;)
+					{
+						interference += raw_cow_data[c][px_index];
+						c = (c + 1) % txlist.size();
+					}
+
+
+					// it is not one of the RX station coordinates
+					if (!(rx_coords_hash_lut.find(row) == rx_coords_hash_lut.end() || rx_coords_hash_lut[row].find(col) == rx_coords_hash_lut[row].end()))
+					{
+						//indices_ms[rx_index++] = px_index;
+						continue; // dont show the pixe under the rx themselves
+					}
+
+					num = lin2dB(signal / (interference + noise_factor));
+					raw_mrg_data[cow_idx][px_index] = num;
+				}
+				++px_index;
+			}
+		}
+		std::pair<float, float> min_and_max = compute_colorspan(raw_cow_data);
+		min_and_max = compute_colorspan(raw_mrg_data, min_and_max.first, min_and_max.second);
 
 		graphics::render(logger,
 			mobile_stations_loc,
 			base_stations_loc,
 			raw_cow_data,
-			cow_sigids,
+			raw_mrg_data,
 			bs_txpower,
 			bs_theta_c,
 			scan_alpha_list,
 			rows,
 			cols,
-			double_v{ sep_channels.first, com_channels.first },
-			double_v{ sep_channels.second, com_channels.second },
+			min_and_max.first,
+			min_and_max.second,
 			synced_state,
 			is_rendering);
 	}
@@ -259,32 +348,40 @@ struct GraphicsHelper
 
 		if (txlist[0].gui_state() == false)
 			setup_tx(txlist, bs_txpower, scan_alpha_list, rows, cols);
-
 		// else capture plot as it is
 
-		std::vector<unsigned> tx_ids(txlist.size() + 1);
-		std::iota(tx_ids.begin(), tx_ids.end(), 0);
+		std::pair<double, double> min_and_max_d = compute_colorspan(raw_cow_data);
+		std::pair<double, double> min_and_max = compute_colorspan(raw_mrg_data);// , min_and_max.first, min_and_max.second);
 
-		auto sep_ch = compute_colorspan(txlist);
-		auto com_ch = compute_colorspan(txlist.size() - 1);
 
-		for (auto& id : tx_ids)
+
+		for (auto& cow : txlist)
 		{
-
-			std::string num = id == tx_ids.back() ? "combined" : str(id);
-
 			graphics::capture_plot(logger,
-				"transmitter_" + num + ".png",
+				"transmitter_dbg_" + str(cow.sid()) + ".png",
 				mobile_stations_loc,
 				base_stations_loc,
-				raw_cow_data[id],
+				raw_cow_data[cow.sid()],
 				bs_txpower,
 				bs_theta_c,
 				scan_alpha_list,
 				rows,
 				cols,
-				id == tx_ids.back() ? com_ch.first : sep_ch.first,
-				id == tx_ids.back() ? com_ch.second : sep_ch.second);
+				min_and_max_d.first,
+				min_and_max_d.second);
+
+			graphics::capture_plot(logger,
+				"transmitter_int_" + str(cow.sid()) + ".png",
+				mobile_stations_loc,
+				base_stations_loc,
+				raw_mrg_data[cow.sid()],
+				bs_txpower,
+				bs_theta_c,
+				scan_alpha_list,
+				rows,
+				cols,
+				min_and_max.first,
+				min_and_max.second);
 		}
 	}
 
@@ -296,8 +393,8 @@ struct GraphicsHelper
 		cols(pixel_cols),
 		synced_state(num_transmitters),
 		is_rendering(true),
-		raw_cow_data(num_tx + 1),
-		raw_mrg_data(raw_cow_data.back()),
+		raw_cow_data(num_tx),
+		raw_mrg_data(num_tx),
 		logger(ilogger)
 	{
 	}
@@ -566,7 +663,12 @@ public:
 
 		simhelper->get_lut_tx_power(antenna_power);
 		simhelper->get_lut_scan_angle(scan_angles);
+
+		auto queue_thread = visuals.gui_change_detect(cows);
+
 		visuals.render(cows, mobile_stations_loc, base_stations_loc, antenna_power, bs_theta_c, scan_angles);
+
+		queue_thread.join();
 #endif
 	}
 
@@ -627,191 +729,4 @@ public:
 			visuals.init(stations[0].get_nf());
 		}
 	}
-};
-
-
-class Simulator
-{
-protected:
-    Logger& logger;
-    std::string sim_error;
-    std::vector<Cow> cows;
-    std::vector<Station> stations;
-    PerfMon* monitor;
-
-    //std::vector<double> dBm2watts;              // in watts
-    //std::vector<double> deg2rads;  // scan angle
-    const double&   frequency;
-    const double    lambda;
-    const double&   bandwidth;
-    const double&   symrate;
-    const double&   blockspersym;
-    const double&   antenna_height;
-    const double&   ms_gain_gtrx_lin;
-    const double&   system_noise_lin;
-    const unsigned& mobile_station_count;
-    const unsigned& base_station_count;
-    const unsigned& timeslot_count;
-    const double&   sinr_limit_linear;
-    const std::vector<double>& bs_theta_c;
-    const std::vector<Placements>& base_stations_loc;
-    const std::vector<Placements>& mobile_stations_loc;
-    const std::vector<unsigned>& bs_antenna_counts;
-    const std::vector<double>& power_range_dBm;
-    const std::vector<double>& scan_angle_range;
-    const std::vector<double>& antenna_spacing;
-    const std::vector<double>& antenna_dims;
-    const bool&     showgui;
-    const bool&     debug;
-
-    const std::vector<std::vector<double>>& bs_tx_requested_power_dBm;
-    const std::vector<std::vector<double>>& bs_requested_scan_alpha_deg;
-    const std::vector<std::vector<unsigned>>& ms2bs_requested_bindings;
-
-    void setup()
-    {
-        //for (unsigned power = power_range_dBm.front(); power <= power_range_dBm.back(); ++power)
-        //{
-        //    dBm2watts.emplace_back(cached::dBm2watt(power));
-        //}
-        //
-        //for (unsigned alpha = power_range_dBm.front(); alpha <= power_range_dBm.back(); ++alpha)
-        //{
-        //    deg2rads.emplace_back(cached::dBm2watt(alpha));
-        //}
-
-        //for (auto& theta : bs_theta_c)
-        //{
-        //    theta = deg2rad(theta);
-        //}
-
-        for (unsigned i = 0; i < mobile_stations_loc.size(); ++i)
-        {
-            stations.emplace_back(i, cows, system_noise_lin);
-        }
-
-        /* setup the system */
-        for (unsigned bs_id = 0; bs_id < base_station_count; ++bs_id)
-        {
-            cows.emplace_back(bs_id,
-                base_stations_loc[bs_id],
-                mobile_stations_loc,
-                ms_gain_gtrx_lin,
-                bs_antenna_counts[bs_id],
-                lambda,
-                antenna_spacing[bs_id],
-                bs_theta_c[bs_id],
-                antennadim(antenna_dims[0], antenna_dims[1])
-                );
-        }
-    }
-
-    void run_single_timelot()
-    {
-        auto& simhelper = monitor->params;
-
-        /* set the selected stations as per bindings */
-        std::vector<unsigned> select_stations;
-        simhelper.get_bindings(select_stations);
-
-        /* create a new list of power nums and run calculations on its permutations */
-        std::vector<double> power_list;
-        simhelper.get_power(power_list);
-
-        /* update the SINR for each scenario (base-station-count factorial permutations) */
-        bool permutation_state = true;
-        while (permutation_state)
-        {
-            /* change the antenna power across all base stations */
-            simhelper.set_power(power_list);
-
-            for (size_t bs_id = 0; bs_id < base_station_count; ++bs_id)
-            {
-                auto& station = stations[select_stations[bs_id]];
-                station.set_rx(bs_id);
-
-                monitor->update(bs_id, station.get_sinr(), select_stations);
-            }
-
-            permutation_state = simhelper.get_perm_power(power_list);
-        }
-    }
-
-    void run_multi_timeslot()
-    {
-        auto& simhelper = monitor->params;
-
-        /* setup the cows first such that the simulation is set with alphas and TX powers */
-        for (unsigned slot = 0; slot < simhelper.timeslots; ++slot)
-        {
-            run_single_timelot();
-            simhelper.inc_timeslot(); // increment the timeslot to get the next parameters
-        }
-    }
-
-public:
-
-    /* run the simulation */
-    void run()
-    {
-        SimulationHelper simparams(cows,
-            timeslot_count,
-            mobile_station_count,
-            bs_tx_requested_power_dBm,
-            bs_requested_scan_alpha_deg,
-            ms2bs_requested_bindings
-        );
-
-        monitor = new PerfMon(simparams);
-
-        if (timeslot_count > 1)
-            run_multi_timeslot();
-        else
-            run_single_timelot();
-    }
-
-
-    void print()
-    {
-        monitor->print();
-    }
-
-    ~Simulator()
-    {
-        delete monitor;
-    }
-
-    Simulator(const MyArgs& args, Logger& ilogger)
-        :
-        logger(ilogger),
-        sim_error(""),
-        monitor(nullptr),
-        frequency(args.frequency),
-        lambda(getLambda(frequency)),
-        bandwidth(args.bandwidth),
-        symrate(args.symrate),
-        blockspersym(args.blockspersym),
-        antenna_height(args.antenna_height),
-        ms_gain_gtrx_lin(cached::log2lin(args.gain_gtrx)),
-        system_noise_lin(cached::log2lin(getThermalSystemNoise(bandwidth, args.system_noise))),
-        mobile_station_count(args.mobile_station_count),
-        base_station_count(args.base_station_count),
-        timeslot_count(args.timeslots),
-        sinr_limit_linear(cached::log2lin(args.sinr_limit_dB)),
-        bs_theta_c(cached::deg2rad(args.bs_theta_c)),
-        base_stations_loc(args.base_stations_loc.data),
-        mobile_stations_loc(args.mobile_stations_loc.data),
-        bs_antenna_counts(args.bs_antenna_count),
-        power_range_dBm(args.power_range_dBm),
-        scan_angle_range(args.scan_angle_range),
-        antenna_spacing(args.antenna_spacing),
-        antenna_dims(args.antenna_dims),
-        showgui(args.showgui),
-        debug(args.debug),
-        bs_tx_requested_power_dBm(args.bs_tx_power_dBm.value().data),
-        bs_requested_scan_alpha_deg(args.bs_scan_alpha_deg.value().data),
-        ms2bs_requested_bindings(args.ms_id_selections.binding_data)
-    {
-        setup();
-    }
 };
