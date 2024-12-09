@@ -555,6 +555,7 @@ namespace graphics
 
         sf::Vector2f startpos, mouseoffset;
         txvertex* tx_dragging = nullptr;
+        bool grid_update = false;
 
         /* heat data contains vertices too */
         HeatGrid griddata(grid_rows, grid_cols, min_color_span, max_color_span, window_size, rx_locations, tx_locations, ant_txpower, ant_direction, ant_scan_angle);
@@ -844,6 +845,46 @@ namespace graphics
                 }
 
                 grid_update = true;
+            }
+
+            /* Signal Threshold Sliders */
+            ImGui::Text("Signal Threshold Control");
+
+            if (ImGui::SliderFloat("Low##slider", &griddata.curr_thresholds[0], 0.0f, 1.0f, "%.2f") ||
+                ImGui::InputFloat("Low##input", &griddata.curr_thresholds[0], 0.1f, 1.0f, "%.2f"))
+                grid_update = true;
+            if (ImGui::SliderFloat("Mid##slider", &griddata.curr_thresholds[1], 0.0f, 1.0f, "%.2f") ||
+                ImGui::InputFloat("Mid##input", &griddata.curr_thresholds[1], 0.1f, 1.0f, "%.2f"))
+                grid_update = true;
+            if (ImGui::SliderFloat("High##slider", &griddata.curr_thresholds[2], 0.0f, 1.0f,"%.2f") ||
+                ImGui::InputFloat("High##input", &griddata.curr_thresholds[2], 0.1f, 1.0f, "%.2f"))
+                grid_update = true;
+
+
+            // Ensure thresholds are in the correct order
+            if (griddata.curr_thresholds[0] > griddata.curr_thresholds[1])
+                std::swap(griddata.curr_thresholds[0], griddata.curr_thresholds[1]);
+
+            if (griddata.curr_thresholds[1] > griddata.curr_thresholds[2])
+                std::swap(griddata.curr_thresholds[1], griddata.curr_thresholds[2]);
+
+            if (griddata.curr_thresholds[0] > griddata.curr_thresholds[1])
+                std::swap(griddata.curr_thresholds[0], griddata.curr_thresholds[1]);
+
+
+            /* Add sliders for minand max values */
+            ImGui::Text("Signal Min and Max");
+            if (ImGui::SliderFloat("Min##slider", &griddata.curr_pxl_range[0], -300.0f, 50.0f, "%.2f dB") ||
+                ImGui::InputFloat("Min##input", &griddata.curr_pxl_range[0], -300.0f, 50.0f, "%.2f dB"))
+                grid_update = true;
+            if (ImGui::SliderFloat("Max##slider", &griddata.curr_pxl_range[1], -299.0f, 50.0f, "%.2f dB") ||
+                ImGui::InputFloat("Max##input", &griddata.curr_pxl_range[1], -299.0f, 50.0f, "%.2f dB"))
+                grid_update = true;
+
+            // Ensure minval is always less than maxval
+            if (griddata.curr_pxl_range[0] >= griddata.curr_pxl_range[1])
+            {
+                griddata.curr_pxl_range[0] = griddata.curr_pxl_range[1] - 1.0f;
             }
 
             if (grid_update)
