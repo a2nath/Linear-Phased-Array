@@ -100,6 +100,7 @@ namespace graphics
         std::vector<txvertex> txdata;
         sf::Font font;
 
+        bool debug_mode;
 
         //sf::Color monocolorgrid(const double& raw, unsigned& tx_id)
         //{
@@ -415,7 +416,6 @@ namespace graphics
             const double_v& itx_ant_dir,
             const double_v& itx_scan_angle)
             :
-            //raw_values(values),
             padding(30.0f),
             offset_height(padding),
             offset_width(padding),
@@ -431,8 +431,8 @@ namespace graphics
             tx_ant_dir(itx_ant_dir),
             tx_scan_angle(itx_scan_angle),
 
-            grid(sf::Quads, irows * icols * 4)
-            //vertices(sf::Quads, values.size() * 4)
+            grid(sf::Quads, irows * icols * 4),
+            debug_mode(false)
         {
             init_thresholds[0] = 0.25; // Cyan to Green
             init_thresholds[1] = 0.50; // Green to Yellow
@@ -714,9 +714,23 @@ namespace graphics
                 {
                     switch (event.key.scancode)
                     {
-                    case sf::Keyboard::Scan::Q:
+                    case sf::Keyboard::Scan::D:
                     {
-                        griddata.update_heat((*ptr_live_data)[render_cow_id]);
+                        if (event.key.control)
+                        {
+                            if (griddata.debug_mode == false)
+                            {
+                                ptr_live_data = &raw_cow_data;
+                                griddata.debug_mode = true;
+                            }
+                            else
+                            {
+                                ptr_live_data = &mrg_cow_data;
+                                griddata.debug_mode = false;
+                            }
+
+                            griddata.update_heat((*ptr_live_data)[render_cow_id]);
+                        }
                         break;
                     }
                     case sf::Keyboard::Scan::R:
@@ -815,6 +829,27 @@ namespace graphics
                 moved_offset = { 0, 0 - pan_adj_factor };
                 pan_window(window, view, curr_position, moved_offset);
                 griddata.update_panning(moved_offset);
+            }
+            else if (ImGui::Button("Debug"))
+            {
+                if (griddata.debug_mode == false)
+                {
+                    ptr_live_data = &raw_cow_data;
+                    griddata.debug_mode = true;
+                }
+                else
+                {
+                    ptr_live_data = &mrg_cow_data;
+                    griddata.debug_mode = false;
+                }
+
+                grid_update = true;
+            }
+
+            if (grid_update)
+            {
+                griddata.update_heat((*ptr_live_data)[render_cow_id]);
+                grid_update = false;
             }
 
             ImGui::End();
