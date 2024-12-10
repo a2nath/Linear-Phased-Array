@@ -431,17 +431,14 @@ namespace graphics
             init_thresholds[1] = 0.50; // Green to Yellow
             init_thresholds[2] = 0.81; // Yellow to Red
 
-            init_pxl_range[0] = -147.0;
-            init_pxl_range[1] = -63.0;
-
-            curr_pxl_range[0] = imin;
-            curr_pxl_range[1] = imax;
-
+            init_pxl_range[0] = imin;
+            init_pxl_range[1] = imax;
 
             std::copy(std::begin(init_thresholds), std::end(init_thresholds), std::begin(prev_thresholds));
             std::copy(std::begin(init_thresholds), std::end(init_thresholds), std::begin(curr_thresholds));
 
             std::copy(std::begin(init_pxl_range), std::end(init_pxl_range), std::begin(prev_pxl_range));
+            std::copy(std::begin(init_pxl_range), std::end(init_pxl_range), std::begin(curr_pxl_range));
 
             init(bounds_lower, bounds_upper);
 
