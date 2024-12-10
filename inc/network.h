@@ -7,8 +7,6 @@
 
 namespace network_package
 {
-	using antennadim = Dimensions<double>;
-
 	inline double rad2deg(double rad)
 	{
 		return rad * 180.0 / M_PIl;
@@ -129,28 +127,6 @@ namespace network_package
 	/* Linear Phase Array Antenna */
 	class AAntenna
 	{
-		struct Settings
-		{
-			double     power; // -30 to +30 dBm, default value is 0
-			double     alpha; // -90 to +90, default value is 91 or 1.58825
-			unsigned   panel_count;
-			double     lambda;
-			double     spacing;
-			double     theta_c;
-			antennadim antenna_dims;
-
-			friend bool operator==(const Settings& settings1, const Settings& settings2)
-			{
-				return settings1.power == settings2.power &&
-					settings1.alpha == settings2.alpha &&
-					settings1.panel_count == settings2.panel_count &&
-					settings1.lambda == settings2.lambda &&
-					settings1.spacing == settings2.spacing &&
-					settings1.theta_c == settings2.theta_c &&
-					settings1.antenna_dims == settings2.antenna_dims;
-			}
-		};
-
 		const Settings initial;
 		Settings prev, current;
 

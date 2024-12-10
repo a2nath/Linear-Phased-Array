@@ -294,10 +294,10 @@ namespace cached
 
 
 
-template<class Width>
+template<class Type>
 struct Dimensions
 {
-	Width x, y;
+	Type x, y;
 
 	Dimensions& operator=(const Dimensions& ref)
 	{
@@ -305,7 +305,7 @@ struct Dimensions
 		y = ref.y;
 		return *this;
 	}
-	Dimensions& operator=(const Width& ref)
+	Dimensions& operator=(const Type& ref)
 	{
 		x = ref;
 		y = ref;
@@ -333,7 +333,7 @@ struct Dimensions
 	}
 
 
-	Dimensions(const Width& i, const Width& j) : x(i), y(j) {}
+	Dimensions(const Type& i, const Type& j) : x(i), y(j) {}
 	Dimensions() : x(0), y(0) {}
 };
 
@@ -406,6 +406,36 @@ inline Coordinates<double> pol2cart(const Polar_Coordinates& c)
 #include <thread>
 #include <future>
 #include <condition_variable>
+
+/* antenna states */
+using antennadim = Dimensions<float>;
+struct Settings
+{
+	double     power; // -30 to +30 dBm, default value is 0
+	double     alpha; // -90 to +90, default value is 91 or 1.58825
+	unsigned   panel_count;
+	double     lambda;
+	double     spacing;
+	double     theta_c;
+	antennadim antenna_dims;
+
+	friend bool operator==(const Settings& settings1, const Settings& settings2)
+	{
+		return settings1.power == settings2.power &&
+			settings1.alpha == settings2.alpha &&
+			settings1.panel_count == settings2.panel_count &&
+			settings1.lambda == settings2.lambda &&
+			settings1.spacing == settings2.spacing &&
+			settings1.theta_c == settings2.theta_c &&
+			settings1.antenna_dims == settings2.antenna_dims;
+	}
+
+	friend bool operator!=(const Settings& settings1, const Settings& settings2)
+	{
+		return !operator==(settings1, settings2);
+	}
+};
+
 
 namespace graphics
 {
