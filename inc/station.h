@@ -63,9 +63,87 @@ public:
 		return location;
 	}
 
-	const AAntenna& antennaDetails() const
+	/* only gui calls this so "update" both [sim] and [gui] components */
+	void update(const Settings& new_settings, const Placements& new_location, const size_t& x, const size_t& y)
 	{
-		return antenna;
+		auto& current = antenna.settings();
+		bool ant_reinit = false;
+		bool ant_update = false;
+		bool gui_reinit = false;
+
+		if (current.antenna_dims != new_settings.antenna_dims)
+		{
+			antenna.set_antdim(new_settings.antenna_dims);
+			ant_reinit = true;
+		}
+
+		if (current.lambda != new_settings.lambda)
+		{
+			antenna.set_antlambda(new_settings.lambda);
+			ant_reinit = true;
+		}
+
+		if (current.panel_count != new_settings.panel_count)
+		{
+			antenna.set_antpanelcount(new_settings.panel_count);
+			ant_reinit = true;
+		}
+
+		if (current.spacing != new_settings.spacing)
+		{
+			antenna.set_antspacing(new_settings.spacing);
+			ant_reinit = true;
+		}
+
+		if (current.theta_c != new_settings.spacing)
+		{
+			antenna.rotate_cow_at(new_settings.theta_c);
+			ant_reinit = true;
+		}
+
+		if (current.alpha != new_settings.alpha)
+		{
+			antenna.set_alpha(new_settings.alpha);
+			ant_update = true;
+		}
+
+		if (current.power != new_settings.power)
+		{
+			antenna.set_power(new_settings.power);
+		}
+
+		if (location != new_location)
+		{
+			location = new_location;
+			ant_reinit = true;
+		}
+
+		if (gui_grid_size.x != x || gui_grid_size.y != y)
+		{
+			gui_reinit = true;
+		}
+
+		if (ant_reinit)
+		{
+			set_polar_data(location, polar_data);
+			antenna.numerical_init(polar_data);
+		}
+
+		if (ant_reinit || gui_reinit)
+		{
+			set_polar_data(x, y, location, gui_polar_data);
+			antenna.graphics_init(gui_polar_data);
+		}
+
+		if (ant_reinit || ant_update)
+		{
+			antenna.numerical_update();
+		}
+
+		if (ant_reinit || ant_update || gui_reinit)
+		{
+			antenna.graphics_update();
+		}
 	}
 
 	/* set Gtx power in linear */

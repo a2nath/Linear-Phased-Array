@@ -265,10 +265,15 @@ namespace network_package
 			return current.antenna_dims;
 		}
 
-		/* update the antenna array from updated power and scan angle */
-		inline void update(const double& new_alpha, Calculations& calculations)
+		void set_alpha(const double& dir_rads)
 		{
-			if (new_alpha != current.alpha)
+			current.alpha = dir_rads;
+		}
+
+		/*update the antenna array from updated powerand scan angle */
+		inline void update(Calculations& calculations)
+		{
+			if (current.alpha != prev.alpha)
 			{
 				/* update the antenna gain Gtx */
 				for (long long idx = 0; idx < calculations.phee_minus_alpha_list.size(); ++idx)
@@ -284,7 +289,7 @@ namespace network_package
 						continue;
 					}
 
-					double phee = (calculations.phee_minus_alpha_list[idx] + new_alpha) / 2;
+					double phee = (calculations.phee_minus_alpha_list[idx] + current.alpha) / 2;
 
 					double sin_term = current.panel_count * sin(phee);
 					double gain_factor_antenna_system = calculations.gain_RX_grid[idx]; // xN antennas already
@@ -328,8 +333,30 @@ namespace network_package
 				}
 
 				/* update the scan angle of the antenna array */
-				current.alpha = new_alpha;
+				prev.alpha = current.alpha;
 			}
+		}
+
+		/* update the antenna array from updated power and scan angle */
+		inline void update(const double& new_alpha, Calculations& calculations)
+		{
+			if (new_alpha != current.alpha)
+			{
+				current.alpha = new_alpha;
+				update(calculations);
+			}
+		}
+
+		/* for bare-minimum numerical calculations needed at the mobile_stations only */
+		void graphics_update()
+		{
+			update(graphic);
+		}
+
+		/* for bare-minimum numerical calculations needed at the mobile_stations only */
+		void numerical_update()
+		{
+			update(simulation);
 		}
 
 		/* for bare-minimum numerical calculations needed at the mobile_stations only */
