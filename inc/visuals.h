@@ -398,8 +398,9 @@ namespace graphics
             std::copy(std::begin(curr_pxl_range), std::end(curr_pxl_range), std::begin(prev_pxl_range));
         }
 
-        HeatGrid(const size_t& irows,
+        HeatGrid(
             const size_t& icols,
+            const size_t& irows,
             const float& imin,
             const float& imax,
             const sf::Vector2u& iwindow_size,
@@ -548,7 +549,7 @@ namespace graphics
         bool grid_update = false;
 
         /* heat data contains vertices too */
-        HeatGrid griddata(grid_rows, grid_cols, min_color_span, max_color_span, window_size, rx_locations, tx_locations, ant_txpower, ant_direction, ant_scan_angle);
+        HeatGrid griddata(grid_cols, grid_rows, min_color_span, max_color_span, window_size, init_rx_locations, curr);
 
         /* init the heatmap to display heat from TX id */
         //griddata.update_heat(raw_values[render_cow_id]);
@@ -937,9 +938,9 @@ namespace graphics
         double_v& raw_cow_data,
         const double_v& ant_power,
         const double_v& ant_direction,
-        const double_v& scan_angle,
-        const size_t& rows,
-        const size_t& cols,
+        const double_v& ant_scan_angle,
+        const size_t& grid_rows,
+        const size_t& grid_cols,
         const double& min_color_span,
         const double& max_color_span)
     {
@@ -948,11 +949,11 @@ namespace graphics
 
         sf::RenderTexture renderTexture;
 
-        if (renderTexture.create(cols * pixel_width, rows * pixel_height))
+        if (renderTexture.create(grid_cols * pixel_width, grid_rows * pixel_height))
         {
             renderTexture.clear();
 
-            HeatGrid griddata(rows, cols, min_color_span, max_color_span, renderTexture.getSize(), rx_locations, tx_locations, ant_power, ant_direction, scan_angle);
+            HeatGrid griddata(grid_cols, grid_rows, min_color_span, max_color_span, renderTexture.getSize(), rx_locations, tx_locations, ant_power, ant_direction, scan_angle);
 
 
             /* draw the grid */
