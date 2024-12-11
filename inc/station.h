@@ -137,9 +137,9 @@ public:
 		size_t idx = 0;
 		output.resize(width * height);
 
-		for (int row = 0; row < width; ++row)
+		for (int row = 0; row < height; ++row)
 		{
-			for (int col = 0; col < height; ++col)
+			for (int col = 0; col < width; ++col)
 			{
 				long int diffx = col - new_location.x; // diff with respect to pixel (think of col, row has location of rx)
 				long int diffy = row - new_location.y;
@@ -238,7 +238,7 @@ public:
 		const double& lambda,
 		const double& antenna_spacing,
 		const double& antenna_orientation,
-		const network_package::antennadim& antenna_dim)
+		const antennadim& antenna_dim)
 		:
 		station_id(id),
 		init_location(bs_location),
