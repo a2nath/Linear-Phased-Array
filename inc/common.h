@@ -329,7 +329,7 @@ struct Dimensions
 
 	friend bool operator!=(const Dimensions& d1, const Dimensions& d2)
 	{
-		return !operator==(d1, d2);
+		return d1.x != d2.x || d1.y != d2.y;
 	}
 
 
