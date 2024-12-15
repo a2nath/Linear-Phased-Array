@@ -549,7 +549,7 @@ namespace graphics
         bool grid_update = false;
 
         /* heat data contains vertices too */
-        HeatGrid griddata(grid_cols, grid_rows, min_color_span, max_color_span, window_size, init_rx_locations, curr);
+        HeatGrid griddata(grid_cols, grid_rows, min_color_span, max_color_span, window_size, rx_locations, tx_locations, ant_txpower, ant_direction, ant_scan_angle);
 
         /* init the heatmap to display heat from TX id */
         //griddata.update_heat(raw_values[render_cow_id]);
@@ -953,7 +953,8 @@ namespace graphics
         {
             renderTexture.clear();
 
-            HeatGrid griddata(grid_cols, grid_rows, min_color_span, max_color_span, renderTexture.getSize(), rx_locations, tx_locations, ant_power, ant_direction, scan_angle);
+            HeatGrid griddata(grid_cols, grid_rows, min_color_span, max_color_span, renderTexture.getSize(), \
+                rx_locations, tx_locations, ant_power, ant_direction, ant_scan_angle);
 
 
             /* draw the grid */
