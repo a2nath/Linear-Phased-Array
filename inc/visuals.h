@@ -34,8 +34,8 @@ namespace graphics
         //sf::VertexArray transmitter;
         int id;
         vertex_v indicators;
-        sf::Vector2f size;
-        sf::Vector2f position;
+        sf::Vector2i size;
+        sf::Vector2i location;
         sf::Color ogcolor;
 
         sf::Vector2f curr_pos;
@@ -58,15 +58,15 @@ namespace graphics
             }
         }
 
-        txvertex(int iid, const Placements& location, sf::Color color)
+        txvertex(int iid, const Placements& ilocation, sf::Color color)
             :
             id(iid),
-            size(10.0f, 10.0f),
-            transmitter(size),
-            position(location.x - size.x / 2, location.y - size.y / 2),
+            size(10, 10),
+            transmitter(sf::Vector2f(size)),
+            location(ilocation.x - size.x / 2, ilocation.y - size.y / 2),
             ogcolor(color)
         {
-            transmitter.setPosition(position);
+            transmitter.setPosition(sf::Vector2f(location));
             transmitter.setFillColor(ogcolor);
         }
     };
@@ -75,8 +75,8 @@ namespace graphics
     {
         const float padding;
         const float offset_height, offset_width;
-        const size_t& data_height;
-        const size_t& data_width;
+        const unsigned& data_height;
+        const unsigned& data_width;
         unsigned pixel_height, pixel_width;
 
         float init_pxl_range[2], prev_pxl_range[2], curr_pxl_range[2];
@@ -294,7 +294,7 @@ namespace graphics
                 /* draw the placement direction indicators for each tower */
 
 
-                auto& position = txdata.back().position;
+                auto& position = txdata.back().location;
                 sf::VertexArray line11(sf::Lines, 2), line12(sf::Lines, 2);
 
                 // Calculate the endpoint of the first line based on direction
@@ -399,8 +399,8 @@ namespace graphics
         }
 
         HeatGrid(
-            const size_t& icols,
-            const size_t& irows,
+            const unsigned& icols,
+            const unsigned& irows,
             const float& imin,
             const float& imax,
             const sf::Vector2u& iwindow_size,
@@ -413,10 +413,10 @@ namespace graphics
             padding(30.0f),
             offset_height(padding),
             offset_width(padding),
-            data_height(irows),
             data_width(icols),
-            pixel_height(iwindow_size.y / irows),
+            data_height(irows),
             pixel_width(iwindow_size.x / icols),
+            pixel_height(iwindow_size.y / irows),
             bounds_lower({0, 0}),
             bounds_upper(iwindow_size),
             rx_locations(irx_locations),
@@ -503,18 +503,18 @@ namespace graphics
     /*    G U I    */
     int render(
         Logger& logger,
-        const placement_v& rx_locations,
-        const placement_v& tx_locations,
+        const placement_v& init_rx_locations,
+        const placement_v& init_tx_locations,
         const std::vector<double_v>& raw_cow_data,
         const std::vector<double_v>& mrg_cow_data,
-        const double_v& ant_txpower,
-        const double_v& ant_direction,
-        const double_v& ant_scan_angle,
-        const size_t& grid_rows,
-        const size_t& grid_cols,
+        const double_v& init_ant_txpower,
+        const double_v& init_ant_direction,
+        const double_v& init_ant_scan_angle,
+        const unsigned& grid_rows,
+        const unsigned& grid_cols,
         const float& min_color_span,
         const float& max_color_span,
-        DataSync& synced_state,
+        DataSync& sync,
         bool& is_rendering)
     {
         std::signal(SIGINT, sig_handler);
@@ -542,14 +542,14 @@ namespace graphics
         float zoom_change_factor = 1.1f;
         long pan_adj_factor = 10;
         int render_cow_id = 0;
-        auto tx_count = tx_locations.size();
+        size_t tx_count = init_tx_locations.size();
 
         sf::Vector2f startpos, mouseoffset;
         txvertex* tx_dragging = nullptr;
         bool grid_update = false;
 
         /* heat data contains vertices too */
-        HeatGrid griddata(grid_cols, grid_rows, min_color_span, max_color_span, window_size, rx_locations, tx_locations, ant_txpower, ant_direction, ant_scan_angle);
+        HeatGrid griddata(grid_cols, grid_rows, min_color_span, max_color_span, window_size, init_rx_locations, init_tx_locations, init_ant_txpower, init_ant_direction, init_ant_scan_angle);
 
         /* init the heatmap to display heat from TX id */
         //griddata.update_heat(raw_values[render_cow_id]);
@@ -568,19 +568,19 @@ namespace graphics
                     std::unique_lock<std::mutex> lock(graphics::finished_mutex);  // Lock the mutex
                     graphics::consig.wait(lock, [&]()
                         {
-                            return synced_state.finished >= 0 || !is_rendering;
+                            return sync.finished >= 0 || !is_rendering;
                         }
                     );
 
                     if (!is_rendering) break;
 
-                    griddata.update_heat((*ptr_live_data)[synced_state.finished]);
-                    synced_state.finished = -1;
+                    griddata.update_heat((*ptr_live_data)[sync.finished]);
+                    sync.finished = -1;
                 }
             }
         );
 
-        synced_state.finished = render_cow_id;
+        sync.finished = render_cow_id;
         consig.notify_one();
 
         // Main loop
@@ -684,7 +684,7 @@ namespace graphics
                         auto& idx = tx_dragging->id;
 
                         /* mouse drag causes just the calculations */
-                        synced_state.emplace(idx, (long)size.x, (long)size.y, ant_txpower[idx], ant_direction[idx], ant_scan_angle[idx], event.mouseMove.x, event.mouseMove.y);
+                        sync.emplace(idx, (long)size.x, (long)size.y, init_ant_txpower[idx], init_ant_direction[idx], init_ant_scan_angle[idx], event.mouseMove.x, event.mouseMove.y);
                         tx_dragging->setPosition(event.mouseMove.x, event.mouseMove.y);
                     }
 
@@ -939,8 +939,8 @@ namespace graphics
         const double_v& ant_power,
         const double_v& ant_direction,
         const double_v& ant_scan_angle,
-        const size_t& grid_rows,
-        const size_t& grid_cols,
+        const unsigned& grid_rows,
+        const unsigned& grid_cols,
         const double& min_color_span,
         const double& max_color_span)
     {
