@@ -20,7 +20,7 @@ class Cow
 	/* more antenna tracking for gui reset */
 	const Placements& init_location;
 	Placements prev_location, location;
-	Dimensions<size_t> init_gui_grid_size, prev_gui_grid_size, gui_grid_size;
+	Dimensions<unsigned> init_gui_grid_size, prev_gui_grid_size, gui_grid_size;
 
 	const std::vector<Placements>& ms_station_loc;
 	const unsigned& ms_stations;
@@ -64,7 +64,7 @@ public:
 	}
 
 	/* only gui calls this so "update" both [sim] and [gui] components */
-	void update(const Settings& new_settings, const Placements& new_location, const size_t& x, const size_t& y)
+	void update(const Settings& new_settings, const Placements& new_location, const unsigned& x, const unsigned& y)
 	{
 		auto& current = antenna.settings();
 		bool ant_reinit = false;
@@ -200,12 +200,9 @@ public:
 
 	void heatmap(std::vector<double>& output)
 	{
-		if (antenna.state_changed())
+		for (size_t pixel_idx = 0; pixel_idx < gui_polar_data.size(); ++pixel_idx)
 		{
-			for (size_t pixel_idx = 0; pixel_idx < gui_polar_data.size(); ++pixel_idx)
-			{
-				g_signal_power(pixel_idx, output[pixel_idx]);
-			}
+			g_signal_power(pixel_idx, output[pixel_idx]);
 		}
 	}
 
@@ -240,11 +237,10 @@ public:
 		}
 	}
 
-
 	/* checks if [antenna.graphics_init] and [antenna.numerical_init] is needed based on what changed */
 	void reset_gui(
-		const size_t& rows,
-		const size_t& cols,
+		const unsigned& rows,
+		const unsigned& cols,
 		const double& new_theta_c,
 		const Placements& new_location)
 	{
@@ -252,7 +248,7 @@ public:
 		location = new_location;
 		antenna.rotate_cow_at(new_theta_c);
 
-		if (location != prev_location && antenna.state_changed())
+		if (location != prev_location && antenna.modified())
 		{
 			set_polar_data(rows, cols, location, gui_polar_data);
 			antenna.graphics_init(gui_polar_data);
@@ -260,7 +256,7 @@ public:
 			set_polar_data(location, polar_data);   // before sinr calc. need to setup polar data on new_loc
 			antenna.numerical_init(polar_data);
 		}
-		else if (antenna.state_changed())
+		else if (antenna.modified())
 		{
 			antenna.graphics_init(gui_polar_data);
 			antenna.numerical_init(polar_data);
@@ -282,7 +278,7 @@ public:
 	}
 
 	/* initialize */
-	void init_gui(const size_t& rows, const size_t& cols)
+	void init_gui(const unsigned& rows, const unsigned& cols)
 	{
 		antenna.reset(); // antenna reset does not reset the location. See reset()
 
