@@ -408,11 +408,8 @@ namespace graphics
         /* undo the action performed */
         void undo()
         {
-            std::copy(std::begin(prev_thresholds), std::end(prev_thresholds), std::begin(curr_thresholds));
-            std::copy(std::begin(curr_thresholds), std::end(curr_thresholds), std::begin(prev_thresholds));
-
-            std::copy(std::begin(prev_pxl_range), std::end(prev_pxl_range), std::begin(curr_pxl_range));
-            std::copy(std::begin(curr_pxl_range), std::end(curr_pxl_range), std::begin(prev_pxl_range));
+            std::swap(prev_thresholds, curr_thresholds);
+            std::swap(prev_pxl_range, curr_pxl_range);
         }
 
         HeatGrid(
