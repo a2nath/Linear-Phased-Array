@@ -19,6 +19,7 @@ using namespace std;
 std::mutex graphics::queue_mutex;
 std::mutex graphics::finished_mutex;
 std::condition_variable graphics::consig;
+Dimensions<unsigned> graphics::render_space;
 
 cached::Cache<double, double> cached::cache_sin;
 cached::Cache<double, double> cached::cache_dbm2w;
