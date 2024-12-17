@@ -37,8 +37,6 @@ namespace graphics
         sf::Vector2i size;
         sf::Vector2i location;
         sf::Color ogcolor;
-
-        sf::Vector2f curr_pos;
         sf::RectangleShape transmitter;
 
         void setPosition(const long& new_x, const long& new_y)
@@ -56,6 +54,11 @@ namespace graphics
                     indicator[v].position += { offset.x, offset.y };
                 }
             }
+        }
+
+        void setPosition()
+        {
+            setPosition(location.x, location.y);
         }
 
         txvertex(int iid, const Placements& ilocation, sf::Color color)
@@ -84,11 +87,8 @@ namespace graphics
 
         sf::Vector2u bounds_lower, bounds_upper, window_size;
 
-        const placement_v& tx_locations;
         const placement_v& rx_locations;
-        const double_v& tx_ant_pwr;
-        const double_v& tx_ant_dir;
-        const double_v& tx_scan_angle;
+        const std::vector<State>& txstates;
 
         sf::VertexArray grid;
         std::vector<sf::CircleShape> rx_cicles;
@@ -252,6 +252,11 @@ namespace graphics
             }
         }
 
+        inline void resize(const Dimensions<unsigned>& shape)
+        {
+            render_space = shape;
+        }
+
         void init(const sf::Vector2u& ibounds_lower, const sf::Vector2u& ibounds_upper)
         {
             bounds_lower = ibounds_lower;
@@ -283,10 +288,10 @@ namespace graphics
                 rx_cicles.emplace_back(sta);
             }
 
-            for (int i = 0; i < tx_locations.size(); ++i)
+            for (int i = 0; i < txstates.size(); ++i)
             {
-                auto& loc = tx_locations[i];
-                auto dir_radians = M_PIl / 2 - tx_ant_dir[i];
+                auto& loc = txstates[i].location;
+                auto dir_radians = M_PIl / 2 - txstates[i].settings.theta_c;
 
                 txdata.emplace_back(i, Placements{ loc.x + (unsigned)offset_width, unsigned(data_height + offset_height) - loc.y }, sf::Color(90, 90, 90));
 
@@ -330,8 +335,8 @@ namespace graphics
                 sf::VertexArray arrow(sf::Lines, 6);
 
                 // Calculate the beam angle relative to the first line (add scan_angle to direction)
-                float beam_angle_radians = tx_ant_dir[i] + tx_scan_angle[i];;
-                //cout << beam_angle_radians * (180 / M_PIl) << endl;
+                float beam_angle_radians = txstates[i].settings.theta_c + txstates[i].settings.alpha;
+
                 float beam_length = 25.0f;  // Length of the signal beam line
 
 
@@ -379,6 +384,18 @@ namespace graphics
             }
         }
 
+        Placements bounded(const int& x, const int& y)
+        {
+            Placements p;
+            p.x = min((int)data_width, x);
+            p.x = max(0, x);
+
+            p.y = min((int)data_height, y);
+            p.y = max(0, y);
+
+            return p;
+        }
+
         void reset()
         {
             std::copy(std::begin(curr_thresholds), std::end(curr_thresholds), std::begin(prev_thresholds));
@@ -405,10 +422,7 @@ namespace graphics
             const float& imax,
             const sf::Vector2u& iwindow_size,
             const placement_v& irx_locations,
-            const placement_v& itx_locations,
-            const double_v& itx_ant_pwr,
-            const double_v& itx_ant_dir,
-            const double_v& itx_scan_angle)
+            const vector<State>& curr_state)
             :
             padding(30.0f),
             offset_height(padding),
@@ -420,11 +434,7 @@ namespace graphics
             bounds_lower({0, 0}),
             bounds_upper(iwindow_size),
             rx_locations(irx_locations),
-            tx_locations(itx_locations),
-            tx_ant_pwr(itx_ant_pwr),
-            tx_ant_dir(itx_ant_dir),
-            tx_scan_angle(itx_scan_angle),
-
+            txstates(curr_state),
             grid(sf::Quads, irows * icols * 4),
             debug_mode(false)
         {
@@ -448,6 +458,8 @@ namespace graphics
                 std::cout << "current dir:" << system("cd") << endl;
                 spdlog::warn("Font file did not load for SFML library");
             }
+
+            resize({ data_width, data_height });
         }
     };
 
@@ -544,22 +556,55 @@ namespace graphics
         int render_cow_id = 0;
         size_t tx_count = init_tx_locations.size();
 
+        /* set the states, current (working variable), previous (for undo), init (for reset) */
+        std::vector<State> curr, prev, init;
+        for (int i = 0; i < tx_count; ++i)
+        {
+            auto& tx_loc = init_tx_locations[i];
+            init.emplace_back(i, init_ant_txpower[i], init_ant_direction[i], init_ant_scan_angle[i], tx_loc.x, tx_loc.y);
+        }
+
         sf::Vector2f startpos, mouseoffset;
         txvertex* tx_dragging = nullptr;
-        bool grid_update = false;
+
+        bool grid_update = true;
 
         /* heat data contains vertices too */
-        HeatGrid griddata(grid_cols, grid_rows, min_color_span, max_color_span, window_size, init_rx_locations, init_tx_locations, init_ant_txpower, init_ant_direction, init_ant_scan_angle);
+        HeatGrid griddata(grid_cols, grid_rows, min_color_span, max_color_span, window_size, init_rx_locations, init);
+
+        std::vector<std::string> tx_header, tx_x_slider, tx_x_inp, tx_y_slider, tx_y_inp, tx_power_slider, tx_power_inp, tx_dir_slider, tx_dir_inp, tx_scan_slider, tx_scan_inp;
+        vector<Coordinates<int>> grid_tx_offsets;
+
+        for (auto i = 0; i < init.size(); ++i)
+        {
+            auto sidx = str(i);
+
+            grid_tx_offsets.emplace_back(griddata.txdata[i].location.x - init[i].location.x, griddata.txdata[i].location.y - init[i].location.y);
+
+            //init[i].location = { (unsigned)griddata.txdata[i].location.x, (unsigned)griddata.txdata[i].location.y };
+
+            tx_header.emplace_back("TX " + sidx);
+            tx_x_slider.emplace_back("X##slider" + sidx);
+            tx_x_inp.emplace_back("X##input" + sidx);
+            tx_y_slider.emplace_back("Y##slider" + sidx);
+            tx_y_inp.emplace_back("Y##input" + sidx);
+            tx_power_slider.emplace_back("Power##slider" + sidx);
+            tx_power_inp.emplace_back("Power##input" + sidx);
+            tx_dir_slider.emplace_back("Direction##slider" + sidx);
+            tx_dir_inp.emplace_back("Direction##input" + sidx);
+            tx_scan_slider.emplace_back("Scan Angle##slider" + sidx);
+            tx_scan_inp.emplace_back("Scan Angle##input" + sidx);
+        }
+
+        curr = init;
+        prev = init;
 
         /* init the heatmap to display heat from TX id */
-        //griddata.update_heat(raw_values[render_cow_id]);
         const std::vector<std::vector<double>>* ptr_live_data = &mrg_cow_data;
 
 #ifdef CONTROLS
         ImGui::SFML::Init(window);
 #endif
-        //griddata.update_heat(raw_values[render_cow_id]);
-
         /* only update the heat when INIT or moving MOVING tx on the map */
         std::thread heat_checker([&]()
             {
@@ -579,9 +624,6 @@ namespace graphics
                 }
             }
         );
-
-        sync.finished = render_cow_id;
-        consig.notify_one();
 
         // Main loop
         while (window.isOpen() && is_rendering)
@@ -628,9 +670,9 @@ namespace graphics
                             {   // found it
                                 tx_dragging = &tx;
 
-                                //startpos = tx.transmitter.getPosition();
+                                auto& id = tx_dragging->id;
+                                prev[id].location = { (unsigned)tx_dragging->location.x - grid_tx_offsets[id].x, (unsigned)tx_dragging->location.y - grid_tx_offsets[id].y };
 
-                                //tx_dragging->curr_pos = sf::Vector2f(event.mouseButton.x, event.mouseButton.y);
                                 break;
                             }
                         }
@@ -680,12 +722,13 @@ namespace graphics
                 {
                     if (tx_dragging)
                     {
-                        auto size = window.getSize();
-                        auto& idx = tx_dragging->id;
+                        auto new_loc = griddata.bounded(event.mouseMove.x, event.mouseMove.y);
+                        auto& id = tx_dragging->id;
 
-                        /* mouse drag causes just the calculations */
-                        sync.emplace(idx, (long)size.x, (long)size.y, init_ant_txpower[idx], init_ant_direction[idx], init_ant_scan_angle[idx], event.mouseMove.x, event.mouseMove.y);
+                        curr[id].location = { new_loc.x - grid_tx_offsets[id].x, new_loc.y - grid_tx_offsets[id].y };
                         tx_dragging->setPosition(event.mouseMove.x, event.mouseMove.y);
+
+                        griddata.update_heat((*ptr_live_data)[render_cow_id]);
                     }
 
                     if (panning)
@@ -953,8 +996,13 @@ namespace graphics
         {
             renderTexture.clear();
 
-            HeatGrid griddata(grid_cols, grid_rows, min_color_span, max_color_span, renderTexture.getSize(), \
-                rx_locations, tx_locations, ant_power, ant_direction, ant_scan_angle);
+            vector<State> curr;
+            for (int i = 0; i < tx_locations.size(); ++i)
+            {
+                curr.emplace_back(i, ant_power[i], ant_direction[i], ant_scan_angle[i], tx_locations[i].x, tx_locations[i].y);
+            }
+
+            HeatGrid griddata(grid_cols, grid_rows, min_color_span, max_color_span, renderTexture.getSize(), rx_locations, curr);
 
 
             /* draw the grid */

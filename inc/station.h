@@ -146,6 +146,16 @@ public:
 		}
 	}
 
+	void update(const double& power, const double& alpha)
+	{
+		Settings current = antenna.settings();
+
+		current.alpha = alpha;
+		current.power = power;
+
+		update(current, location, gui_grid_size.x, gui_grid_size.y);
+	}
+
 	/* set Gtx power in linear */
 	void set_power(const double& input_power)
 	{
@@ -181,9 +191,9 @@ public:
 	}
 
 	/* get signal level in Watts (linear): second parameter, needs to be reshaped to M x N */
-	void gui_udpate(const double& alpha)
+	void gui_udpate()
 	{
-		antenna.graphics_update(alpha);
+		antenna.graphics_update();
 	}
 
 	/* set the signal level in Watts (linear): second parameter */
@@ -286,8 +296,17 @@ public:
 		prev_gui_grid_size = init_gui_grid_size;
 		gui_grid_size = init_gui_grid_size;
 
-		set_polar_data(rows, cols, location, gui_polar_data);
-		antenna.graphics_init(gui_polar_data); // always calcu
+		//set_polar_data(rows, cols, location, gui_polar_data);
+		//antenna.graphics_init(gui_polar_data); // always calcu
+	}
+
+	void undo()
+	{
+		antenna.undo();
+		std::swap(prev_location, location);
+
+		set_polar_data(location, polar_data);
+		antenna.numerical_init(polar_data);
 	}
 
 	/* when user resets all the changes in the simulation */
