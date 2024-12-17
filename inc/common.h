@@ -14,6 +14,10 @@
 #include <cstring>
 #include <queue>
 #include <iostream>
+#include <thread>
+#include <future>
+#include <condition_variable>
+
 
 #include "spdlog/spdlog.h"
 
@@ -48,7 +52,7 @@ std::string str(const T& input, int precision = std::numeric_limits<T>::digits10
 	return std::to_string(input);
 }
 
-template<class U, class V> using Pair = std::pair<U, V>;
+template<class U, class V = U> using Pair = std::pair<U, V>;
 using unsigned_v = std::vector<unsigned>;
 using double_v = std::vector<double>;
 
@@ -366,8 +370,8 @@ using placement_v = std::vector<Placements>;
 
 struct Polar_Coordinates : private Coordinates<double>
 {
-	double& theta;
-	double& hype;
+	double theta;
+	double hype;
 	Polar_Coordinates& operator=(const Polar_Coordinates& input)
 	{
 		theta = input.theta;
@@ -403,9 +407,6 @@ inline Coordinates<double> pol2cart(const Polar_Coordinates& c)
 	return pol2cart(c.theta, c.hype);
 }
 
-#include <thread>
-#include <future>
-#include <condition_variable>
 
 /* antenna states */
 using antennadim = Dimensions<float>;
@@ -434,6 +435,35 @@ struct Settings
 	{
 		return !operator==(settings1, settings2);
 	}
+
+	Settings(const double& ipower,
+		const double& ialpha,
+		const unsigned& ipanel_count,
+		const double& ilambda,
+		const double& ispacing,
+		const double& itheta_c,
+		const antennadim& iantenna_dims)
+		:
+		power(ipower),
+		alpha(ialpha),
+		panel_count(ipanel_count),
+		lambda(ilambda),
+		spacing(ispacing),
+		theta_c(itheta_c),
+		antenna_dims(iantenna_dims)
+	{
+	}
+
+	Settings() :
+		power(std::numeric_limits<double>::max()),
+		alpha(std::numeric_limits<double>::max()),
+		panel_count(std::numeric_limits<unsigned>::max()),
+		lambda(std::numeric_limits<double>::max()),
+		spacing(std::numeric_limits<double>::max()),
+		theta_c(std::numeric_limits<double>::max()),
+		antenna_dims(std::numeric_limits<float>::max(), std::numeric_limits<float>::max())
+	{
+	}
 };
 
 
@@ -442,17 +472,48 @@ namespace graphics
 	extern std::mutex queue_mutex;          // Mutex to protect the shared queue
 	extern std::mutex finished_mutex;
 	extern std::condition_variable consig;      // Condition variable to signal the consumer thread
+	extern Dimensions<unsigned> render_space;
 
 	struct State
 	{
 		int tx_idx;
+		Settings settings;
 		double ant_power, ant_dir, ant_angle;
 		long row, col;
 		Placements location;
 
+		State& operator=(const State& b)
+		{
+			settings = b.settings;
+			location = b.location;
+			return *this;
+		}
+
 		State(const int& id, const long& irow, const long& icol, const double& power, const double& dir, const double& scan, const long& x, const long& y) :
 			tx_idx(id), row(irow), col(icol), ant_power(power), ant_dir(dir), ant_angle(scan), location({ (unsigned)x, (unsigned)y }) {}
-		State() : tx_idx(-1), row(-1), col(-1), ant_power(-1), ant_dir(-1), ant_angle(-1), location() {}
+
+		State(const int& id, const double& power, const double& dir, const double& scan, const unsigned long& x, const unsigned long& y)
+			:
+			tx_idx(id),
+			location({ x, y })
+		{
+			settings.alpha = scan;
+			settings.lambda = -1; // TODO
+			settings.panel_count = 0; // TODO:unsigned
+			settings.power = power;
+			settings.spacing = -1; // TODO
+			settings.theta_c = dir;
+		}
+
+		State() : tx_idx(-1)
+		{
+			settings.alpha = -1;
+			settings.lambda = -1; // TODO
+			settings.panel_count = 0; // TODO
+			settings.power = -1;
+			settings.spacing = -1; // TODO
+			settings.theta_c = -1;
+		}
 	};
 
 	struct DataSync
@@ -514,7 +575,7 @@ namespace graphics
 			std::lock_guard<std::mutex> lock(queue_mutex);  // Lock the mutex
 
 			/* queue the latest request from tx */
-			mainq.emplace(idx, row, col, power, dir, scan, x, y);
+			mainq.emplace(idx, power, dir, scan, x, y);
 
 			pending[idx].emplace(&mainq.back());
 
