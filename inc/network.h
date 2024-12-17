@@ -137,6 +137,7 @@ namespace network_package
 			std::vector<double> phee_minus_alpha_list;
 			std::vector<double> pathloss_list;
 			std::vector<double> hmatrix;                 // hmatrix from BS pov
+			bool modified;
 
 			void resize(const size_t& size)
 			{
@@ -144,7 +145,11 @@ namespace network_package
 				phee_minus_alpha_list.resize(size);
 				pathloss_list.resize(size);
 				hmatrix.resize(size);
+
+				modified = true;
 			}
+
+			Calculations() : modified(false) {}
 		};
 
 		/* Calculations needed to create/update the H-matrix coefficient table */
@@ -155,23 +160,22 @@ namespace network_package
 
 	public:
 
-		/* return if antenna phy parameters changed */
+		/* change the state back to the previous one */
 		void undo_change()
 		{
-			current = prev;
+			std::swap(prev, current);
 		}
 
 		/* return if antenna phy parameters changed */
 		const bool state_changed() const
 		{
-			return current == prev;
+			return simulation.modified || graphic.modified;
 		}
 
 		const Settings& settings() const
 		{
 			return current;
 		}
-
 
 		/* accepts a RX station ID with respect to THIS station
 		   and returns the coefficient
@@ -190,7 +194,10 @@ namespace network_package
 		/* set power in watts */
 		void set_power(const double& power_watts)
 		{
+			prev.power = current.power;
 			current.power = power_watts;
+
+			graphic.modified = true;
 		}
 
 		/* get power in watts */
@@ -208,6 +215,7 @@ namespace network_package
 		/* sett panel count in the antenna array */
 		void set_antpanelcount(const unsigned& count)
 		{
+			prev.panel_count = current.panel_count;
 			current.panel_count = count;
 		}
 
@@ -220,6 +228,7 @@ namespace network_package
 		/* set wavelength in meters */
 		void set_antlambda(const double& meters_lambda)
 		{
+			prev.lambda = current.lambda;
 			current.lambda = meters_lambda;
 		}
 
@@ -232,6 +241,7 @@ namespace network_package
 		/* set the physical antenna panel spacing in meters */
 		void set_antspacing(const double& meters_separation)
 		{
+			prev.spacing = current.spacing;
 			current.spacing = meters_separation;
 		}
 
@@ -244,6 +254,7 @@ namespace network_package
 		/* set the physical antenna direction in rads */
 		void rotate_cow_at(const double& rads_direction)
 		{
+			prev.theta_c = current.theta_c;
 			current.theta_c = rads_direction;
 		}
 
@@ -256,6 +267,7 @@ namespace network_package
 		/* set the physical size in meters */
 		void set_antdim(const antennadim& meters_dim)
 		{
+			prev.antenna_dims = current.antenna_dims;
 			current.antenna_dims = meters_dim;
 		}
 
@@ -267,14 +279,16 @@ namespace network_package
 
 		void set_alpha(const double& dir_rads)
 		{
+			prev.alpha = current.alpha;
 			current.alpha = dir_rads;
+
+			simulation.modified = true;
+			graphic.modified = true;
 		}
 
 		/*update the antenna array from updated powerand scan angle */
 		inline void update(Calculations& calculations)
 		{
-			if (current.alpha != prev.alpha)
-			{
 				/* update the antenna gain Gtx */
 				for (long long idx = 0; idx < calculations.phee_minus_alpha_list.size(); ++idx)
 				{
@@ -331,44 +345,35 @@ namespace network_package
 						calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index + 1];
 					}
 				}
-
-				/* update the scan angle of the antenna array */
-				prev.alpha = current.alpha;
-			}
-		}
-
-		/* update the antenna array from updated power and scan angle */
-		inline void update(const double& new_alpha, Calculations& calculations)
-		{
-			if (new_alpha != current.alpha)
-			{
-				current.alpha = new_alpha;
-				update(calculations);
-			}
 		}
 
 		/* for bare-minimum numerical calculations needed at the mobile_stations only */
 		void graphics_update()
 		{
-			update(graphic);
+			if (graphic.modified)
+			{
+				update(graphic);
+				graphic.modified = false;
+			}
 		}
 
 		/* for bare-minimum numerical calculations needed at the mobile_stations only */
 		void numerical_update()
 		{
-			update(simulation);
-		}
-
-		/* for bare-minimum numerical calculations needed at the mobile_stations only */
-		void graphics_update(const double& new_alpha)
-		{
-			update(new_alpha, graphic);
+			if (simulation.modified)
+			{
+				update(simulation);
+				simulation.modified = false;
+			}
 		}
 
 		/* for bare-minimum numerical calculations needed at the mobile_stations only */
 		void numerical_update(const double& new_alpha)
 		{
-			update(new_alpha, simulation);
+			prev.alpha = current.alpha;
+			current.alpha = new_alpha;
+
+			numerical_update();
 		}
 
 		/* re-calc the signal outs to handsets only (before calling update!) */
@@ -432,6 +437,7 @@ namespace network_package
 		{
 			graphic.resize(polar_data.size());
 			init(polar_data, graphic);
+			graphic.modified = true;
 		}
 
 		/* for bare-minimum numerical calculations needed at the mobile_stations only */
@@ -439,6 +445,7 @@ namespace network_package
 		{
 			simulation.resize(polar_data.size());
 			init(polar_data, simulation);
+			simulation.modified = true;
 		}
 
 		void reset()
