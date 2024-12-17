@@ -160,18 +160,6 @@ namespace network_package
 
 	public:
 
-		/* change the state back to the previous one */
-		void undo_change()
-		{
-			std::swap(prev, current);
-		}
-
-		/* return if antenna phy parameters changed */
-		const bool state_changed() const
-		{
-			return simulation.modified || graphic.modified;
-		}
-
 		const Settings& settings() const
 		{
 			return current;
@@ -446,6 +434,18 @@ namespace network_package
 			simulation.resize(polar_data.size());
 			init(polar_data, simulation);
 			simulation.modified = true;
+		}
+
+		/* return if antenna phy parameters changed */
+		const bool modified() const
+		{
+			return simulation.modified || graphic.modified;
+		}
+
+		/* change the state back to the previous one */
+		void undo()
+		{
+			std::swap(prev, current);
 		}
 
 		void reset()
