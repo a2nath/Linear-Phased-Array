@@ -289,62 +289,62 @@ namespace network_package
 		/*update the antenna array from updated powerand scan angle */
 		inline void update(Calculations& calculations)
 		{
-				/* update the antenna gain Gtx */
-				for (long long idx = 0; idx < calculations.phee_minus_alpha_list.size(); ++idx)
-				{
-					if (calculations.pathloss_list[idx] == 0)
-					{ // this is going to be a inf
-						indices_with_inf.emplace_back(idx);
-						continue;
-					}
-					else if (calculations.gain_RX_grid[idx] == 0)
-					{ // this is going to be a zero
-						indices_with_z.emplace_back(idx);
-						continue;
-					}
-
-					double phee = (calculations.phee_minus_alpha_list[idx] + current.alpha) / 2;
-
-					double sin_term = current.panel_count * sin(phee);
-					double gain_factor_antenna_system = calculations.gain_RX_grid[idx]; // xN antennas already
-
-					if (sin_term != 0)
-					{
-						gain_factor_antenna_system *= cached::pow_2(cached::sin(current.panel_count * phee) / sin_term);
-					}
-
-					/* update the channel matrix */
-					calculations.hmatrix[idx] = gain_factor_antenna_system / calculations.pathloss_list[idx];
+			/* update the antenna gain Gtx */
+			for (long long idx = 0; idx < calculations.phee_minus_alpha_list.size(); ++idx)
+			{
+				if (calculations.pathloss_list[idx] == 0)
+				{ // this is going to be a inf
+					indices_with_inf.emplace_back(idx);
+					continue;
+				}
+				else if (calculations.gain_RX_grid[idx] == 0)
+				{ // this is going to be a zero
+					indices_with_z.emplace_back(idx);
+					continue;
 				}
 
-				for (long i = 0; i < indices_with_inf.size(); ++i)
-				{
-					auto& problem_index = indices_with_inf[i];
+				double phee = (calculations.phee_minus_alpha_list[idx] + current.alpha) / 2;
 
-					if (0 <= problem_index - 1)
-					{
-						calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index - 1];
-					}
-					else if (problem_index + 1 < calculations.hmatrix.size())
-					{
-						calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index + 1];
-					}
-					// else all of them are infinity
+				double sin_term = current.panel_count * sin(phee);
+				double gain_factor_antenna_system = calculations.gain_RX_grid[idx]; // xN antennas already
+
+				if (sin_term != 0)
+				{
+					gain_factor_antenna_system *= cached::pow_2(cached::sin(current.panel_count * phee) / sin_term);
 				}
 
-				for (long i = 0; i < indices_with_z.size(); ++i)
-				{
-					auto& problem_index = indices_with_z[i];
+				/* update the channel matrix */
+				calculations.hmatrix[idx] = gain_factor_antenna_system / calculations.pathloss_list[idx];
+			}
 
-					if (0 <= problem_index - 1)
-					{
-						calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index - 1];
-					}
-					else if (problem_index + 1 < calculations.hmatrix.size())
-					{
-						calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index + 1];
-					}
+			for (long i = 0; i < indices_with_inf.size(); ++i)
+			{
+				auto& problem_index = indices_with_inf[i];
+
+				if (0 <= problem_index - 1)
+				{
+					calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index - 1];
 				}
+				else if (problem_index + 1 < calculations.hmatrix.size())
+				{
+					calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index + 1];
+				}
+				// else all of them are infinity
+			}
+
+			for (long i = 0; i < indices_with_z.size(); ++i)
+			{
+				auto& problem_index = indices_with_z[i];
+
+				if (0 <= problem_index - 1)
+				{
+					calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index - 1];
+				}
+				else if (problem_index + 1 < calculations.hmatrix.size())
+				{
+					calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index + 1];
+				}
+			}
 		}
 
 		/* for bare-minimum numerical calculations needed at the mobile_stations only */
