@@ -22,9 +22,9 @@ struct GraphicsHelper
 {
 	Logger& logger;
 	unsigned num_tx, num_rx;
-	size_t rows;
-	size_t cols;
-	graphics::DataSync       synced_state;
+	unsigned rows;
+	unsigned cols;
+	graphics::DataSync       sync;
 	std::vector<double_v>    raw_cow_data; // raw split data that shows signal strength of each COW
 	std::vector<double_v>    raw_mrg_data; // merged data that shows SINR based on strongest signal
 	std::vector<size_t>  cow_sigids;   // max signal ids for each pixel, to be used with merged
@@ -66,12 +66,14 @@ struct GraphicsHelper
 	}
 
 	/* GUI setup for simulation changes */
-	void update_tx(Cow& cow, const double& power, const double& antenna_dir, const double& scan_angle, const size_t& new_rows, const size_t& new_cols, const Placements& placement)
+	void update_tx(Cow& cow, const double& power, const double& antenna_dir, const double& scan_angle, const unsigned& new_rows, const unsigned& new_cols, const Placements& placement)
 	{
-		if (rows != new_rows || rows != new_cols)
+		Dimensions<unsigned> renderarea = { new_cols, new_rows };
+
+		if (rows != renderarea.y || rows != renderarea.x)
 		{
-			rows = new_rows;
-			cols = new_cols;
+			rows = renderarea.y;
+			cols = renderarea.x;
 			raw_cow_data.resize(raw_cow_data.size(), double_v(rows * cols));
 			init_late();
 		}
@@ -84,8 +86,7 @@ struct GraphicsHelper
 			") cols(" + str(cols));
 			//") placement(" + str(placement) + ")");
 
-
-		cow.reset_gui(rows, cols, antenna_dir, placement);
+		cow.reset_gui(renderarea.x, renderarea.y, antenna_dir, placement);
 		cow.gui_udpate(scan_angle);
 		cow.set_power(power);
 
@@ -105,8 +106,6 @@ struct GraphicsHelper
 			cows[c].init_gui(rows, cols);
 			cows[c].gui_udpate(scan_alpha_list[c]);
 			cows[c].set_power(antenna_power_list[c]);
-
-			/* update cow heat data */
 			cows[c].heatmap(raw_cow_data[c]);
 
 			setup_cow_heat(c); // <-- this is need to convert to logarithmic, or else all graphs will be plain yellow
@@ -122,17 +121,17 @@ struct GraphicsHelper
 					std::unique_lock<std::mutex> lock(graphics::queue_mutex);  // Lock the mutex
 					graphics::consig.wait(lock, [&]()
 						{
-							return synced_state.size > 0 || !is_rendering;
+							return sync.size > 0 || !is_rendering;
 						}
 					);  // Wait for new data or rendering to stop
 
 					if (!is_rendering) break;
 
-					auto state = synced_state.front();
+					auto state = sync.front();
 					if (state.tx_idx >= 0)
 					{
 						update_tx(cows[state.tx_idx], state.ant_dir, state.ant_angle, state.ant_power, state.row, state.col, state.location);
-						synced_state.pop();
+						sync.pop();
 					}
 				}
 			}
@@ -141,7 +140,7 @@ struct GraphicsHelper
 
 
 	/* returns relative min and max sinr between transmitters */
-	std::pair<double, double> compute_colorspan(const std::vector<std::vector<double>>& heatdata,
+	Pair<double> compute_colorspan(const std::vector<std::vector<double>>& heatdata,
 		double double_min = std::numeric_limits<double>::max(),
 		double double_max = std::numeric_limits<double>::lowest())
 	{
@@ -171,7 +170,7 @@ struct GraphicsHelper
 		//
 		//setup_tx(txlist, bs_txpower, scan_alpha_list, rows, cols);
 		//
-		std::pair<double, double> sep_channels = compute_colorspan(raw_cow_data);
+		Pair<double> sep_channels = compute_colorspan(raw_cow_data);
 
 
 		size_t index = 0;
@@ -241,7 +240,7 @@ struct GraphicsHelper
 			}
 		}
 
-		std::pair<double, double> com_channels = compute_colorspan({ raw_cow_data.back() });
+		Pair<double> com_channels = compute_colorspan({ raw_cow_data.back() });
 
 	}
 
@@ -271,9 +270,6 @@ struct GraphicsHelper
 
 		size_t px_index = 0;
 		double num = 0;
-
-
-
 		auto& indices_ms = rx_ids_p_idx;
 
 		std::unordered_map<size_t, std::unordered_set<size_t>> rx_coords_hash_lut;
@@ -314,7 +310,8 @@ struct GraphicsHelper
 				++px_index;
 			}
 		}
-		std::pair<float, float> min_and_max = compute_colorspan(raw_cow_data);
+
+		Pair<float> min_and_max = compute_colorspan(raw_cow_data);
 		min_and_max = compute_colorspan(raw_mrg_data, min_and_max.first, min_and_max.second);
 
 		graphics::render(logger,
@@ -329,7 +326,7 @@ struct GraphicsHelper
 			cols,
 			min_and_max.first,
 			min_and_max.second,
-			synced_state,
+			sync,
 			is_rendering);
 	}
 
@@ -347,11 +344,13 @@ struct GraphicsHelper
 		}
 
 		if (txlist[0].gui_state() == false)
+		{
 			setup_tx(txlist, bs_txpower, scan_alpha_list, rows, cols);
+		}
 		// else capture plot as it is
 
-		std::pair<double, double> min_and_max_d = compute_colorspan(raw_cow_data);
-		std::pair<double, double> min_and_max = compute_colorspan(raw_mrg_data);// , min_and_max.first, min_and_max.second);
+		Pair<double> min_and_max_d = compute_colorspan(raw_cow_data);
+		Pair<double> min_and_max = compute_colorspan(raw_mrg_data);// , min_and_max.first, min_and_max.second);
 
 
 
@@ -385,17 +384,17 @@ struct GraphicsHelper
 		}
 	}
 
-	GraphicsHelper(const size_t num_transmitters, const size_t num_receivers, const size_t& pixel_rows, const size_t& pixel_cols, Logger& ilogger)
+	GraphicsHelper(const size_t num_transmitters, const size_t num_receivers, const unsigned& pixel_rows, const unsigned& pixel_cols, Logger& ilogger)
 		:
 		num_tx(num_transmitters),
 		num_rx(num_receivers),
 		rows(pixel_rows),
 		cols(pixel_cols),
-		synced_state(num_transmitters),
 		is_rendering(true),
 		raw_cow_data(num_tx),
 		raw_mrg_data(num_tx),
-		logger(ilogger)
+		logger(ilogger),
+		sync(num_transmitters)
 	{
 	}
 };
