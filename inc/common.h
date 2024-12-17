@@ -478,8 +478,6 @@ namespace graphics
 	{
 		int tx_idx;
 		Settings settings;
-		double ant_power, ant_dir, ant_angle;
-		long row, col;
 		Placements location;
 
 		State& operator=(const State& b)
@@ -488,9 +486,6 @@ namespace graphics
 			location = b.location;
 			return *this;
 		}
-
-		State(const int& id, const long& irow, const long& icol, const double& power, const double& dir, const double& scan, const long& x, const long& y) :
-			tx_idx(id), row(irow), col(icol), ant_power(power), ant_dir(dir), ant_angle(scan), location({ (unsigned)x, (unsigned)y }) {}
 
 		State(const int& id, const double& power, const double& dir, const double& scan, const unsigned long& x, const unsigned long& y)
 			:
@@ -570,7 +565,7 @@ namespace graphics
 			}
 		}
 
-		void emplace(const int& idx, const long& row, const long& col, const double& power, const double& dir, const double& scan, const long& x, const long& y)
+		void emplace(const int& idx, const double& power, const double& dir, const double& scan, const long& x, const long& y)
 		{
 			std::lock_guard<std::mutex> lock(queue_mutex);  // Lock the mutex
 

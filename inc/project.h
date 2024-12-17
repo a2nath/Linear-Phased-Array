@@ -66,9 +66,9 @@ struct GraphicsHelper
 	}
 
 	/* GUI setup for simulation changes */
-	void update_tx(Cow& cow, const double& power, const double& antenna_dir, const double& scan_angle, const unsigned& new_rows, const unsigned& new_cols, const Placements& placement)
+	void update_tx(Cow& cow, const graphics::State& state)
 	{
-		Dimensions<unsigned> renderarea = { new_cols, new_rows };
+		auto& renderarea = graphics::render_space;
 
 		if (rows != renderarea.y || rows != renderarea.x)
 		{
@@ -79,16 +79,14 @@ struct GraphicsHelper
 		}
 
 		spdlog::info("Reconfigering #" + str(cow.sid()) + " transmitter in visuals: \
-			power(" + str(power) + \
-			") antenna_dir (" + str(antenna_dir) + \
-			") scan_angle(" + str(scan_angle) + \
+			power(" + str(state.settings.power) + \
+			") antenna_dir (" + str(state.settings.theta_c) + \
+			") scan_angle(" + str(state.settings.alpha) + \
 			") rows(" + str(rows) + \
 			") cols(" + str(cols));
 			//") placement(" + str(placement) + ")");
 
-		cow.reset_gui(renderarea.x, renderarea.y, antenna_dir, placement);
-		cow.gui_udpate(scan_angle);
-		cow.set_power(power);
+		cow.update(state.settings, state.location, renderarea.x, renderarea.y);
 
 		/* update cow heat data */
 		cow.heatmap(raw_cow_data[cow.sid()]);
@@ -103,9 +101,9 @@ struct GraphicsHelper
 
 		for (unsigned c = 0; c < cows.size(); ++c)
 		{
+
 			cows[c].init_gui(rows, cols);
-			cows[c].gui_udpate(scan_alpha_list[c]);
-			cows[c].set_power(antenna_power_list[c]);
+			cows[c].update(antenna_power_list[c], scan_alpha_list[c]);
 			cows[c].heatmap(raw_cow_data[c]);
 
 			setup_cow_heat(c); // <-- this is need to convert to logarithmic, or else all graphs will be plain yellow
