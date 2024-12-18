@@ -698,6 +698,7 @@ namespace graphics
                         if (tx_dragging)
                         {
                             /* mouse release causes heat update */
+                            grid_update = true;
                             tx_dragging = nullptr;
                         }
                         break;
@@ -725,7 +726,7 @@ namespace graphics
                         curr[id].location = { new_loc.x - grid_tx_offsets[id].x, new_loc.y - grid_tx_offsets[id].y };
                         tx_dragging->setPosition(event.mouseMove.x, event.mouseMove.y);
 
-                        griddata.update_heat((*ptr_live_data)[render_cow_id]);
+                        grid_update = true;
                     }
 
                     if (panning)
@@ -746,6 +747,24 @@ namespace graphics
                 {
                     switch (event.key.scancode)
                     {
+                    case sf::Keyboard::Scan::Z:
+                    {
+                        if (event.key.control)
+                        {
+                            std::swap(prev, curr);
+
+                            for (auto& tx : curr)
+                            {
+                                griddata.txdata[tx.tx_idx].setPosition(\
+                                    tx.location.x + grid_tx_offsets[tx.tx_idx].x, \
+                                    tx.location.y + grid_tx_offsets[tx.tx_idx].y);
+                            }
+
+                            griddata.undo();
+                            grid_update = true;
+                        }
+                        break;
+                    }
                     case sf::Keyboard::Scan::D:
                     {
                         if (event.key.control)
@@ -761,7 +780,7 @@ namespace graphics
                                 griddata.debug_mode = false;
                             }
 
-                            griddata.update_heat((*ptr_live_data)[render_cow_id]);
+                            grid_update = true;
                         }
                         break;
                     }
@@ -770,8 +789,21 @@ namespace graphics
                         zoomLevel = 1.0f;  // Reset zoom level
                         view = window.getDefaultView();
 
+                        if (event.key.shift) // Ctrl + R - erases all changes
+                        {
+                            prev = curr;
+                            curr = init;
+
+                            for (auto& tx : curr)
+                            {
+                                griddata.txdata[tx.tx_idx].setPosition(\
+                                    tx.location.x + grid_tx_offsets[tx.tx_idx].x, \
+                                    tx.location.y + grid_tx_offsets[tx.tx_idx].y);
+                            }
+                        }
+
                         griddata.reset();
-                        griddata.update_heat((*ptr_live_data)[render_cow_id]);
+                        grid_update = true;
 
                         window.setView(view);
                         break;
@@ -779,7 +811,7 @@ namespace graphics
                     case sf::Keyboard::Scan::Tab:
                     {
                         render_cow_id = (render_cow_id + 1) % tx_count;
-                        griddata.update_heat((*ptr_live_data)[render_cow_id]);
+                        grid_update = true;
                         break;
                     }
                     case sf::Keyboard::Scan::Left:
@@ -920,7 +952,8 @@ namespace graphics
 
             if (grid_update)
             {
-                griddata.update_heat((*ptr_live_data)[render_cow_id]);
+                sync.finished = render_cow_id;
+                consig.notify_one();
                 grid_update = false;
             }
 
