@@ -39,9 +39,9 @@ namespace graphics
         sf::Color ogcolor;
         sf::RectangleShape transmitter;
 
-        void setPosition(const long& new_x, const long& new_y)
+        void setPosition(const float& new_x, const float& new_y)
         {
-            auto curloc = transmitter.getPosition();
+            auto& curloc = transmitter.getPosition();
             sf::Vector2f offset = { new_x - curloc.x, new_y - curloc.y };
 
             transmitter.setPosition(new_x, new_y);
@@ -938,10 +938,10 @@ namespace graphics
             /* Add sliders for minand max values */
             ImGui::Text("Signal Min and Max");
             if (ImGui::SliderFloat("Min##slider", &griddata.curr_pxl_range[0], -300.0f, 50.0f, "%.2f dB") ||
-                ImGui::InputFloat("Min##input", &griddata.curr_pxl_range[0], -300.0f, 50.0f, "%.2f dB"))
+                ImGui::InputFloat("Min##input", &griddata.curr_pxl_range[0], -300.0f, 50.0f, "%.2f"))
                 grid_update = true;
             if (ImGui::SliderFloat("Max##slider", &griddata.curr_pxl_range[1], -299.0f, 50.0f, "%.2f dB") ||
-                ImGui::InputFloat("Max##input", &griddata.curr_pxl_range[1], -299.0f, 50.0f, "%.2f dB"))
+                ImGui::InputFloat("Max##input", &griddata.curr_pxl_range[1], -299.0f, 50.0f, "%.2f"))
                 grid_update = true;
 
             // Ensure minval is always less than maxval
@@ -949,6 +949,72 @@ namespace graphics
             {
                 griddata.curr_pxl_range[0] = griddata.curr_pxl_range[1] - 1.0f;
             }
+
+
+            if (ImGui::CollapsingHeader("Transmitter Control"))
+            {
+                for (auto i = 0; i < curr.size(); ++i)
+                {
+                    if (ImGui::CollapsingHeader(tx_header[i].c_str()));
+                    {
+                        /* position mechanism for each transmitter */
+                        ImGui::Text("Placement");
+                        auto& position = griddata.txdata[i].location;
+
+                        if (ImGui::SliderInt(tx_x_slider[i].c_str(), &position.x, 0, grid_cols - 1, "%d meters") || // unsigned long -> int?
+                            ImGui::InputInt(tx_x_inp[i].c_str(), &position.x, 0, grid_cols - 1))
+                        {
+                            curr[i].location.x = position.x - grid_tx_offsets[i].x;
+                            griddata.txdata[i].setPosition();
+                            grid_update = true;
+                        }
+
+                        if (ImGui::SliderInt(tx_y_slider[i].c_str(), &position.y, 0, grid_rows - 1, "%d meters") ||
+                            ImGui::InputInt(tx_y_inp[i].c_str(), &position.y, 0, grid_rows - 1))
+                        {
+                            curr[i].location.y = position.y - grid_tx_offsets[i].y;
+                            griddata.txdata[i].setPosition();
+                            grid_update = true;
+                        }
+
+                        /* antenna-power mechanism for each transmitter */
+                        ImGui::Text("Antenna Power");
+
+                        float power = curr[i].settings.power;
+
+                        if (ImGui::SliderFloat(tx_power_slider[i].c_str(), &power, -30, +30.0, "%.2f dBm") ||
+                            ImGui::InputFloat(tx_power_inp[i].c_str(), &power, -30.0, +30.0, "%.2f"))
+                        {
+                            curr[i].settings.power = power;
+                            grid_update = true;
+                        }
+
+
+                        /* antenna-power mechanism for each transmitter */
+                        ImGui::Text("Antenna Direction");
+
+                        float theta_c = curr[i].settings.theta_c;
+
+                        if (ImGui::SliderAngle (tx_dir_slider[i].c_str(), &theta_c, -30, +30.0, "%.2f rads") ||
+                            ImGui::InputFloat(tx_dir_inp[i].c_str(), &theta_c, -30.0, +30.0, "%.2f"))
+                        {
+                            curr[i].settings.theta_c = theta_c;
+                            grid_update = true;
+
+                        }
+
+                        ImGui::Text("Scan Angle");
+
+                        float scan_angle_alpha = curr[i].settings.alpha;
+
+                        if (ImGui::SliderAngle(tx_scan_slider[i].c_str(), &scan_angle_alpha, -30, +30.0, "%.2f rads") ||
+                            ImGui::InputFloat(tx_scan_inp[i].c_str(), &scan_angle_alpha, -30.0, +30.0, "%.2f"))
+                        {
+                            curr[i].settings.alpha = scan_angle_alpha;
+                            grid_update = true;
+                        }
+                    }
+                }
 
             if (grid_update)
             {
