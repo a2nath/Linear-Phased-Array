@@ -565,13 +565,15 @@ namespace graphics
 
         std::vector<std::string> tx_header, tx_x_slider, tx_x_inp, tx_y_slider, tx_y_inp, tx_power_slider, tx_power_inp, tx_dir_slider, tx_dir_inp, tx_scan_slider, tx_scan_inp;
         std::vector<Coordinates<int>> grid_tx_offsets;
+        std::vector<float> power_dBm(init.size());
 
         for (auto i = 0; i < init.size(); ++i)
         {
+
+            grid_tx_offsets.emplace_back(griddata.txdata[i].location.x - init[i].location.x, \
+                                        griddata.txdata[i].location.y - init[i].location.y);
+
             auto sidx = str(i);
-
-            grid_tx_offsets.emplace_back(griddata.txdata[i].location.x - init[i].location.x, griddata.txdata[i].location.y - init[i].location.y);
-
             tx_header.emplace_back("TX " + sidx);
             tx_x_slider.emplace_back("X##slider" + sidx);
             tx_x_inp.emplace_back("X##input" + sidx);
@@ -583,6 +585,8 @@ namespace graphics
             tx_dir_inp.emplace_back("Direction##input" + sidx);
             tx_scan_slider.emplace_back("Scan Angle##slider" + sidx);
             tx_scan_inp.emplace_back("Scan Angle##input" + sidx);
+
+            power_dBm[i] = cached::watt2dBm(init[i].settings.power);
         }
 
         curr = init;
@@ -668,7 +672,8 @@ namespace graphics
                                 tx_dragging = &tx;
 
                                 auto& id = tx_dragging->id;
-                                prev[id].location = { (unsigned)tx_dragging->location.x - grid_tx_offsets[id].x, (unsigned)tx_dragging->location.y - grid_tx_offsets[id].y };
+                                prev[id].location = { (unsigned)tx_dragging->location.x - grid_tx_offsets[id].x, \
+                                                    (unsigned)tx_dragging->location.y - grid_tx_offsets[id].y };
 
                                 sync.render_tx_id = tx_dragging->id;
                                 break;
@@ -943,9 +948,11 @@ namespace graphics
                 if (ImGui::SliderFloat("Low##slider", &griddata.curr_thresholds[0], 0.0f, 1.0f, "%.2f") ||
                     ImGui::InputFloat("Low##input", &griddata.curr_thresholds[0], 0.1f, 1.0f, "%.2f"))
                     sync.render_tx_id = render_tx_id;
+
                 if (ImGui::SliderFloat("Mid##slider", &griddata.curr_thresholds[1], 0.0f, 1.0f, "%.2f") ||
                     ImGui::InputFloat("Mid##input", &griddata.curr_thresholds[1], 0.1f, 1.0f, "%.2f"))
                     sync.render_tx_id = render_tx_id;
+
                 if (ImGui::SliderFloat("High##slider", &griddata.curr_thresholds[2], 0.0f, 1.0f, "%.2f") ||
                     ImGui::InputFloat("High##input", &griddata.curr_thresholds[2], 0.1f, 1.0f, "%.2f"))
                     sync.render_tx_id = render_tx_id;
@@ -967,6 +974,7 @@ namespace graphics
                 if (ImGui::SliderFloat("Min##slider", &griddata.curr_pxl_range[0], -300.0f, 50.0f, "%.2f dB") ||
                     ImGui::InputFloat("Min##input", &griddata.curr_pxl_range[0], -300.0f, 50.0f, "%.2f"))
                     sync.render_tx_id = render_tx_id;
+
                 if (ImGui::SliderFloat("Max##slider", &griddata.curr_pxl_range[1], -299.0f, 50.0f, "%.2f dB") ||
                     ImGui::InputFloat("Max##input", &griddata.curr_pxl_range[1], -299.0f, 50.0f, "%.2f"))
                     sync.render_tx_id = render_tx_id;
@@ -978,12 +986,11 @@ namespace graphics
                 }
             }
 
-
             if (ImGui::CollapsingHeader("Transmitter Control", ImGuiTreeNodeFlags_DefaultOpen))
             {
                 for (auto i = 0; i < curr.size(); ++i)
                 {
-                    if (ImGui::CollapsingHeader(tx_header[i].c_str()));
+                    if (ImGui::CollapsingHeader(tx_header[i].c_str(), ImGuiTreeNodeFlags_DefaultOpen))
                     {
                         /* position mechanism for each transmitter */
                         ImGui::Text("Placement");
@@ -1008,37 +1015,35 @@ namespace graphics
                         /* antenna-power mechanism for each transmitter */
                         ImGui::Text("Antenna Power");
 
-                        float power = curr[i].settings.power;
-
-                        if (ImGui::SliderFloat(tx_power_slider[i].c_str(), &power, -30, +30.0, "%.2f dBm") ||
-                            ImGui::InputFloat(tx_power_inp[i].c_str(), &power, -30.0, +30.0, "%.2f"))
+                        if (ImGui::SliderFloat(tx_power_slider[i].c_str(), &power_dBm[i], -30.0f, +30.0f, "%.2f dBm"))
                         {
-                            curr[i].settings.power = power;
+                            curr[i].settings.power = cached::dBm2watt(power_dBm[i]);
                             sync.emplace_state(curr[i]);
                         }
-
+                        ImGui::SameLine();
+                        if (ImGui::InputFloat(tx_power_inp[i].c_str(), &power_dBm[i], -30.0f, +30.0f, "%.2f"))
+                        {
+                            curr[i].settings.power = cached::dBm2watt(power_dBm[i]);
+                            sync.emplace_state(curr[i]);
+                        }
 
                         /* antenna-power mechanism for each transmitter */
                         ImGui::Text("Antenna Direction");
 
-                        float theta_c = curr[i].settings.theta_c;
-
-                        if (ImGui::SliderAngle(tx_dir_slider[i].c_str(), &theta_c, -30, +30.0, "%.2f rads") ||
-                            ImGui::InputFloat(tx_dir_inp[i].c_str(), &theta_c, -30.0, +30.0, "%.2f"))
+                        if (ImGui::SliderAngle (tx_dir_slider[i].c_str(), &curr[i].settings.theta_c, 0.0f, 359.9f, "%.2f deg") ||
+                            ImGui::InputFloat(tx_dir_inp[i].c_str(), &curr[i].settings.theta_c, 0.0f, 359.9f, "%.2f"))
                         {
-                            curr[i].settings.theta_c = theta_c;
+                            /* draw the placement direction indicators for each tower */
+                            griddata.tx_lines(M_PIl / 2 - curr[i].settings.theta_c, griddata.txdata[i]);
                             sync.emplace_state(curr[i]);
-
                         }
 
+                        /* antenna-scan angle for each transmitter */
                         ImGui::Text("Scan Angle");
 
-                        float scan_angle_alpha = curr[i].settings.alpha;
-
-                        if (ImGui::SliderAngle(tx_scan_slider[i].c_str(), &scan_angle_alpha, -30, +30.0, "%.2f rads") ||
-                            ImGui::InputFloat(tx_scan_inp[i].c_str(), &scan_angle_alpha, -30.0, +30.0, "%.2f"))
+                        if (ImGui::SliderAngle(tx_scan_slider[i].c_str(), &curr[i].settings.alpha, -90.0, +90.0, "%.2f deg") ||
+                            ImGui::InputFloat(tx_scan_inp[i].c_str(), &curr[i].settings.alpha, -90.0, +90.0, "%.2f"))
                         {
-                            curr[i].settings.alpha = scan_angle_alpha;
                             sync.emplace_state(curr[i]);
                         }
                     }

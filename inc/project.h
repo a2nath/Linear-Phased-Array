@@ -414,7 +414,12 @@ struct GraphicsHelper
 		}
 	}
 
-	GraphicsHelper(const size_t num_transmitters, const size_t num_receivers, const unsigned& pixel_rows, const unsigned& pixel_cols, Logger& ilogger)
+	GraphicsHelper(const size_t num_transmitters,
+		const size_t num_receivers,
+		const unsigned& pixel_rows,
+		const unsigned& pixel_cols,
+		Logger& ilogger,
+		const bool& debug = false)
 		:
 		num_tx(num_transmitters),
 		num_rx(num_receivers),
@@ -743,12 +748,13 @@ public:
 		scan_angle_range(args.scan_angle_range),
 		antenna_spacing(args.antenna_spacing),
 		antenna_dims(args.antenna_dims),
-		visuals(args.base_station_count, args.mobile_station_count, args.field_size[0], args.field_size[1], ilogger),
+		visuals(args.base_station_count, args.mobile_station_count,
+			args.field_size[0], args.field_size[1], ilogger),
 		bs_tx_requested_power_watts(args.tx_powerlist().data),
 		bs_requested_scan_alpha_rad(args.tx_alphalist().data),
 		ms2bs_requested_bindings(args.ms_id_selections.binding_data)
 	{
-		setup(double_v(args.mobile_station_count, cached::log2lin(args.gain_gtrx)),
+		setup(double_v(mobile_station_count, cached::log2lin(args.gain_gtrx)),
 			cached::log2lin(getThermalSystemNoise(bandwidth, args.system_noise)));
 
 		if (!args.nogui)
