@@ -564,7 +564,7 @@ namespace graphics
         HeatGrid griddata(grid_cols, grid_rows, min_color_span, max_color_span, window_size, init_rx_locations, init);
 
         std::vector<std::string> tx_header, tx_x_slider, tx_x_inp, tx_y_slider, tx_y_inp, tx_power_slider, tx_power_inp, tx_dir_slider, tx_dir_inp, tx_scan_slider, tx_scan_inp;
-        vector<Coordinates<int>> grid_tx_offsets;
+        std::vector<Coordinates<int>> grid_tx_offsets;
 
         for (auto i = 0; i < init.size(); ++i)
         {
@@ -643,11 +643,11 @@ namespace graphics
                 }
                 case sf::Event::MouseWheelScrolled:
                 {
-                    if (event.mouseWheelScroll.delta - mouse_delta_thresh > 0)
+                    if (event.mouseWheelScroll.delta - mouse_delta_thresh > 0 && !ImGui::IsWindowHovered())
                     {
                         zoom_in(window, view, zoomLevel, zoom_change_factor);
                     }
-                    else if (event.mouseWheelScroll.delta - mouse_delta_thresh < 0)
+                    else if (event.mouseWheelScroll.delta - mouse_delta_thresh < 0 && !ImGui::IsWindowHovered())
                     {
                         zoom_out(window, view, zoomLevel, zoom_change_factor);
                     }
@@ -877,6 +877,8 @@ namespace graphics
             ImGui::SFML::Update(window, delta_clock.restart());
             ImGui::Begin("Control Panel");
 
+            if (ImGui::CollapsingHeader("Map Control", ImGuiTreeNodeFlags_DefaultOpen))
+            {
             if (ImGui::Button("Zoom In"))
             {
                 zoom_in(window, view, zoomLevel, zoom_change_factor);
@@ -931,7 +933,10 @@ namespace graphics
 
                     sync.render_tx_id = render_tx_id;
             }
+			}
 
+            if (ImGui::CollapsingHeader("Heatmap Control", ImGuiTreeNodeFlags_DefaultOpen))
+            {
             /* Signal Threshold Sliders */
             ImGui::Text("Signal Threshold Control");
 
@@ -971,9 +976,10 @@ namespace graphics
             {
                 griddata.curr_pxl_range[0] = griddata.curr_pxl_range[1] - 1.0f;
             }
+			}
 
 
-            if (ImGui::CollapsingHeader("Transmitter Control"))
+            if (ImGui::CollapsingHeader("Transmitter Control", ImGuiTreeNodeFlags_DefaultOpen))
             {
                 for (auto i = 0; i < curr.size(); ++i)
                 {
