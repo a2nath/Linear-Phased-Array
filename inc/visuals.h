@@ -879,104 +879,104 @@ namespace graphics
 
             if (ImGui::CollapsingHeader("Map Control", ImGuiTreeNodeFlags_DefaultOpen))
             {
-            if (ImGui::Button("Zoom In"))
-            {
-                zoom_in(window, view, zoomLevel, zoom_change_factor);
-            }
-            else if (ImGui::Button("Zoom Out"))
-            {
-                zoom_out(window, view, zoomLevel, zoom_change_factor);
-            }
-            else if (ImGui::Button("Reset View"))
-            {
-                zoomLevel = 1.0f;  // Reset zoom level
-                window.setView(window.getDefaultView());
-            }
-            else if (ImGui::Button("Left"))
-            {
-                moved_offset = { 0 + pan_adj_factor, 0 };
-                pan_window(window, view, curr_position, moved_offset);
-                griddata.update_panning(moved_offset);
-            }
-            else if (ImGui::Button("Up"))
-            {
-                moved_offset = { 0, 0 + pan_adj_factor };
-                pan_window(window, view, curr_position, moved_offset);
-                griddata.update_panning(moved_offset);
-
-            }
-            else if (ImGui::Button("Right"))
-            {
-                moved_offset = { -pan_adj_factor, 0 };
-                pan_window(window, view, curr_position, moved_offset);
-                griddata.update_panning(moved_offset);
-
-            }
-            else if (ImGui::Button("Down"))
-            {
-                moved_offset = { 0, 0 - pan_adj_factor };
-                pan_window(window, view, curr_position, moved_offset);
-                griddata.update_panning(moved_offset);
-            }
-            else if (ImGui::Button("Debug"))
-            {
-                if (griddata.debug_mode == false)
+                if (ImGui::Button("Zoom In"))
                 {
-                    ptr_live_data = &raw_cow_data;
-                    griddata.debug_mode = true;
+                    zoom_in(window, view, zoomLevel, zoom_change_factor);
                 }
-                else
+                else if (ImGui::Button("Zoom Out"))
                 {
-                    ptr_live_data = &mrg_cow_data;
-                    griddata.debug_mode = false;
+                    zoom_out(window, view, zoomLevel, zoom_change_factor);
                 }
+                else if (ImGui::Button("Reset View"))
+                {
+                    zoomLevel = 1.0f;  // Reset zoom level
+                    window.setView(window.getDefaultView());
+                }
+                else if (ImGui::Button("Left"))
+                {
+                    moved_offset = { 0 + pan_adj_factor, 0 };
+                    pan_window(window, view, curr_position, moved_offset);
+                    griddata.update_panning(moved_offset);
+                }
+                else if (ImGui::Button("Up"))
+                {
+                    moved_offset = { 0, 0 + pan_adj_factor };
+                    pan_window(window, view, curr_position, moved_offset);
+                    griddata.update_panning(moved_offset);
+
+                }
+                else if (ImGui::Button("Right"))
+                {
+                    moved_offset = { -pan_adj_factor, 0 };
+                    pan_window(window, view, curr_position, moved_offset);
+                    griddata.update_panning(moved_offset);
+
+                }
+                else if (ImGui::Button("Down"))
+                {
+                    moved_offset = { 0, 0 - pan_adj_factor };
+                    pan_window(window, view, curr_position, moved_offset);
+                    griddata.update_panning(moved_offset);
+                }
+                else if (ImGui::Button("Debug"))
+                {
+                    if (griddata.debug_mode == false)
+                    {
+                        ptr_live_data = &raw_cow_data;
+                        griddata.debug_mode = true;
+                    }
+                    else
+                    {
+                        ptr_live_data = &mrg_cow_data;
+                        griddata.debug_mode = false;
+                    }
 
                     sync.render_tx_id = render_tx_id;
+                }
             }
-			}
 
             if (ImGui::CollapsingHeader("Heatmap Control", ImGuiTreeNodeFlags_DefaultOpen))
             {
-            /* Signal Threshold Sliders */
-            ImGui::Text("Signal Threshold Control");
+                /* Signal Threshold Sliders */
+                ImGui::Text("Signal Threshold Control");
 
-            if (ImGui::SliderFloat("Low##slider", &griddata.curr_thresholds[0], 0.0f, 1.0f, "%.2f") ||
-                ImGui::InputFloat("Low##input", &griddata.curr_thresholds[0], 0.1f, 1.0f, "%.2f"))
-				sync.render_tx_id = render_tx_id;
-            if (ImGui::SliderFloat("Mid##slider", &griddata.curr_thresholds[1], 0.0f, 1.0f, "%.2f") ||
-                ImGui::InputFloat("Mid##input", &griddata.curr_thresholds[1], 0.1f, 1.0f, "%.2f"))
-				sync.render_tx_id = render_tx_id;
-            if (ImGui::SliderFloat("High##slider", &griddata.curr_thresholds[2], 0.0f, 1.0f,"%.2f") ||
-                ImGui::InputFloat("High##input", &griddata.curr_thresholds[2], 0.1f, 1.0f, "%.2f"))
-				sync.render_tx_id = render_tx_id;
-
-
-            // Ensure thresholds are in the correct order
-            if (griddata.curr_thresholds[0] > griddata.curr_thresholds[1])
-                std::swap(griddata.curr_thresholds[0], griddata.curr_thresholds[1]);
-
-            if (griddata.curr_thresholds[1] > griddata.curr_thresholds[2])
-                std::swap(griddata.curr_thresholds[1], griddata.curr_thresholds[2]);
-
-            if (griddata.curr_thresholds[0] > griddata.curr_thresholds[1])
-                std::swap(griddata.curr_thresholds[0], griddata.curr_thresholds[1]);
+                if (ImGui::SliderFloat("Low##slider", &griddata.curr_thresholds[0], 0.0f, 1.0f, "%.2f") ||
+                    ImGui::InputFloat("Low##input", &griddata.curr_thresholds[0], 0.1f, 1.0f, "%.2f"))
+                    sync.render_tx_id = render_tx_id;
+                if (ImGui::SliderFloat("Mid##slider", &griddata.curr_thresholds[1], 0.0f, 1.0f, "%.2f") ||
+                    ImGui::InputFloat("Mid##input", &griddata.curr_thresholds[1], 0.1f, 1.0f, "%.2f"))
+                    sync.render_tx_id = render_tx_id;
+                if (ImGui::SliderFloat("High##slider", &griddata.curr_thresholds[2], 0.0f, 1.0f, "%.2f") ||
+                    ImGui::InputFloat("High##input", &griddata.curr_thresholds[2], 0.1f, 1.0f, "%.2f"))
+                    sync.render_tx_id = render_tx_id;
 
 
-            /* Add sliders for minand max values */
-            ImGui::Text("Signal Min and Max");
-            if (ImGui::SliderFloat("Min##slider", &griddata.curr_pxl_range[0], -300.0f, 50.0f, "%.2f dB") ||
-                ImGui::InputFloat("Min##input", &griddata.curr_pxl_range[0], -300.0f, 50.0f, "%.2f"))
-				sync.render_tx_id = render_tx_id;
-            if (ImGui::SliderFloat("Max##slider", &griddata.curr_pxl_range[1], -299.0f, 50.0f, "%.2f dB") ||
-                ImGui::InputFloat("Max##input", &griddata.curr_pxl_range[1], -299.0f, 50.0f, "%.2f"))
-				sync.render_tx_id = render_tx_id;
+                // Ensure thresholds are in the correct order
+                if (griddata.curr_thresholds[0] > griddata.curr_thresholds[1])
+                    std::swap(griddata.curr_thresholds[0], griddata.curr_thresholds[1]);
 
-            // Ensure minval is always less than maxval
-            if (griddata.curr_pxl_range[0] >= griddata.curr_pxl_range[1])
-            {
-                griddata.curr_pxl_range[0] = griddata.curr_pxl_range[1] - 1.0f;
+                if (griddata.curr_thresholds[1] > griddata.curr_thresholds[2])
+                    std::swap(griddata.curr_thresholds[1], griddata.curr_thresholds[2]);
+
+                if (griddata.curr_thresholds[0] > griddata.curr_thresholds[1])
+                    std::swap(griddata.curr_thresholds[0], griddata.curr_thresholds[1]);
+
+
+                /* Add sliders for minand max values */
+                ImGui::Text("Signal Min and Max");
+                if (ImGui::SliderFloat("Min##slider", &griddata.curr_pxl_range[0], -300.0f, 50.0f, "%.2f dB") ||
+                    ImGui::InputFloat("Min##input", &griddata.curr_pxl_range[0], -300.0f, 50.0f, "%.2f"))
+                    sync.render_tx_id = render_tx_id;
+                if (ImGui::SliderFloat("Max##slider", &griddata.curr_pxl_range[1], -299.0f, 50.0f, "%.2f dB") ||
+                    ImGui::InputFloat("Max##input", &griddata.curr_pxl_range[1], -299.0f, 50.0f, "%.2f"))
+                    sync.render_tx_id = render_tx_id;
+
+                // Ensure minval is always less than maxval
+                if (griddata.curr_pxl_range[0] >= griddata.curr_pxl_range[1])
+                {
+                    griddata.curr_pxl_range[0] = griddata.curr_pxl_range[1] - 1.0f;
+                }
             }
-			}
 
 
             if (ImGui::CollapsingHeader("Transmitter Control", ImGuiTreeNodeFlags_DefaultOpen))
