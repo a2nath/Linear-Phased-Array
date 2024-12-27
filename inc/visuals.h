@@ -519,7 +519,7 @@ namespace graphics
     int render(
         Logger& logger,
         const placement_v& init_rx_locations,
-        const vector<State>& tx_states,
+        const state_v& tx_states,
         const std::vector<double_v>& raw_cow_data,
         const std::vector<double_v>& mrg_cow_data,
         const unsigned& grid_rows,
@@ -558,10 +558,8 @@ namespace graphics
 
         /* set the states, current (working variable), previous (for undo), init (for reset) */
         auto& init = tx_states;
-        vector<State> curr, prev;
+        state_v curr, prev;
         txvertex* tx_dragging = nullptr;
-
-        bool grid_update = true;
 
         /* heat data contains vertices too */
         HeatGrid griddata(grid_cols, grid_rows, min_color_span, max_color_span, window_size, init_rx_locations, init);
@@ -595,6 +593,7 @@ namespace graphics
 
         /* init the heatmap to display heat from TX id */
         const std::vector<std::vector<double>>* ptr_live_data = &mrg_cow_data;
+        sync.render_tx_id = render_tx_id;
 
 #ifdef CONTROLS
         ImGui::SFML::Init(window);
@@ -604,7 +603,7 @@ namespace graphics
             {
                 while (is_rendering)
                 {
-                    std::unique_lock<std::mutex> lock(graphics::finished_mutex);  // Lock the mutex
+                    std::unique_lock<std::mutex> lock(graphics::graphics_data_mutex);  // Lock the mutex
                     graphics::consig.wait(lock, [&]()
                         {
                             return sync.render_tx_id >= 0 || !is_rendering;
@@ -667,6 +666,7 @@ namespace graphics
                                 auto& id = tx_dragging->id;
                                 prev[id].location = { (unsigned)tx_dragging->location.x - grid_tx_offsets[id].x, (unsigned)tx_dragging->location.y - grid_tx_offsets[id].y };
 
+                                sync.render_tx_id = tx_dragging->id;
                                 break;
                             }
                         }
@@ -695,7 +695,7 @@ namespace graphics
                         if (tx_dragging)
                         {
                             /* mouse release causes heat update */
-                            grid_update = true;
+                            sync.render_tx_id = tx_dragging->id;
                             tx_dragging = nullptr;
                         }
                         break;
@@ -723,7 +723,7 @@ namespace graphics
                         curr[id].location = { new_loc.x - grid_tx_offsets[id].x, new_loc.y - grid_tx_offsets[id].y };
                         tx_dragging->setPosition(event.mouseMove.x, event.mouseMove.y);
 
-                        grid_update = true;
+                        sync.emplace_state(curr[id]);
                     }
 
                     if (panning)
@@ -755,10 +755,12 @@ namespace graphics
                                 griddata.txdata[tx.tx_idx].setPosition(\
                                     tx.location.x + grid_tx_offsets[tx.tx_idx].x, \
                                     tx.location.y + grid_tx_offsets[tx.tx_idx].y);
+
+								sync.emplace_state(tx);
                             }
 
+                            /* undo the color thresholds */
                             griddata.undo();
-                            grid_update = true;
                         }
                         break;
                     }
@@ -777,7 +779,7 @@ namespace graphics
                                 griddata.debug_mode = false;
                             }
 
-                            grid_update = true;
+                            sync.render_tx_id = render_tx_id;
                         }
                         break;
                     }
@@ -796,11 +798,13 @@ namespace graphics
                                 griddata.txdata[tx.tx_idx].setPosition(\
                                     tx.location.x + grid_tx_offsets[tx.tx_idx].x, \
                                     tx.location.y + grid_tx_offsets[tx.tx_idx].y);
+
+								sync.emplace_state(tx);
                             }
+
                         }
 
                         griddata.reset();
-                        grid_update = true;
 
                         window.setView(view);
                         break;
@@ -808,7 +812,7 @@ namespace graphics
                     case sf::Keyboard::Scan::Tab:
                     {
                         render_tx_id = (render_tx_id + 1) % tx_count;
-                        grid_update = true;
+                        sync.render_tx_id = render_tx_id;
                         break;
                     }
                     case sf::Keyboard::Scan::Left:
@@ -904,7 +908,7 @@ namespace graphics
                     griddata.debug_mode = false;
                 }
 
-                grid_update = true;
+                    sync.render_tx_id = render_tx_id;
             }
 
             /* Signal Threshold Sliders */
@@ -912,13 +916,13 @@ namespace graphics
 
             if (ImGui::SliderFloat("Low##slider", &griddata.curr_thresholds[0], 0.0f, 1.0f, "%.2f") ||
                 ImGui::InputFloat("Low##input", &griddata.curr_thresholds[0], 0.1f, 1.0f, "%.2f"))
-                grid_update = true;
+				sync.render_tx_id = render_tx_id;
             if (ImGui::SliderFloat("Mid##slider", &griddata.curr_thresholds[1], 0.0f, 1.0f, "%.2f") ||
                 ImGui::InputFloat("Mid##input", &griddata.curr_thresholds[1], 0.1f, 1.0f, "%.2f"))
-                grid_update = true;
+				sync.render_tx_id = render_tx_id;
             if (ImGui::SliderFloat("High##slider", &griddata.curr_thresholds[2], 0.0f, 1.0f,"%.2f") ||
                 ImGui::InputFloat("High##input", &griddata.curr_thresholds[2], 0.1f, 1.0f, "%.2f"))
-                grid_update = true;
+				sync.render_tx_id = render_tx_id;
 
 
             // Ensure thresholds are in the correct order
@@ -936,10 +940,10 @@ namespace graphics
             ImGui::Text("Signal Min and Max");
             if (ImGui::SliderFloat("Min##slider", &griddata.curr_pxl_range[0], -300.0f, 50.0f, "%.2f dB") ||
                 ImGui::InputFloat("Min##input", &griddata.curr_pxl_range[0], -300.0f, 50.0f, "%.2f"))
-                grid_update = true;
+				sync.render_tx_id = render_tx_id;
             if (ImGui::SliderFloat("Max##slider", &griddata.curr_pxl_range[1], -299.0f, 50.0f, "%.2f dB") ||
                 ImGui::InputFloat("Max##input", &griddata.curr_pxl_range[1], -299.0f, 50.0f, "%.2f"))
-                grid_update = true;
+				sync.render_tx_id = render_tx_id;
 
             // Ensure minval is always less than maxval
             if (griddata.curr_pxl_range[0] >= griddata.curr_pxl_range[1])
@@ -963,7 +967,7 @@ namespace graphics
                         {
                             curr[i].location.x = position.x - grid_tx_offsets[i].x;
                             griddata.txdata[i].setPosition();
-                            grid_update = true;
+                            sync.emplace_state(curr[i]);
                         }
 
                         if (ImGui::SliderInt(tx_y_slider[i].c_str(), &position.y, 0, grid_rows - 1, "%d meters") ||
@@ -971,7 +975,7 @@ namespace graphics
                         {
                             curr[i].location.y = position.y - grid_tx_offsets[i].y;
                             griddata.txdata[i].setPosition();
-                            grid_update = true;
+                            sync.emplace_state(curr[i]);
                         }
 
                         /* antenna-power mechanism for each transmitter */
@@ -983,7 +987,7 @@ namespace graphics
                             ImGui::InputFloat(tx_power_inp[i].c_str(), &power, -30.0, +30.0, "%.2f"))
                         {
                             curr[i].settings.power = power;
-                            grid_update = true;
+                            sync.emplace_state(curr[i]);
                         }
 
 
@@ -996,7 +1000,7 @@ namespace graphics
                             ImGui::InputFloat(tx_dir_inp[i].c_str(), &theta_c, -30.0, +30.0, "%.2f"))
                         {
                             curr[i].settings.theta_c = theta_c;
-                            grid_update = true;
+                            sync.emplace_state(curr[i]);
 
                         }
 
@@ -1008,17 +1012,15 @@ namespace graphics
                             ImGui::InputFloat(tx_scan_inp[i].c_str(), &scan_angle_alpha, -30.0, +30.0, "%.2f"))
                         {
                             curr[i].settings.alpha = scan_angle_alpha;
-                            grid_update = true;
+                            sync.emplace_state(curr[i]);
                         }
                     }
                 }
             }
 
-            if (grid_update)
+            if (sync.got_updates(render_tx_id))
             {
-                sync.render_tx_id = render_tx_id;
-                consig.notify_one();
-                grid_update = false;
+                consig.notify_one(); // either have [render_tx_id] set or [compute_tx_id] set, not both
             }
 
             ImGui::End();
@@ -1070,7 +1072,7 @@ namespace graphics
     void capture_plot(
         Logger& logger,
         const string& filename,
-        const vector<State>& tx_states,
+        const state_v& tx_states,
         const placement_v& rx_locations,
         double_v& raw_cow_data,
         const unsigned& grid_rows,
@@ -1087,9 +1089,7 @@ namespace graphics
         {
             renderTexture.clear();
 
-			auto& curr = tx_states;
-            HeatGrid griddata(grid_cols, grid_rows, min_color_span, max_color_span, renderTexture.getSize(), rx_locations, curr);
-
+            HeatGrid griddata(grid_cols, grid_rows, min_color_span, max_color_span, renderTexture.getSize(), rx_locations, tx_states);
 
             /* draw the grid */
             griddata.update_heat(raw_cow_data);

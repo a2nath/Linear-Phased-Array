@@ -55,6 +55,7 @@ std::string str(const T& input, int precision = std::numeric_limits<T>::digits10
 template<class U, class V = U> using Pair = std::pair<U, V>;
 using unsigned_v = std::vector<unsigned>;
 using double_v = std::vector<double>;
+using float_v = std::vector<float>;
 
 inline std::string timestamp() {
 	// Get the current time as a time_point
@@ -205,7 +206,7 @@ namespace cached
 {
 	template<class U, class V> using Cache = std::unordered_map<U, V>;
 	template<class U> using HashSet        = std::unordered_set<U>;
-	extern Cache<double, double> cache_sin, cache_dbm2w, cache_w2dBm, cache_db2lin, cache_lin2dB, cache_pow;
+	extern Cache<double, double> cache_sin, cache_dBm2w, cache_w2dBm, cache_db2lin, cache_lin2dB, cache_pow;
 
 	inline double deg2rad(const double& deg)
 	{
@@ -266,11 +267,11 @@ namespace cached
 
 	inline double dBm2watt(double dBm)
 	{
-		auto ite = cache_dbm2w.find(dBm);
-		if (ite == cache_dbm2w.end())
+		auto ite = cache_dBm2w.find(dBm);
+		if (ite == cache_dBm2w.end())
 		{
 			double answer = log2lin(dBm - 30);
-			cache_dbm2w.emplace(dBm, answer);
+			cache_dBm2w.emplace(dBm, answer);
 			return answer;
 		}
 
@@ -514,8 +515,8 @@ struct Settings
 
 namespace graphics
 {
-	extern std::mutex queue_mutex;          // Mutex to protect the shared queue
-	extern std::mutex finished_mutex;
+	extern std::mutex compute_sim_mutex;          // Mutex to protect the shared queue
+	extern std::mutex render_mutex;
 	extern std::mutex graphics_data_mutex;
 	extern std::condition_variable consig;      // Condition variable to signal the consumer thread
 	extern Dimensions<unsigned> render_space;
@@ -562,71 +563,28 @@ namespace graphics
 		std::queue<State*> mainq;
 		std::vector<std::queue<State*>> pending;
 
-
-		auto& front()
+		inline void emplace_state(State& state)
 		{
-			std::lock_guard<std::mutex> lock(queue_mutex);  // Lock the mutex
+			std::lock_guard<std::mutex> lock(graphics::graphics_data_mutex);  // Lock the mutex
+			mainq.emplace(&state);
 
-			auto state = *mainq.front();
-			State new_state;
-
-			/* is this in the pending references */
-			while (pending[state.tx_idx].front() != &state)
-			{
-				mainq.pop();
-
-				if (mainq.size())
-				{
-					state = *mainq.front();
-				}
-				else
-				{
-					state = new_state;
-				}
-			}
-
-			/* the newest valid request for that tx */
-			return state;
+			compute_tx_id = 1;
 		}
 
-		void pop()
+		inline void emplace_resize(const unsigned& width, const unsigned& height, const int& def_render_id)
 		{
-			std::lock_guard<std::mutex> lock(queue_mutex);  // Lock the mutex
-
-			if (mainq.size())
+			def_render_tx_id = def_render_id;
+			if (width != render_space.x || height != render_space.y)
 			{
-				auto& state = *mainq.front();
-				pending[state.tx_idx].pop();
-				mainq.pop();
-
-				std::unique_lock<std::mutex> lock(graphics::finished_mutex);
-				render_tx_id = state.tx_idx;
-
-				consig.notify_one();
+				resize_event = true;
 			}
 		}
 
-		void emplace(const int& idx, const double& power, const double& dir, const double& scan, const long& x, const long& y)
+
+		bool got_updates(const int& def_render_id)
 		{
-			std::lock_guard<std::mutex> lock(queue_mutex);  // Lock the mutex
-
-			/* queue the latest request from tx */
-			mainq.emplace(idx, power, dir, scan, x, y);
-
-			pending[idx].emplace(&mainq.back());
-
-
-			/* just process the newest request from other tx */
-			for (int i = 0; i < pending.size(); ++i)
-			{
-				if (i != idx && pending[i].size() > 1)
-				{
-					std::queue<State*> empty_queue({ pending[i].back() });
-					std::swap(pending[i], empty_queue);
-				}
-			}
-
-			consig.notify_one();  // Notify the consumer thread that there's new data
+			def_render_tx_id = def_render_id;
+			return compute_tx_id > 0 || render_tx_id >= 0 || resize_event;
 		}
 
 		DataSync(int num_tx) : compute_tx_id(0), render_tx_id(-1), def_render_tx_id(-1), \
@@ -635,3 +593,4 @@ namespace graphics
 		}
 	};
 }
+using state_v = std::vector<graphics::State>;

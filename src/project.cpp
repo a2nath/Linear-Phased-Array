@@ -16,14 +16,17 @@
 using namespace std;
 
 /* define externs */
-std::mutex graphics::queue_mutex;
-std::mutex graphics::finished_mutex;
+std::mutex graphics::compute_sim_mutex;
+std::mutex graphics::render_mutex;
+std::mutex graphics::graphics_data_mutex;
 std::condition_variable graphics::consig;
 Dimensions<unsigned> graphics::render_space;
 
 cached::Cache<double, double> cached::cache_sin;
-cached::Cache<double, double> cached::cache_dbm2w;
+cached::Cache<double, double> cached::cache_dBm2w;
+cached::Cache<double, double> cached::cache_w2dBm;
 cached::Cache<double, double> cached::cache_db2lin;
+cached::Cache<double, double> cached::cache_lin2dB;
 cached::Cache<double, double> cached::cache_pow;
 
 
