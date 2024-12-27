@@ -113,17 +113,17 @@ struct GraphicsHelper
 	}
 
 	/* GUI setup for all cows together, inputs: rows, cols */
-	void setup_tx(cow_v& cows, const double_v& antenna_power_list, const double_v& scan_alpha_list)
+	void setup_tx(cow_v& cows, const double_v& lut_power_list, const double_v& lut_scan_angle_list)
 	{
 		spdlog::info("Setting up " + str(cows.size()) + " transmitters in visuals");
 
-		for (unsigned c = 0; c < cows.size(); ++c)
+		for (auto& cow : cows)
 		{
-			spdlog::info("Setting up TX " + str(cows[c].sid()) + " for GUI");
+			spdlog::info("Setting up TX " + str(cow.sid()) + " for GUI");
 
-			cows[c].init_gui(rows, cols);
-			cows[c].update(antenna_power_list[c], scan_alpha_list[c]);
-			cows[c].heatmap(raw_cow_data[c]);
+			cow.init_gui(rows, cols);
+			cow.update(lut_power_list[cow.sid()], lut_scan_angle_list[cow.sid()]);
+			cow.heatmap(raw_cow_data[cow.sid()], debug_steps);
 		}
 
 		setup_cow_heat(); // <-- this is needed to convert to logarithmic, or else all graphs will be plain yellow
@@ -755,7 +755,7 @@ public:
 		ms2bs_requested_bindings(args.ms_id_selections.binding_data)
 	{
 		setup(double_v(mobile_station_count, cached::log2lin(args.gain_gtrx)),
-			cached::log2lin(getThermalSystemNoise(bandwidth, args.system_noise)));
+			dBm2watt(getThermalSystemNoise(bandwidth, args.system_noise)));
 
 		if (!args.nogui)
 		{
