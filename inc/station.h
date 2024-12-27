@@ -23,7 +23,7 @@ class Cow
 	Dimensions<unsigned> init_gui_grid_size, prev_gui_grid_size, gui_grid_size;
 
 	const std::vector<Placements>& ms_station_loc;
-	const unsigned& ms_stations;
+	const unsigned ms_stations;
 
 	/* each cell is a mobile station */
 	std::vector<Polar_Coordinates> polar_data;
@@ -64,7 +64,7 @@ public:
 	}
 
 	/* only gui calls this so "update" both [sim] and [gui] components */
-	void update(const Settings& new_settings, const Placements& new_location, const unsigned& x, const unsigned& y)
+	void update(const Settings& new_settings, const Placements& new_location)
 	{
 		auto& current = antenna.settings();
 		bool ant_reinit = false;
@@ -118,7 +118,7 @@ public:
 			ant_reinit = true;
 		}
 
-		if (gui_grid_size.x != x || gui_grid_size.y != y)
+		if (gui_grid_size.x != prev_gui_grid_size.x || gui_grid_size.y != prev_gui_grid_size.y)
 		{
 			gui_reinit = true;
 		}
@@ -131,7 +131,7 @@ public:
 
 		if (ant_reinit || gui_reinit)
 		{
-			set_polar_data(x, y, location, gui_polar_data);
+			set_polar_data(gui_grid_size.x, gui_grid_size.y, location, gui_polar_data);
 			antenna.graphics_init(gui_polar_data);
 		}
 
@@ -143,6 +143,7 @@ public:
 		if (ant_reinit || ant_update || gui_reinit)
 		{
 			antenna.graphics_update();
+			prev_gui_grid_size = gui_grid_size;
 		}
 	}
 
@@ -153,7 +154,7 @@ public:
 		current.alpha = alpha;
 		current.power = power;
 
-		update(current, location, gui_grid_size.x, gui_grid_size.y);
+		update(current, location);
 	}
 
 	/* set Gtx power in linear */
@@ -297,7 +298,7 @@ public:
 	}
 
 	/* return state is [true]=init done, else [false]=not called "init_gui" yet */
-	const bool gui_state() const
+	const bool gui_ready() const
 	{
 		return gui_polar_data.size() > 0;
 	}

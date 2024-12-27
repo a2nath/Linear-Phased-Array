@@ -104,7 +104,7 @@ struct GraphicsHelper
 			") cols(" + str(cols));
 			//") placement(" + str(placement) + ")");
 
-		cow.update(state.settings, state.location, renderarea.x, renderarea.y);
+		cow.update(state.settings, state.location);
 
 		/* update cow heat data */
 		cow.heatmap(raw_cow_data[cow.sid()]);
@@ -371,7 +371,7 @@ struct GraphicsHelper
 			return;
 		}
 
-		if (txlist[0].gui_state() == false)
+		if (txlist[0].gui_ready() == false)
 		{
 			setup_tx(txlist, bs_txpower, scan_alpha_list);
 
