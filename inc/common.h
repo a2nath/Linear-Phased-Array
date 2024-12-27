@@ -205,7 +205,7 @@ namespace cached
 {
 	template<class U, class V> using Cache = std::unordered_map<U, V>;
 	template<class U> using HashSet        = std::unordered_set<U>;
-	extern Cache<double, double> cache_sin, cache_dbm2w, cache_db2lin, cache_pow;
+	extern Cache<double, double> cache_sin, cache_dbm2w, cache_w2dBm, cache_db2lin, cache_lin2dB, cache_pow;
 
 	inline double deg2rad(const double& deg)
 	{
@@ -225,6 +225,19 @@ namespace cached
 		return ite->second;
 	}
 
+	inline double lin2dB(const double& lin)
+	{
+		auto ite = cache_lin2dB.find(lin);
+		if (ite == cache_lin2dB.end())
+		{
+			double answer = 10 * log10(lin);
+			cache_lin2dB.emplace(lin, answer);
+			return answer;
+		}
+
+		return ite->second;
+	}
+
 	inline double log2lin(double log)
 	{
 		auto ite = cache_db2lin.find(log);
@@ -232,6 +245,19 @@ namespace cached
 		{
 			double answer = pow(10, log / 10);
 			cache_db2lin.emplace(log, answer);
+			return answer;
+		}
+
+		return ite->second;
+	}
+
+	inline double watt2dBm(const float& watt)
+	{
+		auto ite = cache_w2dBm.find(watt);
+		if (ite == cache_w2dBm.end())
+		{
+			double answer = lin2dB(watt) + 30;
+			cache_w2dBm.emplace(watt, answer);
 			return answer;
 		}
 
@@ -314,6 +340,11 @@ struct Dimensions
 		x = ref;
 		y = ref;
 		return *this;
+	}
+
+	const std::string str() const
+	{
+		return "{ x:" + std::to_string(x) + ",y:" + std::to_string(y) + " }";
 	}
 
 	bool operator==(const Dimensions& ref)
@@ -436,6 +467,20 @@ struct Settings
 		return !operator==(settings1, settings2);
 	}
 
+
+	const std::string str() const
+	{
+		return "{ power:" + std::to_string(power)
+			+ ", alpha:" + std::to_string(alpha)
+			+ ", panel_count:" + std::to_string(panel_count)
+			+ ", lambda:" + std::to_string(lambda)
+			+ ", spacing:" + std::to_string(spacing)
+			+ ", spacing:" + std::to_string(spacing)
+			+ ", theta_c:" + std::to_string(theta_c)
+			+ ", antenna_dims:" + antenna_dims.str() + " }";
+	}
+
+
 	Settings(const double& ipower,
 		const double& ialpha,
 		const unsigned& ipanel_count,
@@ -471,6 +516,7 @@ namespace graphics
 {
 	extern std::mutex queue_mutex;          // Mutex to protect the shared queue
 	extern std::mutex finished_mutex;
+	extern std::mutex graphics_data_mutex;
 	extern std::condition_variable consig;      // Condition variable to signal the consumer thread
 	extern Dimensions<unsigned> render_space;
 
@@ -487,20 +533,17 @@ namespace graphics
 			return *this;
 		}
 
-		State(const int& id, const double& power, const double& dir, const double& scan, const unsigned long& x, const unsigned long& y)
-			:
-			tx_idx(id),
-			location({ x, y })
+		friend bool operator==(const State& a, const State& b)
 		{
-			settings.alpha = scan;
-			settings.lambda = -1; // TODO
-			settings.panel_count = 0; // TODO:unsigned
-			settings.power = power;
-			settings.spacing = -1; // TODO
-			settings.theta_c = dir;
+			return true;// a.settings == b.settings && a.location == b.location;
 		}
 
-		State() : tx_idx(-1)
+		friend bool operator!=(const State& a, const State& b)
+		{
+			return a.settings != b.settings || a.location != b.location;
+		}
+
+		State(const unsigned& id = -1) : tx_idx(id)
 		{
 			settings.alpha = -1;
 			settings.lambda = -1; // TODO
@@ -514,9 +557,9 @@ namespace graphics
 	struct DataSync
 	{
 		/* signal the tx number */
-		int finished;
-		long size;
-		std::queue<State> mainq;
+		int compute_tx_id, render_tx_id, def_render_tx_id;
+		bool resize_event;
+		std::queue<State*> mainq;
 		std::vector<std::queue<State*>> pending;
 
 
@@ -524,7 +567,7 @@ namespace graphics
 		{
 			std::lock_guard<std::mutex> lock(queue_mutex);  // Lock the mutex
 
-			auto state = mainq.front();
+			auto state = *mainq.front();
 			State new_state;
 
 			/* is this in the pending references */
@@ -534,7 +577,7 @@ namespace graphics
 
 				if (mainq.size())
 				{
-					state = mainq.front();
+					state = *mainq.front();
 				}
 				else
 				{
@@ -552,14 +595,12 @@ namespace graphics
 
 			if (mainq.size())
 			{
-				auto& state = mainq.front();
+				auto& state = *mainq.front();
 				pending[state.tx_idx].pop();
 				mainq.pop();
 
 				std::unique_lock<std::mutex> lock(graphics::finished_mutex);
-				finished = state.tx_idx;
-
-				size--;
+				render_tx_id = state.tx_idx;
 
 				consig.notify_one();
 			}
@@ -585,14 +626,12 @@ namespace graphics
 				}
 			}
 
-			size++;
-
 			consig.notify_one();  // Notify the consumer thread that there's new data
 		}
 
-		DataSync(int num_tx) : size(0), finished(-1), pending(num_tx)
+		DataSync(int num_tx) : compute_tx_id(0), render_tx_id(-1), def_render_tx_id(-1), \
+			resize_event(false), pending(num_tx)
 		{
-
 		}
 	};
 }

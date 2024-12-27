@@ -25,10 +25,11 @@ struct GraphicsHelper
 	unsigned rows;
 	unsigned cols;
 	graphics::DataSync       sync;
-	std::vector<double_v>    raw_cow_data; // raw split data that shows signal strength of each COW
-	std::vector<double_v>    raw_mrg_data; // merged data that shows SINR based on strongest signal
-	std::vector<size_t>  cow_sigids;   // max signal ids for each pixel, to be used with merged
-	std::vector<size_t>      rx_ids_p_idx; // rx index to find the SINR value from the mrg lut data
+	std::vector<double_v> raw_cow_data; // raw split data that shows signal strength of each COW
+	std::vector<double_v> raw_mrg_data; // merged data that shows SINR based on strongest signal
+	std::vector<size_t>   cow_sigids;   // max signal ids for each pixel, to be used with merged
+	std::vector<size_t>   rx_ids_p_idx; // rx index to find the SINR value from the mrg lut data
+	std::vector <graphics::State> init_states;
 
 	std::queue<std::future<int>> thread_queue;
 	bool is_rendering;
@@ -40,14 +41,15 @@ struct GraphicsHelper
 		noise_factor = inoise_factor;
 	}
 
-	void init_late()
+	void rqst_secondary_mem()
 	{
 		raw_mrg_data.assign(num_tx, double_v(rows * cols)); // resize the part with merged cow heat data (2.)
 		cow_sigids.resize(rows * cols);   // cow id to use as signal source (3.) - this can be a local variable
 		rx_ids_p_idx.resize(num_rx);      // indices inside the merged cow heat data to represent receiver SINR. See (2.) (4.)
 	}
 
-	/* debug with logger */
+	/* WARNING: if you're building the mrg-data model, do that first
+	before converting debug model to dBm (all interference and thermal noise are ADDITIVE sources of noise!) */
 	void setup_cow_heat(unsigned cow_idx)
 	{
 		size_t index = 0;
@@ -65,6 +67,14 @@ struct GraphicsHelper
 		}
 	}
 
+	void setup_cow_heat()
+	{
+		for (auto idx = 0; idx < num_tx; ++idx)
+		{
+			setup_cow_heat(idx);
+		}
+	}
+
 	/* GUI setup for simulation changes */
 	void update_tx(Cow& cow, const graphics::State& state)
 	{
@@ -75,7 +85,7 @@ struct GraphicsHelper
 			rows = renderarea.y;
 			cols = renderarea.x;
 			raw_cow_data.resize(raw_cow_data.size(), double_v(rows * cols));
-			init_late();
+			rqst_secondary_mem();
 		}
 
 		spdlog::info("Reconfigering #" + str(cow.sid()) + " transmitter in visuals: \
@@ -119,7 +129,7 @@ struct GraphicsHelper
 					std::unique_lock<std::mutex> lock(graphics::queue_mutex);  // Lock the mutex
 					graphics::consig.wait(lock, [&]()
 						{
-							return sync.size > 0 || !is_rendering;
+							return sync.compute_tx_id > 0 || !is_rendering;
 						}
 					);  // Wait for new data or rendering to stop
 
@@ -128,7 +138,7 @@ struct GraphicsHelper
 					auto state = sync.front();
 					if (state.tx_idx >= 0)
 					{
-						update_tx(cows[state.tx_idx], state.ant_dir, state.ant_angle, state.ant_power, state.row, state.col, state.location);
+						update_tx(cows[state.tx_idx], state);
 						sync.pop();
 					}
 				}
@@ -154,6 +164,38 @@ struct GraphicsHelper
 	}
 
 
+	void generate_interference_data(const cow_v& txlist)
+	{
+		size_t pxl_idx = 0;
+		double num = 0;
+
+		for (unsigned row = 0; row < rows; ++row)
+		{
+			for (unsigned col = 0; col < cols; ++col)
+			{
+				for (auto& cow : txlist)
+				{
+					auto& cow_idx = cow.sid();
+
+					const double& signal = raw_cow_data[cow_idx][pxl_idx];
+					double interference = 0;
+
+					for (unsigned c = (cow_idx + 1) % txlist.size(); c != cow_idx;)
+					{
+						interference += raw_cow_data[c][pxl_idx];
+						c = (c + 1) % txlist.size();
+					}
+
+					raw_mrg_data[cow_idx][pxl_idx] = lin2dB(signal / (interference + noise_factor));
+				}
+
+				++pxl_idx;
+			}
+		}
+
+		setup_cow_heat(); // <-- this is need to convert to logarithmic, or else all graphs will be plain yellow
+	}
+
 	void debug_mode_max_signal_map(cow_v& txlist,
 		const placement_v& mobile_stations_loc)
 	{
@@ -164,7 +206,7 @@ struct GraphicsHelper
 		//}
 		//
 		//
-		//init_late();
+		//rqst_secondary_mem();
 		//
 		//setup_tx(txlist, bs_txpower, scan_alpha_list, rows, cols);
 		//
@@ -245,9 +287,9 @@ struct GraphicsHelper
 	void render(cow_v& txlist,
 		const placement_v& mobile_stations_loc,
 		const placement_v& base_stations_loc,
-		const double_v& bs_txpower,
+		const double_v& lut_power_list,
 		const double_v& bs_theta_c,
-		const double_v& scan_alpha_list)
+		const double_v& lut_scan_angle_list)
 	{
 		if (raw_cow_data[0].empty())
 		{
@@ -255,58 +297,16 @@ struct GraphicsHelper
 			return;
 		}
 
-		init_late();
+		/* fill the TX indivisual simulation data across the entire grid */
+		setup_tx(txlist, lut_power_list, lut_scan_angle_list, rows, cols);
 
-		setup_tx(txlist, bs_txpower, scan_alpha_list, rows, cols);
+		/* fill the overall interference simulation across the entire grid */
+		rqst_secondary_mem();
+		generate_interference_data(txlist);
 
-		//std::pair<double, double> sep_channels = compute_colorspan(raw_cow_data);
-
-
-		/*auto& signal_table = raw_cow_data;
-		auto& strongest_sigid = cow_sigids;*/
-
-
-		size_t px_index = 0;
-		double num = 0;
-		auto& indices_ms = rx_ids_p_idx;
-
-		std::unordered_map<size_t, std::unordered_set<size_t>> rx_coords_hash_lut;
-
-		for (auto& loc : mobile_stations_loc)
+		for (auto& tx : txlist)
 		{
-			rx_coords_hash_lut[loc.x].emplace(loc.y);
-		}
-
-		for (size_t row = 0; row < rows; ++row)
-		{
-			for (size_t col = 0; col < cols; ++col)
-			{
-				for (auto& cow : txlist)
-				{
-					auto& cow_idx = cow.sid();
-					const double& signal = raw_cow_data[cow_idx][px_index];
-
-					double interference = 0;
-
-					for (unsigned c = (cow_idx + 1) % txlist.size(); c != cow_idx;)
-					{
-						interference += raw_cow_data[c][px_index];
-						c = (c + 1) % txlist.size();
-					}
-
-
-					// it is not one of the RX station coordinates
-					if (!(rx_coords_hash_lut.find(row) == rx_coords_hash_lut.end() || rx_coords_hash_lut[row].find(col) == rx_coords_hash_lut[row].end()))
-					{
-						//indices_ms[rx_index++] = px_index;
-						continue; // dont show the pixe under the rx themselves
-					}
-
-					num = lin2dB(signal / (interference + noise_factor));
-					raw_mrg_data[cow_idx][px_index] = num;
-				}
-				++px_index;
-			}
+			init_states.emplace_back(tx.get_state());
 		}
 
 		Pair<float> min_and_max = compute_colorspan(raw_cow_data);
@@ -314,12 +314,9 @@ struct GraphicsHelper
 
 		graphics::render(logger,
 			mobile_stations_loc,
-			base_stations_loc,
+			init_states,
 			raw_cow_data,
 			raw_mrg_data,
-			bs_txpower,
-			bs_theta_c,
-			scan_alpha_list,
 			rows,
 			cols,
 			min_and_max.first,
@@ -344,6 +341,15 @@ struct GraphicsHelper
 		if (txlist[0].gui_state() == false)
 		{
 			setup_tx(txlist, bs_txpower, scan_alpha_list, rows, cols);
+
+			rqst_secondary_mem();
+			generate_interference_data(txlist);
+
+			init_states.clear();
+			for (auto& tx : txlist)
+			{
+				init_states.emplace_back(tx.get_state());
+			}
 		}
 		// else capture plot as it is
 
@@ -351,17 +357,13 @@ struct GraphicsHelper
 		Pair<double> min_and_max = compute_colorspan(raw_mrg_data);// , min_and_max.first, min_and_max.second);
 
 
-
 		for (auto& cow : txlist)
 		{
 			graphics::capture_plot(logger,
 				"transmitter_dbg_" + str(cow.sid()) + ".png",
+				init_states,
 				mobile_stations_loc,
-				base_stations_loc,
 				raw_cow_data[cow.sid()],
-				bs_txpower,
-				bs_theta_c,
-				scan_alpha_list,
 				rows,
 				cols,
 				min_and_max_d.first,
@@ -369,12 +371,9 @@ struct GraphicsHelper
 
 			graphics::capture_plot(logger,
 				"transmitter_int_" + str(cow.sid()) + ".png",
+				init_states,
 				mobile_stations_loc,
-				base_stations_loc,
 				raw_mrg_data[cow.sid()],
-				bs_txpower,
-				bs_theta_c,
-				scan_alpha_list,
 				rows,
 				cols,
 				min_and_max.first,
@@ -656,14 +655,14 @@ public:
 	void gui_run()
 	{
 #ifdef GRAPHICS
-		double_v antenna_power, scan_angles;
+		double_v init_ant_power, init_scan_angle;
 
-		simhelper->get_lut_tx_power(antenna_power);
-		simhelper->get_lut_scan_angle(scan_angles);
+		simhelper->get_lut_tx_power(init_ant_power);
+		simhelper->get_lut_scan_angle(init_scan_angle);
 
 		auto queue_thread = visuals.gui_change_detect(cows);
 
-		visuals.render(cows, mobile_stations_loc, base_stations_loc, antenna_power, bs_theta_c, scan_angles);
+		visuals.render(cows, mobile_stations_loc, base_stations_loc, init_ant_power, bs_theta_c, init_scan_angle);
 
 		queue_thread.join();
 #endif

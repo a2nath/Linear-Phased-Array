@@ -203,16 +203,16 @@ public:
 	}
 
 	/* set the signal level in Watts (linear): second parameter */
-	inline void g_signal_power(const size_t& pidx, double& signal_level_lin) const
+	inline void g_signal_power(const size_t& pidx, double& signal_level_lin, const bool& debug) const
 	{
 		signal_level_lin = antenna.gcoeff(pidx) * antenna.get_power();
 	}
 
-	void heatmap(std::vector<double>& output)
+	void heatmap(std::vector<double>& output, const bool& debug = false)
 	{
 		for (size_t pixel_idx = 0; pixel_idx < gui_polar_data.size(); ++pixel_idx)
 		{
-			g_signal_power(pixel_idx, output[pixel_idx]);
+			g_signal_power(pixel_idx, output[pixel_idx], debug);
 		}
 	}
 
@@ -247,6 +247,11 @@ public:
 		}
 	}
 
+	const std::string str() const
+	{
+		return "cow:" + std::to_string(station_id) + ", location:" + location.str() + ", antenna settings:" + antenna.settings().str();
+	}
+
 	/* checks if [antenna.graphics_init] and [antenna.numerical_init] is needed based on what changed */
 	void reset_gui(
 		const unsigned& rows,
@@ -279,6 +284,16 @@ public:
 
 		prev_location = location;
 		prev_gui_grid_size = gui_grid_size;
+	}
+
+	/* state of the TX station */
+	graphics::State get_state()
+	{
+		graphics::State state(station_id);
+		state.settings = antenna.settings();
+		state.location = location;
+
+		return state;
 	}
 
 	/* return state is [true]=init done, else [false]=not called "init_gui" yet */
