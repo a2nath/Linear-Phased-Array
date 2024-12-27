@@ -449,7 +449,7 @@ namespace network_package
 
 		void reset()
 		{
-			prev = current;
+			prev = initial;
 			current = initial;
 		}
 
