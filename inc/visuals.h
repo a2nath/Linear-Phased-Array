@@ -257,6 +257,95 @@ namespace graphics
             render_space = shape;
         }
 
+        void tx_lines(const float& dir_radians, txvertex& txvertex_obj)
+        {
+            txvertex_obj.indicators.clear();
+
+            auto& position = txvertex_obj.location;
+            auto& idx = txvertex_obj.id;
+
+            sf::VertexArray line11(sf::Lines, 2), line12(sf::Lines, 2);
+
+            // Calculate the endpoint of the first line based on direction
+            float length = 30.0f / 2;  // Halfway across the rectangle
+
+            // Line 1's position: calculated from the antenna direction
+            float line1StartX = position.x + 5.0f; // Middle of the rectangle;
+            float line1StartY = position.y + 5.0f;
+
+            // Endpoint using the direction to calculate the x and y offset
+            float line11EndX = line1StartX - length * cos(dir_radians);
+            float line11EndY = line1StartY - length * sin(dir_radians);
+
+            float line12EndX = line1StartX + length * cos(dir_radians);
+            float line12EndY = line1StartY + length * sin(dir_radians);
+
+            line11[0].position = sf::Vector2f(line1StartX, line1StartY);
+            line11[1].position = sf::Vector2f(line11EndX, line11EndY);
+
+            line11[0].color = sf::Color::White;
+            line11[1].color = sf::Color::White;
+
+            line12[0].position = sf::Vector2f(line1StartX, line1StartY);
+            line12[1].position = sf::Vector2f(line12EndX, line12EndY);
+
+            line12[0].color = sf::Color::White;
+            line12[1].color = sf::Color::White;
+
+            txvertex_obj.indicators.emplace_back(line11);
+            txvertex_obj.indicators.emplace_back(line12);
+
+            /* draw the scan angle of the linear phase array */
+            sf::VertexArray arrow(sf::Lines, 6);
+
+            // Calculate the beam angle relative to the first line (add scan_angle to direction)
+            float beam_angle_radians = txstates[idx].settings.theta_c + txstates[idx].settings.alpha;
+
+            float beam_length = 25.0f;  // Length of the signal beam line
+
+            // Line 1's position: calculated from the antenna direction
+            float line2StartX = position.x + 5.0f; // Middle of the rectangle
+            float line2StartY = position.y + 5.0f;
+
+            // Calculate the endpoint of the second line based on beam angle
+            float line2EndX = line2StartX + beam_length * cos(beam_angle_radians);
+            float line2EndY = line2StartY - beam_length * sin(beam_angle_radians);
+
+            arrow[0].position = sf::Vector2f(line2StartX, line2StartY);  // Starts from the end of the first line
+            arrow[1].position = sf::Vector2f(line2EndX, line2EndY);
+
+            arrow[0].color = sf::Color::Blue;
+            arrow[1].color = sf::Color::Blue;
+
+            // Arrowhead parameters
+            float arrowhead_angle = M_PIl / 6;  // 30 degrees for the arrowhead angle
+            float arrowhead_length = 5.0f;    // Length of the arrowhead sides
+
+            // Calculate the points for the arrowhead
+            float left_head_angle = beam_angle_radians + arrowhead_angle;   // Angle for the left arrowhead
+            float right_head_angle = beam_angle_radians - arrowhead_angle;  // Angle for the right arrowhead
+
+            float left_head_x = line2EndX - arrowhead_length * cos(left_head_angle);
+            float left_head_y = line2EndY + arrowhead_length * sin(left_head_angle);
+
+            float right_head_x = line2EndX - arrowhead_length * cos(right_head_angle);
+            float right_head_y = line2EndY + arrowhead_length * sin(right_head_angle);
+
+            // Draw the left side of the arrowhead
+            arrow[2].position = sf::Vector2f(line2EndX, line2EndY);  // From the beam endpoint
+            arrow[3].position = sf::Vector2f(left_head_x, left_head_y);  // To the left side of the arrowhead
+            arrow[2].color = sf::Color::Blue;
+            arrow[3].color = sf::Color::Blue;
+
+            // Draw the right side of the arrowhead
+            arrow[4].position = sf::Vector2f(line2EndX, line2EndY);  // From the beam endpoint
+            arrow[5].position = sf::Vector2f(right_head_x, right_head_y);  // To the right side of the arrowhead
+            arrow[4].color = sf::Color::Blue;
+            arrow[5].color = sf::Color::Blue;
+
+            txvertex_obj.indicators.emplace_back(arrow);
+        }
+
         void init(const sf::Vector2u& ibounds_lower, const sf::Vector2u& ibounds_upper)
         {
             bounds_lower = ibounds_lower;
@@ -297,90 +386,7 @@ namespace graphics
 
 
                 /* draw the placement direction indicators for each tower */
-
-
-                auto& position = txdata.back().location;
-                sf::VertexArray line11(sf::Lines, 2), line12(sf::Lines, 2);
-
-                // Calculate the endpoint of the first line based on direction
-                float length = 30.0f / 2;  // Halfway across the rectangle
-
-                // Line 1's position: calculated from the antenna direction
-                float line1StartX = position.x + 5.0f; // Middle of the rectangle;
-                float line1StartY = position.y + 5.0f;
-
-                // Endpoint using the direction to calculate the x and y offset
-                float line11EndX = line1StartX - length * cos(dir_radians);
-                float line11EndY = line1StartY - length * sin(dir_radians);
-
-                float line12EndX = line1StartX + length * cos(dir_radians);
-                float line12EndY = line1StartY + length * sin(dir_radians);
-
-                line11[0].position = sf::Vector2f(line1StartX, line1StartY);
-                line11[1].position = sf::Vector2f(line11EndX, line11EndY);
-
-                line11[0].color = sf::Color::White;
-                line11[1].color = sf::Color::White;
-
-                line12[0].position = sf::Vector2f(line1StartX, line1StartY);
-                line12[1].position = sf::Vector2f(line12EndX, line12EndY);
-
-                line12[0].color = sf::Color::White;
-                line12[1].color = sf::Color::White;
-
-                txdata.back().indicators.emplace_back(line11);
-                txdata.back().indicators.emplace_back(line12);
-
-                /* draw the scan angle of the linear phase array */
-                sf::VertexArray arrow(sf::Lines, 6);
-
-                // Calculate the beam angle relative to the first line (add scan_angle to direction)
-                float beam_angle_radians = txstates[i].settings.theta_c + txstates[i].settings.alpha;
-
-                float beam_length = 25.0f;  // Length of the signal beam line
-
-
-                  // Line 1's position: calculated from the antenna direction
-                float line2StartX = position.x + 5.0f; // Middle of the rectangle
-                float line2StartY = position.y + 5.0f;
-
-                // Calculate the endpoint of the second line based on beam angle
-                float line2EndX = line2StartX + beam_length * cos(beam_angle_radians);
-                float line2EndY = line2StartY - beam_length * sin(beam_angle_radians);
-
-                arrow[0].position = sf::Vector2f(line2StartX, line2StartY);  // Starts from the end of the first line
-                arrow[1].position = sf::Vector2f(line2EndX, line2EndY);
-
-                arrow[0].color = sf::Color::Blue;
-                arrow[1].color = sf::Color::Blue;
-
-                // Arrowhead parameters
-                float arrowhead_angle = M_PIl / 6;  // 30 degrees for the arrowhead angle
-                float arrowhead_length = 5.0f;    // Length of the arrowhead sides
-
-                // Calculate the points for the arrowhead
-                float left_head_angle = beam_angle_radians + arrowhead_angle;   // Angle for the left arrowhead
-                float right_head_angle = beam_angle_radians - arrowhead_angle;  // Angle for the right arrowhead
-
-                float left_head_x = line2EndX - arrowhead_length * cos(left_head_angle);
-                float left_head_y = line2EndY + arrowhead_length * sin(left_head_angle);
-
-                float right_head_x = line2EndX - arrowhead_length * cos(right_head_angle);
-                float right_head_y = line2EndY + arrowhead_length * sin(right_head_angle);
-
-                // Draw the left side of the arrowhead
-                arrow[2].position = sf::Vector2f(line2EndX, line2EndY);  // From the beam endpoint
-                arrow[3].position = sf::Vector2f(left_head_x, left_head_y);  // To the left side of the arrowhead
-                arrow[2].color = sf::Color::Blue;
-                arrow[3].color = sf::Color::Blue;
-
-                // Draw the right side of the arrowhead
-                arrow[4].position = sf::Vector2f(line2EndX, line2EndY);  // From the beam endpoint
-                arrow[5].position = sf::Vector2f(right_head_x, right_head_y);  // To the right side of the arrowhead
-                arrow[4].color = sf::Color::Blue;
-                arrow[5].color = sf::Color::Blue;
-
-                txdata.back().indicators.emplace_back(arrow);
+                tx_lines(dir_radians, txdata.back());
             }
         }
 
@@ -513,12 +519,9 @@ namespace graphics
     int render(
         Logger& logger,
         const placement_v& init_rx_locations,
-        const placement_v& init_tx_locations,
+        const vector<State>& tx_states,
         const std::vector<double_v>& raw_cow_data,
         const std::vector<double_v>& mrg_cow_data,
-        const double_v& init_ant_txpower,
-        const double_v& init_ant_direction,
-        const double_v& init_ant_scan_angle,
         const unsigned& grid_rows,
         const unsigned& grid_cols,
         const float& min_color_span,
@@ -550,18 +553,12 @@ namespace graphics
         float mouse_delta_thresh = 0.01f;
         float zoom_change_factor = 1.1f;
         long pan_adj_factor = 10;
-        int render_cow_id = 0;
-        size_t tx_count = init_tx_locations.size();
+        int render_tx_id = 0;
+        size_t tx_count = tx_states.size();
 
         /* set the states, current (working variable), previous (for undo), init (for reset) */
-        std::vector<State> curr, prev, init;
-        for (int i = 0; i < tx_count; ++i)
-        {
-            auto& tx_loc = init_tx_locations[i];
-            init.emplace_back(i, init_ant_txpower[i], init_ant_direction[i], init_ant_scan_angle[i], tx_loc.x, tx_loc.y);
-        }
-
-        sf::Vector2f startpos, mouseoffset;
+        auto& init = tx_states;
+        vector<State> curr, prev;
         txvertex* tx_dragging = nullptr;
 
         bool grid_update = true;
@@ -610,14 +607,14 @@ namespace graphics
                     std::unique_lock<std::mutex> lock(graphics::finished_mutex);  // Lock the mutex
                     graphics::consig.wait(lock, [&]()
                         {
-                            return sync.finished >= 0 || !is_rendering;
+                            return sync.render_tx_id >= 0 || !is_rendering;
                         }
                     );
 
                     if (!is_rendering) break;
 
-                    griddata.update_heat((*ptr_live_data)[sync.finished]);
-                    sync.finished = -1;
+                    griddata.update_heat((*ptr_live_data)[sync.render_tx_id]);
+                    sync.render_tx_id = -1;
                 }
             }
         );
@@ -810,7 +807,7 @@ namespace graphics
                     }
                     case sf::Keyboard::Scan::Tab:
                     {
-                        render_cow_id = (render_cow_id + 1) % tx_count;
+                        render_tx_id = (render_tx_id + 1) % tx_count;
                         grid_update = true;
                         break;
                     }
@@ -995,7 +992,7 @@ namespace graphics
 
                         float theta_c = curr[i].settings.theta_c;
 
-                        if (ImGui::SliderAngle (tx_dir_slider[i].c_str(), &theta_c, -30, +30.0, "%.2f rads") ||
+                        if (ImGui::SliderAngle(tx_dir_slider[i].c_str(), &theta_c, -30, +30.0, "%.2f rads") ||
                             ImGui::InputFloat(tx_dir_inp[i].c_str(), &theta_c, -30.0, +30.0, "%.2f"))
                         {
                             curr[i].settings.theta_c = theta_c;
@@ -1015,10 +1012,11 @@ namespace graphics
                         }
                     }
                 }
+            }
 
             if (grid_update)
             {
-                sync.finished = render_cow_id;
+                sync.render_tx_id = render_tx_id;
                 consig.notify_one();
                 grid_update = false;
             }
@@ -1072,12 +1070,9 @@ namespace graphics
     void capture_plot(
         Logger& logger,
         const string& filename,
+        const vector<State>& tx_states,
         const placement_v& rx_locations,
-        const placement_v& tx_locations,
         double_v& raw_cow_data,
-        const double_v& ant_power,
-        const double_v& ant_direction,
-        const double_v& ant_scan_angle,
         const unsigned& grid_rows,
         const unsigned& grid_cols,
         const double& min_color_span,
@@ -1092,12 +1087,7 @@ namespace graphics
         {
             renderTexture.clear();
 
-            vector<State> curr;
-            for (int i = 0; i < tx_locations.size(); ++i)
-            {
-                curr.emplace_back(i, ant_power[i], ant_direction[i], ant_scan_angle[i], tx_locations[i].x, tx_locations[i].y);
-            }
-
+			auto& curr = tx_states;
             HeatGrid griddata(grid_cols, grid_rows, min_color_span, max_color_span, renderTexture.getSize(), rx_locations, curr);
 
 
