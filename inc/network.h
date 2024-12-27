@@ -7,32 +7,32 @@
 
 namespace network_package
 {
-	inline double rad2deg(double rad)
+	inline double rad2deg(const double& rad)
 	{
 		return rad * 180.0 / M_PIl;
 	}
-	inline double deg2rad(double deg)
+	inline double deg2rad(const double& deg)
 	{
 		return deg * M_PIl / 180.0;
 	}
-	inline double log2lin(double log)
+	inline double log2lin(const double& log)
 	{
 		return pow(10, log / 10);
 	}
-	inline double lin2dB(double lin)
+	inline double lin2dB(const double& lin)
 	{
 		return 10 * log10(lin);
 	}
-	inline double dBm2watt(double dBm)
+	inline double dBm2watt(const double& dBm)
 	{
 		return log2lin(dBm - 30);
 	}
-	inline double watt2dBm(double lin)
+	inline double watt2dBm(const double& lin)
 	{
 		return lin2dB(lin) + 30;
 	}
 
-	inline double getLambda(double frequency)
+	inline double getLambda(const double& frequency)
 	{
 		if (frequency > 0)
 		{
@@ -278,16 +278,20 @@ namespace network_package
 		inline void update(Calculations& calculations)
 		{
 			/* update the antenna gain Gtx */
+			//indices_with_inf.clear();
+			//indices_with_z.clear();
+			spdlog::info("Antenna update");
+
 			for (long long idx = 0; idx < calculations.phee_minus_alpha_list.size(); ++idx)
 			{
 				if (calculations.pathloss_list[idx] == 0)
 				{ // this is going to be a inf
-					indices_with_inf.emplace_back(idx);
+					//indices_with_inf.emplace_back(idx);
 					continue;
 				}
 				else if (calculations.gain_RX_grid[idx] == 0)
 				{ // this is going to be a zero
-					indices_with_z.emplace_back(idx);
+					//indices_with_z.emplace_back(idx);
 					continue;
 				}
 
@@ -305,34 +309,34 @@ namespace network_package
 				calculations.hmatrix[idx] = gain_factor_antenna_system / calculations.pathloss_list[idx];
 			}
 
-			for (long i = 0; i < indices_with_inf.size(); ++i)
-			{
-				auto& problem_index = indices_with_inf[i];
+			//for (long i = 0; i < indices_with_inf.size(); ++i)
+			//{
+			//	auto& problem_index = indices_with_inf[i];
 
-				if (0 <= problem_index - 1)
-				{
-					calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index - 1];
-				}
-				else if (problem_index + 1 < calculations.hmatrix.size())
-				{
-					calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index + 1];
-				}
-				// else all of them are infinity
-			}
+			//	if (0 <= problem_index - 1)
+			//	{
+			//		calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index - 1];
+			//	}
+			//	else if (problem_index + 1 < calculations.hmatrix.size())
+			//	{
+			//		calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index + 1];
+			//	}
+			//	// else all of them are infinity
+			//}
+			//
+			//for (long i = 0; i < indices_with_z.size(); ++i)
+			//{
+			//	auto& problem_index = indices_with_z[i];
 
-			for (long i = 0; i < indices_with_z.size(); ++i)
-			{
-				auto& problem_index = indices_with_z[i];
-
-				if (0 <= problem_index - 1)
-				{
-					calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index - 1];
-				}
-				else if (problem_index + 1 < calculations.hmatrix.size())
-				{
-					calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index + 1];
-				}
-			}
+			//	if (0 <= problem_index - 1)
+			//	{
+			//		calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index - 1];
+			//	}
+			//	else if (problem_index + 1 < calculations.hmatrix.size())
+			//	{
+			//		calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index + 1];
+			//	}
+			//}
 		}
 
 		/* for bare-minimum numerical calculations needed at the mobile_stations only */
@@ -367,8 +371,6 @@ namespace network_package
 		/* re-calc the signal outs to handsets only (before calling update!) */
 		inline void init(const std::vector<Polar_Coordinates>& polar_data, Calculations& calculations)
 		{
-			//if (current.theta_c != new_theta_c)
-			//{
 			const double& pioverlambda = M_PIl / current.lambda;
 			const double& phee_temp = 2 * current.spacing * pioverlambda;
 			const double& pl_temp_meters = 4 * pioverlambda;
@@ -415,9 +417,6 @@ namespace network_package
 						//"Possible reasons cos(theta_minus_thetaC):" + str(cos(theta_minus_thetaC)) + " + 1 = zero");
 				}
 			}
-
-			//current.theta_c = new_theta_c;
-		//}
 		}
 
 		/* for GUI simulation in the whole grid */
