@@ -444,12 +444,12 @@ inline Coordinates<double> pol2cart(const Polar_Coordinates& c)
 using antennadim = Dimensions<float>;
 struct Settings
 {
-	double     power; // -30 to +30 dBm, default value is 0
-	double     alpha; // -90 to +90, default value is 91 or 1.58825
+	float     power; // -30 to +30 dBm, default value is 0
+	float     alpha; // -90 to +90, default value is 91 or 1.58825
 	unsigned   panel_count;
-	double     lambda;
-	double     spacing;
-	double     theta_c;
+	float     lambda;
+	float     spacing;
+	float     theta_c;
 	antennadim antenna_dims;
 
 	friend bool operator==(const Settings& settings1, const Settings& settings2)
