@@ -26,7 +26,7 @@ namespace default_t
 	const double tx_power                       = 0.0;   // default power for all base-stations dBm
 	const double scan_angle                     = 0.0;   // default angle for all base-stations degrees
 	const double sinr_limit                     = 24.0;  // SINR limit in dB
-	const std::vector<int> field_size           = { 1000, 1000 };  // SINR limit in dB
+	const std::vector<unsigned> field_size      = { 1000, 1000 };  // size of the render area not including controls etc.
 	const unsigned timeslot                     = 0;     // current timeslot
 	const unsigned timeslots                    = 1  ;   // number of timeslots to consider
 	const std::vector<double> theta_c_radsdir   = { 60.0, 90.0, 120.0 }; // dBm [min max]
@@ -311,7 +311,7 @@ struct MyArgs : public argparse::Args
 	unsigned& mobile_station_count     = kwarg("mobile_stations", "Number of mobile stations in the simulation");
 	unsigned& timeslots                = kwarg("timeslots", "Number of timeslots to carry out the simulation on").set_default(default_t::timeslots);
 	double& sinr_limit_dB              = kwarg("slimit", "SINR limit to consider the configuration as valid to get a good 'slimit' dB signal at the handset").set_default(default_t::sinr_limit);
-	std::vector<int>& field_size       = kwarg("area", "Size of the field to render GUI. Must be compiled with -DGRAPHICS").set_default(default_t::field_size);
+	unsigned_v& field_size             = kwarg("area", "Size of the field to render GUI. Must be compiled with -DGRAPHICS").set_default(default_t::field_size);
 	double_v& bs_theta_c               = kwarg("base_station_theta_c", "Direction antennas are facing").set_default(default_t::theta_c_radsdir);
 	Location_Setup& tx_loc             = kwarg("base_station_location", "Location of base stattions is a list");
 	Location_Setup& rx_loc             = kwarg("mobile_station_location", "Location of mobile stations is a list");

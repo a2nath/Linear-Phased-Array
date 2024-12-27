@@ -52,7 +52,7 @@ struct GraphicsHelper
 	{
 		size_t index = 0;
 
-		vector<int> input;
+		std::vector<int> input;
 		if (txlist.empty())
 		{
 			input.resize(num_tx);
@@ -182,19 +182,19 @@ struct GraphicsHelper
 
 
 	/* returns relative min and max sinr between transmitters */
-	Pair<double> compute_colorspan(const std::vector<std::vector<double>>& heatdata,
-		double double_min = std::numeric_limits<double>::max(),
-		double double_max = std::numeric_limits<double>::lowest())
+	Pair<float> compute_colorspan(const std::vector<std::vector<double>>& heatdata,
+		float float_min = std::numeric_limits<float>::max(),
+		float float_max = std::numeric_limits<float>::lowest())
 	{
 		for (int tx_id = 0; tx_id < heatdata.size(); ++tx_id)
 		{
 			auto [fmin, fmax] = std::minmax_element(heatdata[tx_id].begin(), heatdata[tx_id].end());
 
-			double_min = std::min(*fmin, double_min);
-			double_max = std::max(*fmax, double_max);
+			float_min = std::min((float)*fmin, float_min);
+			float_max = std::max((float)*fmax, float_max);
 		}
 
-		return { double_min, double_max };
+		return { float_min, float_max };
 	}
 
 
@@ -244,7 +244,7 @@ struct GraphicsHelper
 		//
 		//setup_tx(txlist, bs_txpower, scan_alpha_list, rows, cols);
 		//
-		Pair<double> sep_channels = compute_colorspan(raw_cow_data);
+		Pair<float> sep_channels = compute_colorspan(raw_cow_data);
 
 
 		size_t index = 0;
@@ -314,7 +314,7 @@ struct GraphicsHelper
 			}
 		}
 
-		Pair<double> com_channels = compute_colorspan({ raw_cow_data.back() });
+		Pair<float> com_channels = compute_colorspan({ raw_cow_data.back() });
 
 	}
 
@@ -386,8 +386,8 @@ struct GraphicsHelper
 		}
 		// else capture plot as it is
 
-		Pair<double> min_and_max_d = compute_colorspan(raw_cow_data);
-		Pair<double> min_and_max = compute_colorspan(raw_mrg_data);// , min_and_max.first, min_and_max.second);
+		Pair<float> min_and_max_d = compute_colorspan(raw_cow_data);
+		Pair<float> min_and_max = compute_colorspan(raw_mrg_data);// , min_and_max.first, min_and_max.second);
 
 
 		for (auto& cow : txlist)

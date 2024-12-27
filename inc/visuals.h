@@ -380,10 +380,9 @@ namespace graphics
             for (int i = 0; i < txstates.size(); ++i)
             {
                 auto& loc = txstates[i].location;
-                auto dir_radians = M_PIl / 2 - txstates[i].settings.theta_c;
+                float dir_radians = M_PIl / 2 - txstates[i].settings.theta_c;
 
                 txdata.emplace_back(i, Placements{ loc.x + (unsigned)offset_width, unsigned(data_height + offset_height) - loc.y }, sf::Color(90, 90, 90));
-
 
                 /* draw the placement direction indicators for each tower */
                 tx_lines(dir_radians, txdata.back());
