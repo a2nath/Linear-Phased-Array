@@ -30,7 +30,6 @@ struct GraphicsHelper
 	std::vector<size_t>   rx_ids_p_idx; // rx index to find the SINR value from the mrg lut data
 	state_v init_states;
 
-	std::queue<std::future<int>> thread_queue;
 	bool is_rendering;
 	double noise_factor;
 
@@ -49,28 +48,38 @@ struct GraphicsHelper
 
 	/* WARNING: if you're building the mrg-data model, do that first
 	before converting debug model to dBm (all interference and thermal noise are ADDITIVE sources of noise!) */
-	void setup_cow_heat(unsigned cow_idx)
+	void setup_cow_heat(const std::vector<Cow>& txlist = {})
 	{
 		size_t index = 0;
 
-		for (size_t row = 0; row < rows; ++row)
+		vector<int> input;
+		if (txlist.empty())
 		{
-			//logger.write("cow " + str(cow_idx) + '\n');
-
-			for (size_t col = 0; col < cols; ++col)
+			input.resize(num_tx);
+			iota(input.begin(), input.end(), 0);
+		}
+		else
+		{
+			input.clear();
+			for (auto& tx : txlist)
 			{
-				double num = lin2dB(raw_cow_data[cow_idx][index]); // already filled with heat from "setup_tx" now convert
-				raw_cow_data[cow_idx][index] = num;
-				++index;
+				input.emplace_back(tx.sid());
 			}
 		}
-	}
 
-	void setup_cow_heat()
-	{
-		for (auto idx = 0; idx < num_tx; ++idx)
+		for (auto& txid : input)
 		{
-			setup_cow_heat(idx);
+			for (size_t row = 0; row < rows; ++row)
+			{
+				//logger.write("cow " + str(cow_idx) + '\n');
+
+				for (size_t col = 0; col < cols; ++col)
+				{
+					double num = lin2dB(raw_cow_data[txid][index]); // already filled with heat from "setup_tx" now convert
+					raw_cow_data[txid][index] = num;
+					++index;
+				}
+			}
 		}
 	}
 
@@ -100,7 +109,7 @@ struct GraphicsHelper
 		/* update cow heat data */
 		cow.heatmap(raw_cow_data[cow.sid()]);
 
-		setup_cow_heat(cow.sid()); // <-- this is need to convert to logarithmic, or else all graphs will be plain yellow
+		setup_cow_heat({cow}); // <-- this is needed to convert to logarithmic, or else all graphs will be plain yellow
 	}
 
 	/* GUI setup for all cows together, inputs: rows, cols */
@@ -110,13 +119,14 @@ struct GraphicsHelper
 
 		for (unsigned c = 0; c < cows.size(); ++c)
 		{
+			spdlog::info("Setting up TX " + str(cows[c].sid()) + " for GUI");
 
 			cows[c].init_gui(rows, cols);
 			cows[c].update(antenna_power_list[c], scan_alpha_list[c]);
 			cows[c].heatmap(raw_cow_data[c]);
-
-			setup_cow_heat(c); // <-- this is need to convert to logarithmic, or else all graphs will be plain yellow
 		}
+
+		setup_cow_heat(); // <-- this is needed to convert to logarithmic, or else all graphs will be plain yellow
 	}
 
 	std::thread gui_change_detect(cow_v& txlist, graphics::DataSync& sync)
@@ -128,11 +138,27 @@ struct GraphicsHelper
 					std::unique_lock<std::mutex> lock(graphics::graphics_data_mutex);  // Lock the mutex
 					graphics::consig.wait(lock, [&]()
 						{
-							return sync.compute_tx_id > 0 || !is_rendering;
+							return sync.compute_tx_id > 0 || sync.resize_event || !is_rendering;
 						}
 					);  // Wait for new data or rendering to stop
 
 					if (!is_rendering) break;
+
+
+					if (sync.resize_event)
+					{
+						auto& renderarea = graphics::render_space;
+
+						if (rows != renderarea.y || rows != renderarea.x)
+						{
+							rows = renderarea.y;
+							cols = renderarea.x;
+							raw_cow_data.resize(raw_cow_data.size(), double_v(rows * cols));
+							rqst_secondary_mem();
+						}
+
+						sync.resize_event = false;
+					}
 
 					int last_render_id = sync.def_render_tx_id;
 
@@ -201,7 +227,7 @@ struct GraphicsHelper
 			}
 		}
 
-		setup_cow_heat(); // <-- this is need to convert to logarithmic, or else all graphs will be plain yellow
+		setup_cow_heat(); // <-- this is needed to convert to logarithmic, or else all graphs will be plain yellow
 	}
 
 	void debug_mode_max_signal_map(cow_v& txlist,

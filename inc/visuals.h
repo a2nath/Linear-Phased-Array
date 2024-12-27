@@ -573,8 +573,6 @@ namespace graphics
 
             grid_tx_offsets.emplace_back(griddata.txdata[i].location.x - init[i].location.x, griddata.txdata[i].location.y - init[i].location.y);
 
-            //init[i].location = { (unsigned)griddata.txdata[i].location.x, (unsigned)griddata.txdata[i].location.y };
-
             tx_header.emplace_back("TX " + sidx);
             tx_x_slider.emplace_back("X##slider" + sidx);
             tx_x_inp.emplace_back("X##input" + sidx);
@@ -635,6 +633,13 @@ namespace graphics
                 case sf::Event::Closed:
                 {
                     window.close();
+                    break;
+                }
+                case sf::Event::Resized:
+                {
+                    auto new_size = window.getSize();
+                    griddata.resize({ new_size.x, new_size.y });
+                    sync.emplace_resize(new_size.x, new_size.y, render_tx_id);
                     break;
                 }
                 case sf::Event::MouseWheelScrolled:
@@ -748,15 +753,25 @@ namespace graphics
                     {
                         if (event.key.control)
                         {
-                            std::swap(prev, curr);
-
-                            for (auto& tx : curr)
+                            for (int i = 0; i < tx_count; ++i)
                             {
-                                griddata.txdata[tx.tx_idx].setPosition(\
-                                    tx.location.x + grid_tx_offsets[tx.tx_idx].x, \
-                                    tx.location.y + grid_tx_offsets[tx.tx_idx].y);
+                                if (prev[i] != curr[i])
+                                {
+                                    auto& tx = curr[i];
 
-								sync.emplace_state(tx);
+                                    griddata.txdata[tx.tx_idx].setPosition(\
+                                        tx.location.x + grid_tx_offsets[tx.tx_idx].x, \
+                                        tx.location.y + grid_tx_offsets[tx.tx_idx].y);
+
+                                    sync.emplace_state(tx);
+                                }
+
+                                curr[i] = prev[i];
+                            }
+
+                            if (sync.mainq.empty())
+                            {
+                                sync.render_tx_id = render_tx_id;
                             }
 
                             /* undo the color thresholds */
@@ -790,18 +805,25 @@ namespace graphics
 
                         if (event.key.shift) // Ctrl + R - erases all changes
                         {
-                            prev = curr;
-                            curr = init;
-
-                            for (auto& tx : curr)
+                            for (int i = 0; i < curr.size(); ++i)
                             {
-                                griddata.txdata[tx.tx_idx].setPosition(\
-                                    tx.location.x + grid_tx_offsets[tx.tx_idx].x, \
-                                    tx.location.y + grid_tx_offsets[tx.tx_idx].y);
+                                if (init[i] != curr[i])
+                                {
+                                    prev[i] = curr[i];
+                                    curr[i] = init[i];
+                                    auto& tx = curr[i];
 
-								sync.emplace_state(tx);
+                                    griddata.txdata[tx.tx_idx].setPosition(\
+                                        tx.location.x + grid_tx_offsets[tx.tx_idx].x, \
+                                        tx.location.y + grid_tx_offsets[tx.tx_idx].y);
+
+                                    sync.emplace_state(tx);
+                                }
                             }
-
+                        }
+                        else
+                        {
+                            sync.render_tx_id = render_tx_id;
                         }
 
                         griddata.reset();
