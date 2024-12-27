@@ -24,12 +24,11 @@ struct GraphicsHelper
 	unsigned num_tx, num_rx;
 	unsigned rows;
 	unsigned cols;
-	graphics::DataSync       sync;
 	std::vector<double_v> raw_cow_data; // raw split data that shows signal strength of each COW
 	std::vector<double_v> raw_mrg_data; // merged data that shows SINR based on strongest signal
 	std::vector<size_t>   cow_sigids;   // max signal ids for each pixel, to be used with merged
 	std::vector<size_t>   rx_ids_p_idx; // rx index to find the SINR value from the mrg lut data
-	std::vector <graphics::State> init_states;
+	state_v init_states;
 
 	std::queue<std::future<int>> thread_queue;
 	bool is_rendering;
@@ -105,7 +104,7 @@ struct GraphicsHelper
 	}
 
 	/* GUI setup for all cows together, inputs: rows, cols */
-	void setup_tx(cow_v& cows, const double_v& antenna_power_list, const double_v& scan_alpha_list, const size_t& rows, const size_t& cols)
+	void setup_tx(cow_v& cows, const double_v& antenna_power_list, const double_v& scan_alpha_list)
 	{
 		spdlog::info("Setting up " + str(cows.size()) + " transmitters in visuals");
 
@@ -120,13 +119,13 @@ struct GraphicsHelper
 		}
 	}
 
-	std::thread gui_change_detect(cow_v& cows)
+	std::thread gui_change_detect(cow_v& txlist, graphics::DataSync& sync)
 	{
 		return std::thread([&]()
 			{
 				while (is_rendering)
 				{
-					std::unique_lock<std::mutex> lock(graphics::queue_mutex);  // Lock the mutex
+					std::unique_lock<std::mutex> lock(graphics::graphics_data_mutex);  // Lock the mutex
 					graphics::consig.wait(lock, [&]()
 						{
 							return sync.compute_tx_id > 0 || !is_rendering;
@@ -135,12 +134,21 @@ struct GraphicsHelper
 
 					if (!is_rendering) break;
 
-					auto state = sync.front();
-					if (state.tx_idx >= 0)
+					int last_render_id = sync.def_render_tx_id;
+
+					while (sync.mainq.size())
 					{
-						update_tx(cows[state.tx_idx], state);
-						sync.pop();
+						auto& state = *sync.mainq.front();
+						last_render_id = state.tx_idx;
+
+						update_tx(txlist[state.tx_idx], state);
+						generate_interference_data(txlist);
+						sync.mainq.pop();
 					}
+
+					sync.compute_tx_id = 0;
+					sync.render_tx_id = last_render_id;
+					graphics::consig.notify_one();
 				}
 			}
 		);
@@ -285,10 +293,9 @@ struct GraphicsHelper
 	}
 
 	void render(cow_v& txlist,
+		graphics::DataSync& sync,
 		const placement_v& mobile_stations_loc,
-		const placement_v& base_stations_loc,
 		const double_v& lut_power_list,
-		const double_v& bs_theta_c,
 		const double_v& lut_scan_angle_list)
 	{
 		if (raw_cow_data[0].empty())
@@ -298,7 +305,7 @@ struct GraphicsHelper
 		}
 
 		/* fill the TX indivisual simulation data across the entire grid */
-		setup_tx(txlist, lut_power_list, lut_scan_angle_list, rows, cols);
+		setup_tx(txlist, lut_power_list, lut_scan_angle_list);
 
 		/* fill the overall interference simulation across the entire grid */
 		rqst_secondary_mem();
@@ -340,7 +347,7 @@ struct GraphicsHelper
 
 		if (txlist[0].gui_state() == false)
 		{
-			setup_tx(txlist, bs_txpower, scan_alpha_list, rows, cols);
+			setup_tx(txlist, bs_txpower, scan_alpha_list);
 
 			rqst_secondary_mem();
 			generate_interference_data(txlist);
@@ -390,8 +397,7 @@ struct GraphicsHelper
 		is_rendering(true),
 		raw_cow_data(num_tx),
 		raw_mrg_data(num_tx),
-		logger(ilogger),
-		sync(num_transmitters)
+		logger(ilogger)
 	{
 	}
 };
@@ -659,10 +665,11 @@ public:
 
 		simhelper->get_lut_tx_power(init_ant_power);
 		simhelper->get_lut_scan_angle(init_scan_angle);
+		graphics::DataSync sync(cows.size());
 
-		auto queue_thread = visuals.gui_change_detect(cows);
+		auto queue_thread = visuals.gui_change_detect(cows, sync);
 
-		visuals.render(cows, mobile_stations_loc, base_stations_loc, init_ant_power, bs_theta_c, init_scan_angle);
+		visuals.render(cows, sync, mobile_stations_loc, init_ant_power, init_scan_angle);
 
 		queue_thread.join();
 #endif
