@@ -278,20 +278,20 @@ namespace network_package
 		inline void update(Calculations& calculations)
 		{
 			/* update the antenna gain Gtx */
-			//indices_with_inf.clear();
-			//indices_with_z.clear();
 			spdlog::info("Antenna update");
+			indices_with_inf.clear();
+			indices_with_z.clear();
 
 			for (long long idx = 0; idx < calculations.phee_minus_alpha_list.size(); ++idx)
 			{
 				if (calculations.pathloss_list[idx] == 0)
 				{ // this is going to be a inf
-					//indices_with_inf.emplace_back(idx);
+					indices_with_inf.emplace_back(idx);
 					continue;
 				}
 				else if (calculations.gain_RX_grid[idx] == 0)
 				{ // this is going to be a zero
-					//indices_with_z.emplace_back(idx);
+					indices_with_z.emplace_back(idx);
 					continue;
 				}
 
@@ -309,34 +309,34 @@ namespace network_package
 				calculations.hmatrix[idx] = gain_factor_antenna_system / calculations.pathloss_list[idx];
 			}
 
-			//for (long i = 0; i < indices_with_inf.size(); ++i)
-			//{
-			//	auto& problem_index = indices_with_inf[i];
+			for (long i = 0; i < indices_with_inf.size(); ++i)
+			{
+				auto& problem_index = indices_with_inf[i];
 
-			//	if (0 <= problem_index - 1)
-			//	{
-			//		calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index - 1];
-			//	}
-			//	else if (problem_index + 1 < calculations.hmatrix.size())
-			//	{
-			//		calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index + 1];
-			//	}
-			//	// else all of them are infinity
-			//}
-			//
-			//for (long i = 0; i < indices_with_z.size(); ++i)
-			//{
-			//	auto& problem_index = indices_with_z[i];
+				if (0 <= problem_index - 1)
+				{
+					calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index - 1];
+				}
+				else if (problem_index + 1 < calculations.hmatrix.size())
+				{
+					calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index + 1];
+				}
+				// else all of them are infinity
+			}
 
-			//	if (0 <= problem_index - 1)
-			//	{
-			//		calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index - 1];
-			//	}
-			//	else if (problem_index + 1 < calculations.hmatrix.size())
-			//	{
-			//		calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index + 1];
-			//	}
-			//}
+			for (long i = 0; i < indices_with_z.size(); ++i)
+			{
+				auto& problem_index = indices_with_z[i];
+
+				if (0 <= problem_index - 1)
+				{
+					calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index - 1];
+				}
+				else if (problem_index + 1 < calculations.hmatrix.size())
+				{
+					calculations.hmatrix[problem_index] = calculations.hmatrix[problem_index + 1];
+				}
+			}
 		}
 
 		/* for bare-minimum numerical calculations needed at the mobile_stations only */
