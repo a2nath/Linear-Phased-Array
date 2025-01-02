@@ -238,11 +238,19 @@ namespace cached
 {
 	template<class U, class V> using Cache = std::unordered_map<U, V>;
 	template<class U> using HashSet        = std::unordered_set<U>;
-	extern Cache<double, double> cache_sin, cache_dBm2w, cache_w2dBm, cache_db2lin, cache_lin2dB, cache_pow;
+	extern Cache<float, float> cache_sin, cache_dBm2w, cache_w2dBm, cache_db2lin, cache_lin2dB, cache_pow, cache_deg2rad;
 
 	inline double deg2rad(const double& deg)
 	{
-		return deg * M_PIl / 180.0;
+		auto ite = cache_deg2rad.find(deg);
+		if (ite == cache_deg2rad.end())
+		{
+			double answer = deg * M_PIl / 180.0;
+			cache_deg2rad.emplace(deg, answer);
+			return answer;
+		}
+
+		return ite->second;
 	}
 
 	inline double pow_2(const double& base)
