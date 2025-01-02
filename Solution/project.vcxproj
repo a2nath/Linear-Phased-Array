@@ -30,6 +30,7 @@
     <ClInclude Include="..\inc\visuals.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\src\antenna.cpp" />
     <ClCompile Include="..\src\project.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
