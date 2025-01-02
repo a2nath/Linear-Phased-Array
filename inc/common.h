@@ -400,6 +400,10 @@ struct Dimensions
 		return d1.x != d2.x || d1.y != d2.y;
 	}
 
+	bool is_zero() const
+	{
+		return x == 0 || y == 0;
+	}
 
 	Dimensions(const Type& i, const Type& j) : x(i), y(j) {}
 	Dimensions() : x(0), y(0) {}
@@ -444,6 +448,34 @@ struct Polar_Coordinates : private Coordinates<double>
 	}
 	Polar_Coordinates(double i, double j) : Coordinates(i, j), theta(x), hype(y) {}
 	Polar_Coordinates() : Coordinates(), theta(x), hype(y) {}
+};
+
+struct PolarArray
+{
+	Polar_Coordinates* data_ptr;
+	size_t array_size;
+
+	void set(const size_t& size)
+	{
+		if (array_size)
+		{
+			data_ptr = (Polar_Coordinates*)realloc(data_ptr, size * sizeof(Polar_Coordinates));
+		}
+		else
+		{
+			data_ptr = (Polar_Coordinates*)malloc(size * sizeof(Polar_Coordinates));
+		}
+
+		if (data_ptr == NULL)
+		{
+			spdlog::error("Memory allocation failed");
+			throw std::runtime_error("Ask for less memory");
+		}
+
+		array_size = size;
+	}
+
+	PolarArray() : array_size(0), data_ptr(nullptr) {}
 };
 
 inline Polar_Coordinates cart2pol(const double& x, const double& y)
@@ -576,7 +608,7 @@ namespace graphics
 			return a.settings != b.settings || a.location != b.location;
 		}
 
-		State(const unsigned& id = -1) : tx_idx(id)
+		State(const int& id = -1) : tx_idx(id)
 		{
 			settings.alpha = -1;
 			settings.lambda = -1; // TODO
