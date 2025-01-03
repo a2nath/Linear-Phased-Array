@@ -20,7 +20,7 @@ class Cow
 	/* more antenna tracking for gui reset */
 	const Placements& init_location;
 	Placements prev_location, location;
-	Dimensions<unsigned> init_gui_grid_size, prev_gui_grid_size, gui_grid_size;
+	Dimensions<unsigned> init_gui_grid_size, gui_grid_size;
 
 	const std::vector<Placements>& ms_station_loc;
 	const unsigned ms_stations;
@@ -31,32 +31,7 @@ class Cow
 	/* each cell is a gui grid, hence much larger */
 	std::vector<Polar_Coordinates> gui_polar_data;
 
-	/* helps with gui changes and recalculate based on what the exact change */
-	//struct Last_Antenna_State
-	//{
-	//	double& antpower_watts;
-	//	double& grx_gain;
-	//	double& gain_grx_linear;
-	//	unsigned& panel_count;
-	//	double& lambda;
-	//	double& ant_spacing;
-	//	double& theta_c_rads;
-	//	antennadim& antdim_meters;
-	//};
 public:
-	//void details(double& ant_spacing,
-	//	unsigned& ant_panel_count,
-	//	double& ant_tx_power,
-	//	double& ant_scan_angle,
-	//	Placements& position
-	//) const
-	//{
-	//	ant_spacing = antenna.interAntSpacing();
-	//	ant_panel_count = antenna.getPanelCount();
-	//	ant_tx_power = antenna.get_power();
-	//	ant_scan_angle = antenna.alpha();
-	//	position = location;
-	//}
 
 	const Placements& where() const
 	{
@@ -95,7 +70,7 @@ public:
 			ant_reinit = true;
 		}
 
-		if (current.theta_c != new_settings.spacing)
+		if (current.theta_c != new_settings.theta_c)
 		{
 			antenna.rotate_cow_at(new_settings.theta_c);
 			ant_reinit = true;
@@ -118,11 +93,6 @@ public:
 			ant_reinit = true;
 		}
 
-		if (gui_grid_size.x != prev_gui_grid_size.x || gui_grid_size.y != prev_gui_grid_size.y)
-		{
-			gui_reinit = true;
-		}
-
 		if (ant_reinit)
 		{
 			set_polar_data(location, polar_data);
@@ -143,18 +113,19 @@ public:
 		if (ant_reinit || ant_update || gui_reinit)
 		{
 			antenna.graphics_update();
-			prev_gui_grid_size = gui_grid_size;
 		}
 	}
 
-	void update(const double& power, const double& alpha)
+	void update_minimal(const double& power, const double& alpha)
 	{
-		Settings current = antenna.settings();
+		antenna.set_power(power);
+		antenna.set_alpha(alpha);
+		antenna.numerical_update();
 
-		current.alpha = alpha;
-		current.power = power;
-
-		update(current, location);
+		if (gui_ready()) // minimal update during start of sim or visualization
+		{
+			antenna.graphics_update();
+		}
 	}
 
 	/* set Gtx power in linear */
@@ -164,12 +135,12 @@ public:
 	}
 
 	/* return Gtx power in linear */
-	const double& getxPower() const
+	float& getxPower()
 	{
 		return antenna.get_power();
 	}
 
-	const double& alpha() const
+	float& alpha()
 	{
 		return antenna.getAlpha();
 	}
@@ -184,27 +155,14 @@ public:
 		return station_id;
 	}
 
-
-	/* update the parameters of the Base Station and get channel state to each station */
-	void antenna_update(const double& alpha)
-	{
-		antenna.numerical_update(alpha);
-	}
-
-	/* get signal level in Watts (linear): second parameter, needs to be reshaped to M x N */
-	void gui_udpate()
-	{
-		antenna.graphics_update();
-	}
-
 	/* set the signal level in Watts (linear): second parameter */
-	inline void signal_power(const unsigned& node_id, double& signal_level_lin) const
+	inline void signal_power(const unsigned& node_id, double& signal_level_lin)
 	{
 		signal_level_lin = antenna.coeff(node_id) * antenna.get_power();
 	}
 
 	/* set the signal level in Watts (linear): second parameter */
-	inline void g_signal_power(const size_t& pidx, double& signal_level_lin, const bool& debug) const
+	inline void g_signal_power(const size_t& pidx, double& signal_level_lin, const bool& debug)
 	{
 		signal_level_lin = antenna.gcoeff(pidx) * antenna.get_power();
 	}
@@ -253,40 +211,6 @@ public:
 		return "cow:" + std::to_string(station_id) + ", location:" + location.str() + ", antenna settings:" + antenna.settings().str();
 	}
 
-	/* checks if [antenna.graphics_init] and [antenna.numerical_init] is needed based on what changed */
-	void reset_gui(
-		const unsigned& rows,
-		const unsigned& cols,
-		const double& new_theta_c,
-		const Placements& new_location)
-	{
-		gui_grid_size = { rows, cols };
-		location = new_location;
-		antenna.rotate_cow_at(new_theta_c);
-
-		if (location != prev_location && antenna.modified())
-		{
-			set_polar_data(rows, cols, location, gui_polar_data);
-			antenna.graphics_init(gui_polar_data);
-
-			set_polar_data(location, polar_data);   // before sinr calc. need to setup polar data on new_loc
-			antenna.numerical_init(polar_data);
-		}
-		else if (antenna.modified())
-		{
-			antenna.graphics_init(gui_polar_data);
-			antenna.numerical_init(polar_data);
-		}
-		else if (gui_grid_size != prev_gui_grid_size)
-		{
-			set_polar_data(rows, cols, location, gui_polar_data);
-			antenna.graphics_init(gui_polar_data);
-		}
-
-		prev_location = location;
-		prev_gui_grid_size = gui_grid_size;
-	}
-
 	/* state of the TX station */
 	graphics::State get_state()
 	{
@@ -307,13 +231,17 @@ public:
 	void init_gui(const unsigned& rows, const unsigned& cols)
 	{
 		antenna.reset(); // antenna reset does not reset the location. See reset()
+		if (rows == 0 || cols == 0)
+		{
+			spdlog::error("New size is not valid");
+			throw std::runtime_error("Enter valid size");
+		}
 
 		init_gui_grid_size = { rows, cols };
-		prev_gui_grid_size = init_gui_grid_size;
 		gui_grid_size = init_gui_grid_size;
 
-		//set_polar_data(rows, cols, location, gui_polar_data);
-		//antenna.graphics_init(gui_polar_data); // always calcu
+		set_polar_data(rows, cols, location, gui_polar_data);
+		antenna.graphics_init(gui_polar_data);
 	}
 
 	void undo()
@@ -326,7 +254,7 @@ public:
 	}
 
 	/* when user resets all the changes in the simulation */
-	void reset()
+	void init_sim()
 	{
 		antenna.reset();
 		prev_location = init_location;
@@ -356,7 +284,7 @@ public:
 		antenna(panel_count, lambda, antenna_spacing, antenna_orientation, antenna_dim),
 		power_idx(0)
 	{
-		reset();
+		init_sim();
 	}
 };
 
@@ -391,7 +319,7 @@ public:
 		return gain_rx;
 	}
 
-	/* get system noise figure in watts */
+	/* get system noise factor in watts */
 	const double& get_nf() const
 	{
 		return tnf_watt;
