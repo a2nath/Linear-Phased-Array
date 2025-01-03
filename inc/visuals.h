@@ -39,28 +39,6 @@ namespace graphics
         sf::Color ogcolor;
         sf::RectangleShape transmitter;
 
-        void setPosition(const float& new_x, const float& new_y)
-        {
-            auto& curloc = transmitter.getPosition();
-            sf::Vector2f offset = { new_x - curloc.x, new_y - curloc.y };
-
-            transmitter.setPosition(new_x, new_y);
-            for (auto& indicator : indicators)
-            {
-                const auto& vertices = indicator.getVertexCount();
-
-                for (int v = 0; v < vertices; ++v)
-                {
-                    indicator[v].position += { offset.x, offset.y };
-                }
-            }
-        }
-
-        void setPosition()
-        {
-            setPosition(location.x, location.y);
-        }
-
         txvertex(int iid, const Placements& ilocation, sf::Color color)
             :
             id(iid),
@@ -73,6 +51,7 @@ namespace graphics
             transmitter.setFillColor(ogcolor);
         }
     };
+
 
     struct HeatGrid
     {
@@ -182,9 +161,9 @@ namespace graphics
             for (int i = 0; i < legendHeight; ++i)
             {
 
-                float signalValue = curr_pxl_range[0] + i * range_normalized;
+                float signal_value = curr_pxl_range[0] + i * range_normalized;
                 //sf::Color color = ;
-                gradientRect.setFillColor(colorgrid(signalValue, curr_pxl_range[0], curr_pxl_range[1]));
+                gradientRect.setFillColor(colorgrid(signal_value, curr_pxl_range[0], curr_pxl_range[1]));
 
                 //std::cout << "[" << i << "] signal:" << signalValue << " colorvalue:" << ((max_pxl == min_pxl) ? 0.0 : ((signalValue - min_pxl) / (max_pxl - min_pxl))) \
                 //   << " color:" << to_string(color) << " is at height:" << height_offset - i << " maxval:" << max_pxl << " minval:" << min_pxl << std::endl;
@@ -414,6 +393,49 @@ namespace graphics
             std::swap(prev_pxl_range, curr_pxl_range);
         }
 
+        void set_tx_position(const int& idx, const float& new_x, const float& new_y)
+        {
+            auto& tx_station = txdata[idx];
+
+            sf::Vector2f new_loc = { new_x - tx_station.size.x / 2, new_y - tx_station.size.y / 2 };
+            auto& curr_loc = tx_station.transmitter.getPosition();
+
+            sf::Vector2f offset = { new_loc.x - curr_loc.x, new_loc.y - curr_loc.y };
+
+            tx_station.location = { (int)new_loc.x, (int)new_loc.y };
+            tx_station.transmitter.setPosition(new_loc);
+
+            for (auto& indicator : tx_station.indicators)
+            {
+                const auto& vertices = indicator.getVertexCount();
+
+                for (int v = 0; v < vertices; ++v)
+                {
+                    indicator[v].position += { offset.x, offset.y };
+                }
+            }
+        }
+
+        void update_tx_vertex(const int& idx)
+        {
+            set_tx_position(idx, (float)txdata[idx].location.x, (float)txdata[idx].location.y);
+        }
+
+        inline void set_state_2_grid_loc(const State& state)
+        {
+            set_tx_position(state.tx_idx, state.location.x + offset_width, data_height + offset_height - state.location.y);
+        }
+
+        inline unsigned grid_2_state_y(const unsigned& id) const
+        {
+            return data_height + offset_height - txdata[id].location.y;
+        }
+
+        inline unsigned grid_2_state_x(const unsigned& id) const
+        {
+            return txdata[id].location.x - offset_width;
+        }
+
         inline Placements grid_loc_2_state_loc(const int& new_x, const int& new_y)
         {
             unsigned state_new_x, state_new_y;
@@ -466,7 +488,6 @@ namespace graphics
 
             if (!font.loadFromFile("font/OpenSans-Light.ttf"))
             {
-                std::cout << "current dir:" << system("cd") << endl;
                 spdlog::warn("Font file did not load for SFML library");
             }
 
@@ -568,24 +589,19 @@ namespace graphics
         auto& init = tx_states;
         txvertex* tx_dragging = nullptr;
 
+        const std::vector<std::vector<double>>* ptr_live_data = &mrg_cow_data;
 
         state_v curr, prev;
         curr = init;
         prev = init;
 
-
         HeatGrid griddata(grid_cols, grid_rows, min_color_span, max_color_span, window_size, init_rx_locations, curr);
 
         std::vector<std::string> tx_header, tx_x_slider, tx_x_inp, tx_y_slider, tx_y_inp, tx_power_slider, tx_power_inp, tx_dir_slider, tx_dir_inp, tx_scan_slider, tx_scan_inp;
-        std::vector<Coordinates<int>> grid_tx_offsets;
-        std::vector<float> power_dBm(init.size());
+        std::vector<float> power_dBm(init.size()), theta_deg(init.size()), scan_deg(init.size());
 
         for (auto i = 0; i < init.size(); ++i)
         {
-
-            grid_tx_offsets.emplace_back(griddata.txdata[i].location.x - init[i].location.x, \
-                                        griddata.txdata[i].location.y - init[i].location.y);
-
             auto sidx = str(i);
             tx_header.emplace_back("TX " + sidx);
             tx_x_slider.emplace_back("X##slider" + sidx);
@@ -600,13 +616,12 @@ namespace graphics
             tx_scan_inp.emplace_back("Scan Angle##input" + sidx);
 
             power_dBm[i] = cached::watt2dBm(init[i].settings.power);
+            theta_deg[i] = rad2deg(init[i].settings.theta_c);
+            scan_deg[i] = rad2deg(init[i].settings.alpha);
         }
 
-        curr = init;
-        prev = init;
 
         /* init the heatmap to display heat from TX id */
-        const std::vector<std::vector<double>>* ptr_live_data = &mrg_cow_data;
         sync.render_tx_id = render_tx_id;
 
 #ifdef CONTROLS
@@ -654,8 +669,7 @@ namespace graphics
                 case sf::Event::Resized:
                 {
                     auto new_size = window.getSize();
-                    griddata.resize({ new_size.x, new_size.y });
-                    sync.event_resize(new_size.x, new_size.y);
+                    sync.event_resize(new_size.x, new_size.y, render_tx_id);
                     break;
                 }
                 case sf::Event::MouseWheelScrolled:
@@ -668,6 +682,7 @@ namespace graphics
                     {
                         zoom_out(window, view, zoomLevel, zoom_change_factor);
                     }
+
                     break;
                 }
                 case sf::Event::MouseButtonPressed:
@@ -677,18 +692,18 @@ namespace graphics
                     {
                     case sf::Mouse::Left:
                     {
-                        auto& txvertex = griddata.txdata;
-                        for (auto& tx : txvertex)
+                        for (auto& tx : griddata.txdata)
                         {
                             if (tx.transmitter.getGlobalBounds().contains(event.mouseButton.x, event.mouseButton.y))
                             {   // found it
                                 tx_dragging = &tx;
 
                                 auto& id = tx_dragging->id;
-                                prev[id].location = { (unsigned)tx_dragging->location.x - grid_tx_offsets[id].x, \
-                                                    (unsigned)tx_dragging->location.y - grid_tx_offsets[id].y };
 
-                                sync.render_tx_id = tx_dragging->id;
+                                prev[id].location = curr[id].location;
+                                curr[id].location = griddata.grid_loc_2_state_loc(event.mouseButton.x, event.mouseButton.y);
+                                sync.event_render(render_tx_id);
+
                                 break;
                             }
                         }
@@ -722,12 +737,14 @@ namespace graphics
                             auto potential_new_loc = griddata.grid_loc_2_state_loc(event.mouseButton.x, event.mouseButton.y);
                             if (potential_new_loc != curr[id].location)
                             {
-								// I don't think compute is needed here when button released (what if released with move?)
+                                curr[id].location = potential_new_loc;
+                                griddata.set_tx_position(id, event.mouseButton.x, event.mouseButton.y);
                             }
                             else
                             {
                                 sync.event_render(render_tx_id);
                             }
+
                             tx_dragging = nullptr;
                         }
                         break;
@@ -749,11 +766,10 @@ namespace graphics
                 {
                     if (tx_dragging)
                     {
-                        auto new_loc = griddata.bounded(event.mouseMove.x, event.mouseMove.y);
                         auto& id = tx_dragging->id;
 
-                        curr[id].location = { new_loc.x - grid_tx_offsets[id].x, new_loc.y - grid_tx_offsets[id].y };
-                        tx_dragging->setPosition(event.mouseMove.x, event.mouseMove.y);
+                        curr[id].location = griddata.grid_loc_2_state_loc(event.mouseMove.x, event.mouseMove.y);
+                        griddata.set_tx_position(id, event.mouseMove.x, event.mouseMove.y);
 
                         sync.emplace_state(curr[id]);
                     }
@@ -784,13 +800,9 @@ namespace graphics
                             {
                                 if (prev[i] != curr[i])
                                 {
-                                    auto& tx = curr[i];
+                                    griddata.set_state_2_grid_loc(curr[i]);
 
-                                    griddata.txdata[tx.tx_idx].setPosition(\
-                                        tx.location.x + grid_tx_offsets[tx.tx_idx].x, \
-                                        tx.location.y + grid_tx_offsets[tx.tx_idx].y);
-
-                                    sync.emplace_state(tx);
+                                    sync.emplace_state(curr[i]);
                                 }
 
                                 curr[i] = prev[i];
@@ -838,14 +850,11 @@ namespace graphics
                                 {
                                     prev[i] = curr[i];
                                     curr[i] = init[i];
-                                    auto& tx = curr[i];
 
-                                    griddata.txdata[tx.tx_idx].setPosition(\
-                                        tx.location.x + grid_tx_offsets[tx.tx_idx].x, \
-                                        tx.location.y + grid_tx_offsets[tx.tx_idx].y);
+                                    griddata.set_state_2_grid_loc(curr[i]);
                                     griddata.rotation_update(M_PIl / 2 - curr[i].settings.theta_c, i);
 
-                                    sync.emplace_state(tx);
+                                    sync.emplace_state(curr[i]);
                                 }
                             }
                         }
@@ -1020,19 +1029,38 @@ namespace graphics
                         ImGui::Text("Placement");
                         auto& position = griddata.txdata[i].location;
 
-                        if (ImGui::SliderInt(tx_x_slider[i].c_str(), &position.x, 0, grid_cols - 1, "%d meters") || // unsigned long -> int?
-                            ImGui::InputInt(tx_x_inp[i].c_str(), &position.x, 0, grid_cols - 1))
+                        if (ImGui::SliderInt(tx_x_slider[i].c_str(), &position.x, 0, grid_cols - 1, "%d meters")) // unsigned long -> int?
                         {
-                            curr[i].location.x = position.x - grid_tx_offsets[i].x;
-                            griddata.txdata[i].setPosition();
+                            curr[i].location.x = griddata.grid_2_state_x(i);
+                            griddata.update_tx_vertex(i);
+
                             sync.emplace_state(curr[i]);
                         }
 
-                        if (ImGui::SliderInt(tx_y_slider[i].c_str(), &position.y, 0, grid_rows - 1, "%d meters") ||
-                            ImGui::InputInt(tx_y_inp[i].c_str(), &position.y, 0, grid_rows - 1))
+                        ImGui::SameLine();
+                        if (ImGui::InputInt(tx_x_inp[i].c_str(), &position.x, 0, grid_cols - 1, ImGuiInputTextFlags_EnterReturnsTrue))
                         {
-                            curr[i].location.y = position.y - grid_tx_offsets[i].y;
-                            griddata.txdata[i].setPosition();
+                            curr[i].location.x = griddata.grid_2_state_x(i);
+                            griddata.update_tx_vertex(i);
+
+                            sync.emplace_state(curr[i]);
+                        }
+
+                        if (ImGui::SliderInt(tx_y_slider[i].c_str(), &position.y, 0, grid_rows - 1, "%d meters"))
+                        {
+
+                            curr[i].location.y = griddata.grid_2_state_y(i);
+                            griddata.update_tx_vertex(i);
+
+                            sync.emplace_state(curr[i]);
+                        }
+
+                        ImGui::SameLine();
+                        if (ImGui::InputInt(tx_y_inp[i].c_str(), &position.y, 0, grid_rows - 1, ImGuiInputTextFlags_EnterReturnsTrue))
+                        {
+                            curr[i].location.y = griddata.grid_2_state_y(i);
+                            griddata.update_tx_vertex(i);
+
                             sync.emplace_state(curr[i]);
                         }
 
@@ -1044,8 +1072,9 @@ namespace graphics
                             curr[i].settings.power = cached::dBm2watt(power_dBm[i]);
                             sync.emplace_state(curr[i]);
                         }
+
                         ImGui::SameLine();
-                        if (ImGui::InputFloat(tx_power_inp[i].c_str(), &power_dBm[i], -30.0f, +30.0f, "%.2f"))
+                        if (ImGui::InputFloat(tx_power_inp[i].c_str(), &power_dBm[i], -30.0f, +30.0f, "%.2f", ImGuiInputTextFlags_EnterReturnsTrue))
                         {
                             curr[i].settings.power = cached::dBm2watt(power_dBm[i]);
                             sync.emplace_state(curr[i]);
@@ -1054,27 +1083,45 @@ namespace graphics
                         /* antenna-power mechanism for each transmitter */
                         ImGui::Text("Antenna Direction");
 
-                        if (ImGui::SliderAngle (tx_dir_slider[i].c_str(), &curr[i].settings.theta_c, 0.0f, 359.9f, "%.2f deg") ||
-                            ImGui::InputFloat(tx_dir_inp[i].c_str(), &curr[i].settings.theta_c, 0.0f, 359.9f, "%.2f"))
+                        if (ImGui::SliderAngle(tx_dir_slider[i].c_str(), &theta_deg[i], 0.0f, 359.9f, "%.2f deg"))
                         {
                             /* draw the placement direction indicators for each tower */
+                            curr[i].settings.theta_c = cached::deg2rad(theta_deg[i]);
                             griddata.rotation_update(M_PIl / 2 - curr[i].settings.theta_c, i);
 
                             sync.emplace_state(curr[i]);
                         }
 
-                        /* antenna-scan angle for each transmitter */
-                        ImGui::Text("Scan Angle");
-
-                        if (ImGui::SliderAngle(tx_scan_slider[i].c_str(), &curr[i].settings.alpha, -90.0, +90.0, "%.2f deg") ||
-                            ImGui::InputFloat(tx_scan_inp[i].c_str(), &curr[i].settings.alpha, -90.0, +90.0, "%.2f"))
+                        ImGui::SameLine();
+                        if (ImGui::InputFloat(tx_dir_inp[i].c_str(), &theta_deg[i], 0.0f, 359.9f, "%.2f", ImGuiInputTextFlags_EnterReturnsTrue))
                         {
-                            griddata.scan_angle_update(i);
+                            /* draw the placement direction indicators for each tower */
+                            curr[i].settings.theta_c = cached::deg2rad(theta_deg[i]);
+                            griddata.rotation_update(M_PIl / 2 - curr[i].settings.theta_c, i);
 
                             sync.emplace_state(curr[i]);
                         }
-                    }
-                }
+
+
+                        /* antenna-scan angle for each transmitter */
+                        ImGui::Text("Scan Angle");
+
+                        if (ImGui::SliderFloat(tx_scan_slider[i].c_str(), &scan_deg[i], -90.0, +90.0, "%.2f deg"))
+                        {
+                            curr[i].settings.alpha = cached::deg2rad(scan_deg[i]);
+                            griddata.scan_angle_update(i);
+                            sync.emplace_state(curr[i]);
+                        }
+
+                        ImGui::SameLine();
+                        if (ImGui::InputFloat(tx_scan_inp[i].c_str(), &scan_deg[i], -90.0, +90.0, "%.2f", ImGuiInputTextFlags_EnterReturnsTrue))
+                        {
+                            curr[i].settings.alpha = cached::deg2rad(scan_deg[i]);
+                            griddata.scan_angle_update(i);
+                            sync.emplace_state(curr[i]);
+                        }
+                    } // end TX header (if)
+                } // end TX header section (for loop)
             }
 
             if (sync.got_updates(render_tx_id))
