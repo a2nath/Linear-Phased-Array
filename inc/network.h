@@ -268,7 +268,13 @@ namespace network_package
 		}
 
 		/*update the antenna array from updated powerand scan angle */
-		inline void update(Calculations& calculations);
+		inline void update(
+			const size_t& malloc_size,
+			double* phee_minus_alpha_list,
+			double* gain_RX_grid,
+			double* pathloss_list,
+			double* gpu_hmatrix,
+			double* host_hmatrix);
 
 		/* for bare-minimum numerical calculations needed at the mobile_stations only */
 		void graphics_update();
@@ -277,13 +283,18 @@ namespace network_package
 		void numerical_update();
 
 		/* re-calc the signal outs to handsets only (before calling update!) */
-		inline void init(const std::vector<Polar_Coordinates>& polar_data, Calculations& calculations);
+		inline void init(
+			const size_t& malloc_size,
+			double* d_phee_minus_alpha_list,
+			double* d_pathloss_list,
+			double* d_gain_RX_grid,
+			const Polar_Coordinates* d_polar_data);
 
 		/* for GUI simulation in the whole grid */
-		void graphics_init(const std::vector<Polar_Coordinates>& polar_data);
+		void graphics_init(PolarArray& polar_info);
 
 		/* for bare-minimum numerical calculations needed at the mobile_stations only */
-		void numerical_init(const std::vector<Polar_Coordinates>& polar_data);
+		void numerical_init(PolarArray& polar_info);
 
 		/* change the state back to the previous one */
 		void undo()
