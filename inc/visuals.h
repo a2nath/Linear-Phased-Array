@@ -1259,7 +1259,8 @@ namespace graphics
         const placement_v& rx_locations,
         std::vector<double_v>& raw_cow_data,
         const unsigned& grid_rows,
-        const unsigned& grid_cols)
+        const unsigned& grid_cols,
+        bool debug_plot = false)
     {
         float pixel_height = 1;
         float pixel_width = 1;
@@ -1277,6 +1278,9 @@ namespace graphics
             if (renderTexture.create(grid_cols * pixel_width, grid_rows * pixel_height))
             {
                 renderTexture.clear();
+
+                if (debug_plot)
+                    griddata.logify_intermediate_calc(raw_cow_data[idx]);
 
                 /* draw the grid */
                 griddata.update_heat(raw_cow_data[idx]);
