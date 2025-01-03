@@ -47,43 +47,6 @@ struct GraphicsHelper
 		//rx_ids_p_idx.resize(num_rx);      // indices inside the merged cow heat data to represent receiver SINR. See (2.) (4.)
 	//}
 
-	/* WARNING: if you're building the mrg-data model, do that first
-	before converting debug model to dBm (all interference and thermal noise are ADDITIVE sources of noise!) */
-	void setup_cow_heat(const std::vector<Cow>& txlist = {})
-	{
-		size_t index = 0;
-
-		std::vector<int> input;
-		if (txlist.empty())
-		{
-			input.resize(num_tx);
-			iota(input.begin(), input.end(), 0);
-		}
-		else
-		{
-			input.clear();
-			for (auto& tx : txlist)
-			{
-				input.emplace_back(tx.sid());
-			}
-		}
-
-		for (auto& txid : input)
-		{
-			for (size_t row = 0; row < known_height; ++row)
-			{
-				//logger.write("cow " + str(cow_idx) + '\n');
-
-				for (size_t col = 0; col < known_width; ++col)
-				{
-					double num = lin2dB(raw_cow_data[txid][index]); // already filled with heat from "setup_tx" now convert
-					raw_cow_data[txid][index] = num;
-					++index;
-				}
-			}
-		}
-	}
-
 	/* GUI setup for simulation changes */
 	void update_tx(Cow& cow, const graphics::State& state)
 	{
@@ -99,8 +62,6 @@ struct GraphicsHelper
 
 		/* update cow heat data */
 		cow.heatmap(raw_cow_data[cow.sid()]);
-
-		setup_cow_heat({cow}); // <-- this is needed to convert to logarithmic, or else all graphs will be plain yellow
 	}
 
 	/* GUI setup for all cows together, inputs: rows, cols */
@@ -117,8 +78,6 @@ struct GraphicsHelper
 			cow.update_minimal(lut_power_list[cow.sid()], lut_scan_angle_list[cow.sid()]);
 			cow.heatmap(raw_cow_data[cow.sid()]);
 		}
-
-		setup_cow_heat(); // <-- this is needed to convert to logarithmic, or else all graphs will be plain yellow
 	}
 
 	std::thread gui_change_detect(cow_v& txlist, graphics::DataSync& sync)
@@ -234,8 +193,6 @@ struct GraphicsHelper
 				++pxl_idx;
 			}
 		}
-
-		setup_cow_heat(); // <-- this is needed to convert to logarithmic, or else all graphs will be plain yellow
 	}
 
 	void debug_mode_max_signal_map(cow_v& txlist,
@@ -383,7 +340,8 @@ struct GraphicsHelper
 			mobile_stations_loc,
 			raw_cow_data,
 			known_height,
-			known_width);
+			known_width,
+			true);
 
 		spdlog::info("\tInterference Plots");
 
