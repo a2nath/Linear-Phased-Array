@@ -358,15 +358,6 @@ namespace network_package
 			}
 		}
 
-		/* for bare-minimum numerical calculations needed at the mobile_stations only */
-		void numerical_update(const double& new_alpha)
-		{
-			prev.alpha = current.alpha;
-			current.alpha = new_alpha;
-
-			numerical_update();
-		}
-
 		/* re-calc the signal outs to handsets only (before calling update!) */
 		inline void init(const std::vector<Polar_Coordinates>& polar_data, Calculations& calculations)
 		{
@@ -434,11 +425,6 @@ namespace network_package
 			simulation.modified = true;
 		}
 
-		/* return if antenna phy parameters changed */
-		const bool modified() const
-		{
-			return simulation.modified || graphic.modified;
-		}
 
 		/* change the state back to the previous one */
 		void undo()
@@ -451,6 +437,8 @@ namespace network_package
 			prev = initial;
 			current = initial;
 		}
+
+		~AAntenna();
 
 		AAntenna(
 			const unsigned& init_panel_count,
