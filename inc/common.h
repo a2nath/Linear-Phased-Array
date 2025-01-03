@@ -573,12 +573,12 @@ struct Settings
 	}
 
 	Settings() :
-		power(std::numeric_limits<double>::max()),
-		alpha(std::numeric_limits<double>::max()),
+		power(std::numeric_limits<float>::max()),
+		alpha(std::numeric_limits<float>::max()),
 		panel_count(std::numeric_limits<unsigned>::max()),
-		lambda(std::numeric_limits<double>::max()),
-		spacing(std::numeric_limits<double>::max()),
-		theta_c(std::numeric_limits<double>::max()),
+		lambda(std::numeric_limits<float>::max()),
+		spacing(std::numeric_limits<float>::max()),
+		theta_c(std::numeric_limits<float>::max()),
 		antenna_dims(std::numeric_limits<float>::max(), std::numeric_limits<float>::max())
 	{
 	}

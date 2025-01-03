@@ -22,12 +22,13 @@ std::mutex graphics::graphics_data_mutex;
 std::condition_variable graphics::consig;
 Dimensions<unsigned> graphics::render_space;
 
-cached::Cache<double, double> cached::cache_sin;
-cached::Cache<double, double> cached::cache_dBm2w;
-cached::Cache<double, double> cached::cache_w2dBm;
-cached::Cache<double, double> cached::cache_db2lin;
-cached::Cache<double, double> cached::cache_lin2dB;
-cached::Cache<double, double> cached::cache_deg2rad;
+cached::Cache<float, float> cached::cache_sin;
+cached::Cache<float, float> cached::cache_dBm2w;
+cached::Cache<float, float> cached::cache_w2dBm;
+cached::Cache<float, float> cached::cache_db2lin;
+cached::Cache<float, float> cached::cache_lin2dB;
+cached::Cache<float, float> cached::cache_pow;
+cached::Cache<float, float> cached::cache_deg2rad;
 
 
 void close(Logger& logger)
