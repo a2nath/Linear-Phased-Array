@@ -76,6 +76,22 @@ namespace graphics
         sf::Font font;
 
         bool debug_mode;
+        /* WARNING: if you're building the mrg-data model, do that first
+        before converting debug model to dBm (all interference and thermal noise are ADDITIVE sources of noise!) */
+        void logify_intermediate_calc(double_v& lin_output)
+        {
+            size_t index = 0;
+			for (size_t row = 0; row < data_height; ++row)
+			{
+				//logger.write("cow " + str(cow_idx) + '\n');
+
+				for (size_t col = 0; col < data_width; ++col)
+
+					lin_output[index] = lin2dB(lin_output[index]); // already filled with heat from "setup_tx" now convert
+				++index;
+			}
+
+        }
 
         //sf::Color monocolorgrid(const double& raw, unsigned& tx_id)
         //{
@@ -671,7 +687,7 @@ namespace graphics
                 case sf::Event::Resized:
                 {
                     auto new_size = window.getSize();
-                    sync.event_resize(new_size.x, new_size.y, render_tx_id);
+                    sync.event_resize(new_size.x, new_size.y);
                     break;
                 }
                 case sf::Event::MouseWheelScrolled:
@@ -833,8 +849,8 @@ namespace graphics
                             {
                                 ptr_live_data = &mrg_cow_data;
                                 griddata.debug_mode = true;
-								griddata.curr_pxl_range[0] = min_color_span;
-								griddata.curr_pxl_range[1] = max_color_span;
+                                griddata.curr_pxl_range[0] = min_color_span;
+                                griddata.curr_pxl_range[1] = max_color_span;
                             }
 
                             sync.event_render(render_tx_id);
