@@ -637,7 +637,7 @@ namespace graphics
 
 		inline void emplace_state(State& state)
 		{
-			std::lock_guard<std::mutex> lock(graphics::graphics_data_mutex);  // Lock the mutex
+			std::scoped_lock<std::mutex> lock(graphics::graphics_data_mutex);  // Lock the mutex
 			mainq.emplace(&state);
 
 			compute_tx_id = 1;
