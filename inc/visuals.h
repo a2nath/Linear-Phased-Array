@@ -417,6 +417,18 @@ namespace graphics
             std::swap(prev_pxl_range, curr_pxl_range);
         }
 
+        inline Placements grid_loc_2_state_loc(const int& new_x, const int& new_y)
+        {
+            unsigned state_new_x, state_new_y;
+            state_new_x = min(int(data_width + offset_width), new_x);
+            state_new_x = max(int(offset_width), new_x);
+
+            state_new_y = min(int(data_height + offset_height), new_y);
+            state_new_y = max(int(offset_height), new_y);
+
+            return { state_new_x - (unsigned)offset_width, data_height + (unsigned)offset_height - state_new_y };
+        }
+
         HeatGrid(
             const unsigned& icols,
             const unsigned& irows,
@@ -604,7 +616,7 @@ namespace graphics
             {
                 while (is_rendering)
                 {
-                    std::unique_lock<std::mutex> lock(graphics::graphics_data_mutex);  // Lock the mutex
+                    std::unique_lock<std::mutex> lock(graphics::render_mutex);  // Lock the mutex
                     graphics::consig.wait(lock, [&]()
                         {
                             return sync.render_tx_id >= 0 || !is_rendering;
@@ -704,7 +716,17 @@ namespace graphics
                         if (tx_dragging)
                         {
                             /* mouse release causes heat update */
-                            sync.render_tx_id = tx_dragging->id;
+                            auto& id = tx_dragging->id;
+
+                            auto potential_new_loc = griddata.grid_loc_2_state_loc(event.mouseButton.x, event.mouseButton.y);
+                            if (potential_new_loc != curr[id].location)
+                            {
+								// I don't think compute is needed here when button released (what if released with move?)
+                            }
+                            else
+                            {
+                                sync.event_render(render_tx_id);
+                            }
                             tx_dragging = nullptr;
                         }
                         break;
@@ -775,7 +797,7 @@ namespace graphics
 
                             if (sync.mainq.empty())
                             {
-                                sync.render_tx_id = render_tx_id;
+                                sync.event_render(render_tx_id);
                             }
 
                             /* undo the color thresholds */
@@ -798,7 +820,7 @@ namespace graphics
                                 griddata.debug_mode = false;
                             }
 
-                            sync.render_tx_id = render_tx_id;
+                            sync.event_render(render_tx_id);
                         }
                         break;
                     }
@@ -827,7 +849,7 @@ namespace graphics
                         }
                         else
                         {
-                            sync.render_tx_id = render_tx_id;
+                            sync.event_render(render_tx_id);
                         }
 
                         griddata.reset();
@@ -838,7 +860,7 @@ namespace graphics
                     case sf::Keyboard::Scan::Tab:
                     {
                         render_tx_id = (render_tx_id + 1) % tx_count;
-                        sync.render_tx_id = render_tx_id;
+                        sync.event_render(render_tx_id);
                         break;
                     }
                     case sf::Keyboard::Scan::Left:
@@ -936,7 +958,7 @@ namespace graphics
                         griddata.debug_mode = false;
                     }
 
-                    sync.render_tx_id = render_tx_id;
+                    sync.event_render(render_tx_id);
                 }
             }
 
@@ -947,15 +969,15 @@ namespace graphics
 
                 if (ImGui::SliderFloat("Low##slider", &griddata.curr_thresholds[0], 0.0f, 1.0f, "%.2f") ||
                     ImGui::InputFloat("Low##input", &griddata.curr_thresholds[0], 0.1f, 1.0f, "%.2f"))
-                    sync.render_tx_id = render_tx_id;
+                    sync.event_render(render_tx_id);
 
                 if (ImGui::SliderFloat("Mid##slider", &griddata.curr_thresholds[1], 0.0f, 1.0f, "%.2f") ||
                     ImGui::InputFloat("Mid##input", &griddata.curr_thresholds[1], 0.1f, 1.0f, "%.2f"))
-                    sync.render_tx_id = render_tx_id;
+                    sync.event_render(render_tx_id);
 
                 if (ImGui::SliderFloat("High##slider", &griddata.curr_thresholds[2], 0.0f, 1.0f, "%.2f") ||
                     ImGui::InputFloat("High##input", &griddata.curr_thresholds[2], 0.1f, 1.0f, "%.2f"))
-                    sync.render_tx_id = render_tx_id;
+                    sync.event_render(render_tx_id);
 
 
                 // Ensure thresholds are in the correct order
@@ -973,11 +995,11 @@ namespace graphics
                 ImGui::Text("Signal Min and Max");
                 if (ImGui::SliderFloat("Min##slider", &griddata.curr_pxl_range[0], -300.0f, 50.0f, "%.2f dB") ||
                     ImGui::InputFloat("Min##input", &griddata.curr_pxl_range[0], -300.0f, 50.0f, "%.2f"))
-                    sync.render_tx_id = render_tx_id;
+                    sync.event_render(render_tx_id);
 
                 if (ImGui::SliderFloat("Max##slider", &griddata.curr_pxl_range[1], -299.0f, 50.0f, "%.2f dB") ||
                     ImGui::InputFloat("Max##input", &griddata.curr_pxl_range[1], -299.0f, 50.0f, "%.2f"))
-                    sync.render_tx_id = render_tx_id;
+                    sync.event_render(render_tx_id);
 
                 // Ensure minval is always less than maxval
                 if (griddata.curr_pxl_range[0] >= griddata.curr_pxl_range[1])
