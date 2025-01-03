@@ -32,19 +32,12 @@ struct GraphicsHelper
 	Bench btime;
 
 	bool verbose;
-
 	bool is_rendering;
 	double noise_factor;
 
 	inline bool ready() const
 	{
 		return raw_cow_data.size() > 0;
-	}
-
-	void init(const double& inoise_factor)
-	{
-		raw_cow_data.assign(num_tx, double_v(known_height * known_width)); // resize the part with individual cow heat data (1.)
-		noise_factor = inoise_factor;
 	}
 
 	//void rqst_secondary_mem()
@@ -113,6 +106,7 @@ struct GraphicsHelper
 	/* GUI setup for all cows together, inputs: rows, cols */
 	void setup_tx(cow_v& cows, const double_v& lut_power_list, const double_v& lut_scan_angle_list)
 	{
+		raw_cow_data.assign(num_tx, double_v(known_width * known_height));
 		spdlog::info("Setting up " + str(cows.size()) + " transmitters in visuals");
 
 		for (auto& cow : cows)
@@ -275,7 +269,7 @@ struct GraphicsHelper
 		//rqst_secondary_mem();
 		//
 		//setup_tx(txlist, bs_txpower, scan_alpha_list, rows, cols);
-		//
+
 		Pair<float> sep_channels = compute_colorspan(raw_cow_data);
 
 
@@ -439,6 +433,7 @@ struct GraphicsHelper
 		const unsigned& pixel_rows,
 		const unsigned& pixel_cols,
 		Logger& ilogger,
+		const double& inoise_factor,
 		const bool& iverbose = true)
 		:
 		num_tx(num_transmitters),
@@ -449,7 +444,8 @@ struct GraphicsHelper
 		is_rendering(true),
 		raw_cow_data(num_tx),
 		raw_mrg_data(num_tx),
-		logger(ilogger)
+		logger(ilogger),
+		noise_factor(inoise_factor)
 	{
 		raw_cow_data.clear();
 		raw_mrg_data.clear();
@@ -591,17 +587,18 @@ class Simulator
 	const double_v&    scan_angle_range;
 	const double_v&    antenna_spacing;
 	const double_v&    antenna_dims;
+	const double       system_noise_factor_w;
 	GraphicsHelper     visuals;
 
 	const std::vector<double_v>& bs_tx_requested_power_watts;
 	const std::vector<double_v>& bs_requested_scan_alpha_rad;
 	const std::vector<std::vector<unsigned>>& ms2bs_requested_bindings;
 
-	void setup(const std::vector<double>& grxlist, const double& system_noise_lin)
+	void setup(const std::vector<double>& grxlist)
 	{
 		for (unsigned i = 0; i < mobile_station_count; ++i)
 		{
-			stations.emplace_back(i, system_noise_lin, grxlist[i]);
+			stations.emplace_back(i, system_noise_factor_w, grxlist[i]);
 		}
 
 		/* setup the system */
@@ -769,20 +766,20 @@ public:
 		scan_angle_range(args.scan_angle_range),
 		antenna_spacing(args.antenna_spacing),
 		antenna_dims(args.antenna_dims),
+		system_noise_factor_w(dBm2watt(getThermalSystemNoise(args.bandwidth, args.system_noise))),
 		visuals(args.base_station_count, args.mobile_station_count,
-			args.field_size[0], args.field_size[1], ilogger),
+			args.field_size[0], args.field_size[1], ilogger, system_noise_factor_w),
 		bs_tx_requested_power_watts(args.tx_powerlist().data),
 		bs_requested_scan_alpha_rad(args.tx_alphalist().data),
 		ms2bs_requested_bindings(args.ms_id_selections.binding_data)
 	{
-		setup(double_v(mobile_station_count, cached::log2lin(args.gain_gtrx)),
-			dBm2watt(getThermalSystemNoise(bandwidth, args.system_noise)));
+		setup(double_v(mobile_station_count, cached::log2lin(args.gain_gtrx)));
 
 		if (!args.nogui)
 		{
 			/* initialize the visual helper */
-			spdlog::info("Visualization enabled");
-			visuals.init(stations[0].get_nf());
+			spdlog::info("Visualization enabled for field size "\
+				+ str(args.field_size[0]) + "x" + str(args.field_size[1]) + " meters");
 		}
 	}
 };
