@@ -257,43 +257,11 @@ namespace graphics
             render_space = shape;
         }
 
-        void tx_lines(const float& dir_radians, txvertex& txvertex_obj)
+        void scan_angle_update(const int& idx)
         {
-            txvertex_obj.indicators.clear();
+            txdata[idx].indicators.pop_back();
+            auto& position = txdata[idx].location;
 
-            auto& position = txvertex_obj.location;
-            auto& idx = txvertex_obj.id;
-
-            sf::VertexArray line11(sf::Lines, 2), line12(sf::Lines, 2);
-
-            // Calculate the endpoint of the first line based on direction
-            float length = 30.0f / 2;  // Halfway across the rectangle
-
-            // Line 1's position: calculated from the antenna direction
-            float line1StartX = position.x + 5.0f; // Middle of the rectangle;
-            float line1StartY = position.y + 5.0f;
-
-            // Endpoint using the direction to calculate the x and y offset
-            float line11EndX = line1StartX - length * cos(dir_radians);
-            float line11EndY = line1StartY - length * sin(dir_radians);
-
-            float line12EndX = line1StartX + length * cos(dir_radians);
-            float line12EndY = line1StartY + length * sin(dir_radians);
-
-            line11[0].position = sf::Vector2f(line1StartX, line1StartY);
-            line11[1].position = sf::Vector2f(line11EndX, line11EndY);
-
-            line11[0].color = sf::Color::White;
-            line11[1].color = sf::Color::White;
-
-            line12[0].position = sf::Vector2f(line1StartX, line1StartY);
-            line12[1].position = sf::Vector2f(line12EndX, line12EndY);
-
-            line12[0].color = sf::Color::White;
-            line12[1].color = sf::Color::White;
-
-            txvertex_obj.indicators.emplace_back(line11);
-            txvertex_obj.indicators.emplace_back(line12);
 
             /* draw the scan angle of the linear phase array */
             sf::VertexArray arrow(sf::Lines, 6);
@@ -343,7 +311,48 @@ namespace graphics
             arrow[4].color = sf::Color::Blue;
             arrow[5].color = sf::Color::Blue;
 
-            txvertex_obj.indicators.emplace_back(arrow);
+            txdata[idx].indicators.emplace_back(arrow);
+        }
+
+        void rotation_update(const float& dir_radians, const int& idx)
+        {
+            txvertex& txvertex_obj = txdata[idx];//
+            txvertex_obj.indicators.clear();
+
+            auto& position = txvertex_obj.location;
+
+            sf::VertexArray line11(sf::Lines, 2), line12(sf::Lines, 2);
+
+            // Calculate the endpoint of the first line based on direction
+            float length = 30.0f / 2;  // Halfway across the rectangle
+
+            // Line 1's position: calculated from the antenna direction
+            float line1StartX = position.x + 5.0f; // Middle of the rectangle;
+            float line1StartY = position.y + 5.0f;
+
+            // Endpoint using the direction to calculate the x and y offset
+            float line11EndX = line1StartX - length * cos(dir_radians);
+            float line11EndY = line1StartY - length * sin(dir_radians);
+
+            float line12EndX = line1StartX + length * cos(dir_radians);
+            float line12EndY = line1StartY + length * sin(dir_radians);
+
+            line11[0].position = sf::Vector2f(line1StartX, line1StartY);
+            line11[1].position = sf::Vector2f(line11EndX, line11EndY);
+
+            line11[0].color = sf::Color::Black;
+            line11[1].color = sf::Color::Black;
+
+            line12[0].position = sf::Vector2f(line1StartX, line1StartY);
+            line12[1].position = sf::Vector2f(line12EndX, line12EndY);
+
+            line12[0].color = sf::Color::Black;
+            line12[1].color = sf::Color::Black;
+
+            txvertex_obj.indicators.emplace_back(line11);
+            txvertex_obj.indicators.emplace_back(line12);
+
+            scan_angle_update(idx);
         }
 
         void init(const sf::Vector2u& ibounds_lower, const sf::Vector2u& ibounds_upper)
@@ -385,23 +394,11 @@ namespace graphics
                 txdata.emplace_back(i, Placements{ loc.x + (unsigned)offset_width, unsigned(data_height + offset_height) - loc.y }, sf::Color(90, 90, 90));
 
                 /* draw the placement direction indicators for each tower */
-                tx_lines(dir_radians, txdata.back());
+                rotation_update(M_PIl / 2 - txstates[i].settings.theta_c, i);
             }
         }
 
-        Placements bounded(const int& x, const int& y)
-        {
-            Placements p;
-            p.x = min((int)data_width, x);
-            p.x = max(0, x);
-
-            p.y = min((int)data_height, y);
-            p.y = max(0, y);
-
-            return p;
-        }
-
-        void reset()
+        inline void reset()
         {
             std::copy(std::begin(curr_thresholds), std::end(curr_thresholds), std::begin(prev_thresholds));
             std::copy(std::begin(init_thresholds), std::end(init_thresholds), std::begin(curr_thresholds));
@@ -411,7 +408,7 @@ namespace graphics
         }
 
         /* undo the action performed */
-        void undo()
+        inline void undo()
         {
             std::swap(prev_thresholds, curr_thresholds);
             std::swap(prev_pxl_range, curr_pxl_range);
@@ -558,9 +555,9 @@ namespace graphics
         sf::View view = window.getDefaultView();
 
         /* init variables */
+        float zoomLevel = 1.0f;
         bool state_changed = true;
         bool panning = false;
-        float zoomLevel = 1.0f;
         float mouse_delta_thresh = 0.01f;
         float zoom_change_factor = 1.1f;
         long pan_adj_factor = 10;
@@ -569,11 +566,15 @@ namespace graphics
 
         /* set the states, current (working variable), previous (for undo), init (for reset) */
         auto& init = tx_states;
-        state_v curr, prev;
         txvertex* tx_dragging = nullptr;
 
-        /* heat data contains vertices too */
-        HeatGrid griddata(grid_cols, grid_rows, min_color_span, max_color_span, window_size, init_rx_locations, init);
+
+        state_v curr, prev;
+        curr = init;
+        prev = init;
+
+
+        HeatGrid griddata(grid_cols, grid_rows, min_color_span, max_color_span, window_size, init_rx_locations, curr);
 
         std::vector<std::string> tx_header, tx_x_slider, tx_x_inp, tx_y_slider, tx_y_inp, tx_power_slider, tx_power_inp, tx_dir_slider, tx_dir_inp, tx_scan_slider, tx_scan_inp;
         std::vector<Coordinates<int>> grid_tx_offsets;
@@ -654,7 +655,7 @@ namespace graphics
                 {
                     auto new_size = window.getSize();
                     griddata.resize({ new_size.x, new_size.y });
-                    sync.emplace_resize(new_size.x, new_size.y, render_tx_id);
+                    sync.event_resize(new_size.x, new_size.y);
                     break;
                 }
                 case sf::Event::MouseWheelScrolled:
@@ -842,6 +843,7 @@ namespace graphics
                                     griddata.txdata[tx.tx_idx].setPosition(\
                                         tx.location.x + grid_tx_offsets[tx.tx_idx].x, \
                                         tx.location.y + grid_tx_offsets[tx.tx_idx].y);
+                                    griddata.rotation_update(M_PIl / 2 - curr[i].settings.theta_c, i);
 
                                     sync.emplace_state(tx);
                                 }
@@ -1056,7 +1058,8 @@ namespace graphics
                             ImGui::InputFloat(tx_dir_inp[i].c_str(), &curr[i].settings.theta_c, 0.0f, 359.9f, "%.2f"))
                         {
                             /* draw the placement direction indicators for each tower */
-                            griddata.tx_lines(M_PIl / 2 - curr[i].settings.theta_c, griddata.txdata[i]);
+                            griddata.rotation_update(M_PIl / 2 - curr[i].settings.theta_c, i);
+
                             sync.emplace_state(curr[i]);
                         }
 
@@ -1066,6 +1069,8 @@ namespace graphics
                         if (ImGui::SliderAngle(tx_scan_slider[i].c_str(), &curr[i].settings.alpha, -90.0, +90.0, "%.2f deg") ||
                             ImGui::InputFloat(tx_scan_inp[i].c_str(), &curr[i].settings.alpha, -90.0, +90.0, "%.2f"))
                         {
+                            griddata.scan_angle_update(i);
+
                             sync.emplace_state(curr[i]);
                         }
                     }
