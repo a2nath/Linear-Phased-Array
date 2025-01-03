@@ -649,9 +649,15 @@ namespace graphics
 			if (width != render_space.x || height != render_space.y)
 			{
 				resize_event = true;
+				render_space = { width, height };
 			}
 		}
 
+		inline void event_render(const int& idx)
+		{
+			std::scoped_lock<std::mutex> lock(graphics::render_mutex);  // Lock the mutex
+			render_tx_id = idx;
+		}
 
 		bool got_updates(const int& def_render_id)
 		{
