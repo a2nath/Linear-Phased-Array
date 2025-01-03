@@ -612,6 +612,7 @@ namespace graphics
         int debounce_txid = -1;
         float debounce_timer = 0.0f;
         float debounce_delay = 0.5f; // 100ms delay
+        float zoom_request = 0.0f;
         float zoomLevel = 1.0f;
         bool state_changed = true;
         bool panning = false;
@@ -711,14 +712,8 @@ namespace graphics
                 }
                 case sf::Event::MouseWheelScrolled:
                 {
-                    if (event.mouseWheelScroll.delta - mouse_delta_thresh > 0 && !ImGui::IsWindowHovered())
-                    {
-                        zoom_in(window, view, zoomLevel, zoom_change_factor);
-                    }
-                    else if (event.mouseWheelScroll.delta - mouse_delta_thresh < 0 && !ImGui::IsWindowHovered())
-                    {
-                        zoom_out(window, view, zoomLevel, zoom_change_factor);
-                    }
+
+                    zoom_request = event.mouseWheelScroll.delta - mouse_delta_thresh;
 
                     break;
                 }
@@ -1193,12 +1188,23 @@ namespace graphics
                     debounce_timer = 0.0f; // Reset timer after update
                     debounce_txid = -1;
                 }
+
+            }
+
+            if (zoom_request != 0 && !ImGui::IsWindowHovered())
+            {
+                if (zoom_request > 0)
+                    zoom_in(window, view, zoomLevel, zoom_change_factor);
+                else
+                    zoom_out(window, view, zoomLevel, zoom_change_factor);
             }
 
             if (sync.got_updates(render_tx_id))
             {
                 consig.notify_one(); // either have [render_tx_id] set or [compute_tx_id] set, not both
             }
+
+            zoom_request = 0;
 
             ImGui::End();
 #endif
