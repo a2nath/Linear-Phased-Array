@@ -137,6 +137,8 @@ namespace network_package
 			std::vector<double> phee_minus_alpha_list;
 			std::vector<double> pathloss_list;
 			std::vector<double> hmatrix;                 // hmatrix from BS pov
+			double* host_hmatrix;
+
 			bool modified;
 
 			void resize(const size_t& size)
@@ -145,18 +147,14 @@ namespace network_package
 				phee_minus_alpha_list.resize(size);
 				pathloss_list.resize(size);
 				hmatrix.resize(size);
-
-				modified = true;
 			}
 
-			Calculations() : modified(false) {}
+			Calculations() : modified(false), host_hmatrix(nullptr) {}
 		};
 
 		/* Calculations needed to create/update the H-matrix coefficient table */
 		Calculations simulation, graphic;
-
-		std::vector<unsigned> indices_with_inf;
-		std::vector<unsigned> indices_with_z;
+		double* dummy;
 
 	public:
 
@@ -185,17 +183,18 @@ namespace network_package
 			prev.power = current.power;
 			current.power = power_watts;
 
+			simulation.modified = true;
 			graphic.modified = true;
 		}
 
 		/* get power in watts */
-		const double& get_power() const
+		float& get_power()
 		{
 			return current.power;
 		}
 
 		/* get alpha in rads */
-		const double& getAlpha() const
+		float& getAlpha()
 		{
 			return current.alpha;
 		}
@@ -221,7 +220,7 @@ namespace network_package
 		}
 
 		/* get wavelength in meters */
-		const double& antlambda() const
+		float& antlambda()
 		{
 			return current.lambda;
 		}
@@ -234,7 +233,7 @@ namespace network_package
 		}
 
 		/* get the physical antenna panel spacing in meters */
-		const double& antspacing() const
+		float& antspacing()
 		{
 			return current.spacing;
 		}
@@ -247,7 +246,7 @@ namespace network_package
 		}
 
 		/* get the physical antenna direction */
-		const double& beamdir() const
+		float& beamdir()
 		{
 			return current.theta_c;
 		}
@@ -460,7 +459,16 @@ namespace network_package
 			const double& init_antenna_orientation_rads,
 			const antennadim& init_antdims)
 			:
-			initial{ 0, std::numeric_limits<double>::min(), init_panel_count, init_lambda, init_antenna_spacing, init_antenna_orientation_rads, init_antdims } // constant initial setup
+			initial{ 0,
+				std::numeric_limits<double>::min(),
+				init_panel_count,
+				init_lambda,
+				init_antenna_spacing,
+				init_antenna_orientation_rads,
+				init_antdims
+			},
+			dummy(nullptr) // constant initial setup
+
 		{
 		}
 	};
