@@ -707,7 +707,7 @@ namespace graphics
                 case sf::Event::Resized:
                 {
                     auto new_size = window.getSize();
-                    sync.event_resize(new_size.x, new_size.y);
+                    sync.event_resize(new_size.x, new_size.y, render_tx_id);
                     break;
                 }
                 case sf::Event::MouseWheelScrolled:

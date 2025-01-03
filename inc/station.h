@@ -25,11 +25,8 @@ class Cow
 	const std::vector<Placements>& ms_station_loc;
 	const unsigned ms_stations;
 
-	/* each cell is a mobile station */
-	std::vector<Polar_Coordinates> polar_data;
-
-	/* each cell is a gui grid, hence much larger */
-	std::vector<Polar_Coordinates> gui_polar_data;
+	/* each cell is a mobile station or a gui drid */
+	PolarArray polar_data, gui_polar_data;
 
 public:
 
@@ -95,23 +92,16 @@ public:
 
 		if (ant_reinit)
 		{
-			set_polar_data(location, polar_data);
+			set_polar_data(location);
 			antenna.numerical_init(polar_data);
-		}
 
-		if (ant_reinit || gui_reinit)
-		{
-			set_polar_data(gui_grid_size.x, gui_grid_size.y, location, gui_polar_data);
+			set_polar_data(gui_grid_size, location);
 			antenna.graphics_init(gui_polar_data);
 		}
 
 		if (ant_reinit || ant_update)
 		{
 			antenna.numerical_update();
-		}
-
-		if (ant_reinit || ant_update || gui_reinit)
-		{
 			antenna.graphics_update();
 		}
 	}
@@ -169,40 +159,40 @@ public:
 
 	void heatmap(std::vector<double>& output, const bool& debug = false)
 	{
-		for (size_t pixel_idx = 0; pixel_idx < gui_polar_data.size(); ++pixel_idx)
+		for (size_t pixel_idx = 0; pixel_idx < gui_polar_data.array_size; ++pixel_idx)
 		{
 			g_signal_power(pixel_idx, output[pixel_idx], debug);
 		}
 	}
 
 	/* polar data for gui grid rendering */
-	void set_polar_data(const size_t& width, const size_t& height, const Placements& new_location, std::vector<Polar_Coordinates>& output)
+	void set_polar_data(const Dimensions<unsigned>& new_size, const Placements& new_location)
 	{
 		size_t idx = 0;
-		output.resize(width * height);
+		gui_polar_data.set(new_size.x * new_size.y);
 
-		for (int row = 0; row < height; ++row)
+		for (int row = 0; row < new_size.y; ++row)
 		{
-			for (int col = 0; col < width; ++col)
+			for (int col = 0; col < new_size.x; ++col)
 			{
 				long int diffx = col - new_location.x; // diff with respect to pixel (think of col, row has location of rx)
 				long int diffy = row - new_location.y;
-				output[idx++] = cart2pol(diffx, diffy);
+				gui_polar_data.data_ptr[idx++] = cart2pol(diffx, diffy);
 			}
 		}
 	}
 
 	/* polar data for simulation */
-	void set_polar_data(const Placements& new_location, std::vector<Polar_Coordinates>& output)
+	void set_polar_data(const Placements& new_location)
 	{
 		size_t idx = 0;
-		output.resize(ms_stations);
+		polar_data.set(ms_stations);
 
 		for (auto& mstation : ms_station_loc)
 		{
 			long int diffx = mstation.x - new_location.x; // diff with respect to rx
 			long int diffy = mstation.y - new_location.y;
-			output[idx++] = cart2pol(diffx, diffy);
+			polar_data.data_ptr[idx++] = cart2pol(diffx, diffy);
 		}
 	}
 
@@ -224,13 +214,39 @@ public:
 	/* return state is [true]=init done, else [false]=not called "init_gui" yet */
 	const bool gui_ready() const
 	{
-		return gui_polar_data.size() > 0;
+		return gui_polar_data.array_size > 0;
 	}
 
-	/* initialize */
+	/* resize the gui window;
+	NOTE: the [second] part of this function cannot be DELAYED further */
+	void resize_gui(const Dimensions<unsigned>& new_dimension)
+	{
+		if (gui_ready() && !new_dimension.is_zero() && gui_grid_size != new_dimension)
+		{
+			gui_grid_size = new_dimension;
+			set_polar_data(gui_grid_size, location);
+			antenna.graphics_init(gui_polar_data);
+			antenna.graphics_update();
+		}
+		else if (!gui_ready())
+		{
+			spdlog::error("GUI not ready when resizing");
+			throw std::runtime_error("GUI needs initializing");
+		}
+		else if (new_dimension.is_zero())
+		{
+			spdlog::error("New size is not valid");
+			throw std::runtime_error("Enter valid size");
+		}
+		else
+		{
+			spdlog::warn("performance concern: calling resize() more than once with the same parameters");
+		}
+	}
+
+	/* when user resets or initializes data structures GUI */
 	void init_gui(const unsigned& rows, const unsigned& cols)
 	{
-		antenna.reset(); // antenna reset does not reset the location. See reset()
 		if (rows == 0 || cols == 0)
 		{
 			spdlog::error("New size is not valid");
@@ -240,7 +256,7 @@ public:
 		init_gui_grid_size = { rows, cols };
 		gui_grid_size = init_gui_grid_size;
 
-		set_polar_data(rows, cols, location, gui_polar_data);
+		set_polar_data(gui_grid_size, location);
 		antenna.graphics_init(gui_polar_data);
 	}
 
@@ -249,7 +265,7 @@ public:
 		antenna.undo();
 		std::swap(prev_location, location);
 
-		set_polar_data(location, polar_data);
+		set_polar_data(location);
 		antenna.numerical_init(polar_data);
 	}
 
@@ -260,10 +276,8 @@ public:
 		prev_location = init_location;
 		location = init_location;
 
-		set_polar_data(location, polar_data);
+		set_polar_data(location);
 		antenna.numerical_init(polar_data);
-
-		gui_polar_data.clear();
 	}
 
 	//antennadim dim_meters, double theta, double spacing, int antenna_count,
@@ -292,7 +306,7 @@ public:
 class Station
 {
 	const unsigned  station_id;      // station id
-	const double    tnf_watt;        // thermal noise floor
+	const double&   tnf_watt;        // thermal noise floor
 	const double    gain_rx;
 	double sinr;
 public:

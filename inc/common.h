@@ -643,7 +643,7 @@ namespace graphics
 			compute_tx_id = 1;
 		}
 
-		inline void event_resize(const unsigned& width, const unsigned& height)
+		inline void event_resize(const unsigned& width, const unsigned& height, const int& def_render_id)
 		{
 			def_render_tx_id = def_render_id;
 			if (width != render_space.x || height != render_space.y)
