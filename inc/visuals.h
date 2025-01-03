@@ -386,7 +386,6 @@ namespace graphics
             for (int i = 0; i < txstates.size(); ++i)
             {
                 auto& loc = txstates[i].location;
-                float dir_radians = M_PIl / 2 - txstates[i].settings.theta_c;
 
                 txdata.emplace_back(i, Placements{ loc.x + (unsigned)offset_width, unsigned(data_height + offset_height) - loc.y }, sf::Color(90, 90, 90));
 
@@ -513,6 +512,22 @@ namespace graphics
         }
     };
 
+    /* returns relative min and max sinr between transmitters */
+    Pair<float> compute_colorspan(const std::vector<double_v>& heatdata,
+        float float_min = std::numeric_limits<float>::max(),
+        float float_max = std::numeric_limits<float>::lowest())
+    {
+        for (int tx_id = 0; tx_id < heatdata.size(); ++tx_id)
+        {
+            auto [fmin, fmax] = std::minmax_element(heatdata[tx_id].begin(), heatdata[tx_id].end());
+
+            float_min = std::min((float)*fmin, float_min);
+            float_max = std::max((float)*fmax, float_max);
+        }
+
+        return { float_min, float_max };
+    }
+
     // Function to handle Ctrl + C
     void sig_handler(int signal)
     {
@@ -567,16 +582,15 @@ namespace graphics
         Logger& logger,
         const placement_v& init_rx_locations,
         const state_v& tx_states,
-        const std::vector<double_v>& raw_cow_data,
+        std::vector<double_v>& raw_cow_data,
         const std::vector<double_v>& mrg_cow_data,
         const unsigned& grid_rows,
         const unsigned& grid_cols,
-        const float& min_color_span,
-        const float& max_color_span,
         DataSync& sync,
         bool& is_rendering)
     {
         std::signal(SIGINT, sig_handler);
+
 
         size_t render_width = grid_cols + 800;
         size_t render_height = grid_rows + 500;
@@ -607,13 +621,14 @@ namespace graphics
         auto& init = tx_states;
         txvertex* tx_dragging = nullptr;
 
+        Pair<float> min_and_max = compute_colorspan(mrg_cow_data);
         const std::vector<std::vector<double>>* ptr_live_data = &mrg_cow_data;
 
         state_v curr, prev;
         curr = init;
         prev = init;
 
-        HeatGrid griddata(grid_cols, grid_rows, min_color_span, max_color_span, window_size, init_rx_locations, curr);
+        HeatGrid griddata(grid_cols, grid_rows, min_and_max.first, min_and_max.second, window_size, init_rx_locations, curr);
 
         std::vector<std::string> tx_header, tx_x_slider, tx_x_inp, tx_y_slider, tx_y_inp, tx_power_slider, tx_power_inp, tx_dir_slider, tx_dir_inp, tx_scan_slider, tx_scan_inp;
         std::vector<float> power_dBm(init.size()), theta_deg(init.size()), scan_deg(init.size());
@@ -849,8 +864,8 @@ namespace graphics
                             {
                                 ptr_live_data = &mrg_cow_data;
                                 griddata.debug_mode = true;
-                                griddata.curr_pxl_range[0] = min_color_span;
-                                griddata.curr_pxl_range[1] = max_color_span;
+                                griddata.curr_pxl_range[0] = min_and_max.first;
+                                griddata.curr_pxl_range[1] = min_and_max.second;
                             }
 
                             sync.event_render(render_tx_id);
@@ -987,8 +1002,8 @@ namespace graphics
                     {
                         ptr_live_data = &mrg_cow_data;
                         griddata.debug_mode = false;
-                        griddata.curr_pxl_range[0] = min_color_span;
-                        griddata.curr_pxl_range[1] = max_color_span;
+                        griddata.curr_pxl_range[0] = min_and_max.first;
+                        griddata.curr_pxl_range[1] = min_and_max.second;
                     }
 
                     sync.event_render(render_tx_id);
@@ -1026,12 +1041,12 @@ namespace graphics
 
                 /* Add sliders for minand max values */
                 ImGui::Text("Signal Min and Max");
-                if (ImGui::SliderFloat("Min##slider", &griddata.curr_pxl_range[0], min_color_span, max_color_span, "%.2f dB") ||
-                    ImGui::InputFloat("Min##input", &griddata.curr_pxl_range[0], min_color_span, max_color_span, "%.2f"))
+                if (ImGui::SliderFloat("Min##slider", &griddata.curr_pxl_range[0], min_and_max.first, min_and_max.second, "%.2f dB") ||
+                    ImGui::InputFloat("Min##input", &griddata.curr_pxl_range[0], min_and_max.first, min_and_max.second, "%.2f"))
                     sync.event_render(render_tx_id);
 
-                if (ImGui::SliderFloat("Max##slider", &griddata.curr_pxl_range[1], min_color_span, max_color_span, "%.2f dB") ||
-                    ImGui::InputFloat("Max##input", &griddata.curr_pxl_range[1], min_color_span, max_color_span, ""%.2f"))
+                if (ImGui::SliderFloat("Max##slider", &griddata.curr_pxl_range[1], min_and_max.first, min_and_max.second, "%.2f dB") ||
+                    ImGui::InputFloat("Max##input", &griddata.curr_pxl_range[1], min_and_max.first, min_and_max.second, "%.2f"))
                     sync.event_render(render_tx_id);
 
                 // Ensure minval is always less than maxval
@@ -1202,56 +1217,61 @@ namespace graphics
         const string& filename,
         const state_v& tx_states,
         const placement_v& rx_locations,
-        double_v& raw_cow_data,
+        std::vector<double_v>& raw_cow_data,
         const unsigned& grid_rows,
-        const unsigned& grid_cols,
-        const double& min_color_span,
-        const double& max_color_span)
+        const unsigned& grid_cols)
     {
         float pixel_height = 1;
         float pixel_width = 1;
 
+        std::vector<int> tx_ids(raw_cow_data.size());
+        iota(tx_ids.begin(), tx_ids.end(), 0);
+
+        Pair<float> min_color_span = compute_colorspan(raw_cow_data);
         sf::RenderTexture renderTexture;
 
-        if (renderTexture.create(grid_cols * pixel_width, grid_rows * pixel_height))
+        HeatGrid griddata(grid_cols, grid_rows, min_color_span.first, min_color_span.second, renderTexture.getSize(), rx_locations, tx_states);
+
+        for (auto& idx : tx_ids)
         {
-            renderTexture.clear();
-
-            HeatGrid griddata(grid_cols, grid_rows, min_color_span, max_color_span, renderTexture.getSize(), rx_locations, tx_states);
-
-            /* draw the grid */
-            griddata.update_heat(raw_cow_data);
-            renderTexture.draw(griddata.grid);
-
-            /* draw the receivers */
-            for (auto& circle : griddata.rx_cicles)
+            if (renderTexture.create(grid_cols * pixel_width, grid_rows * pixel_height))
             {
-                renderTexture.draw(circle);
-            }
+                renderTexture.clear();
 
-            /* draw the transmitters */
-            for (auto& data : griddata.txdata)
-            {
-                renderTexture.draw(data.transmitter);
-                for (auto& element : data.indicators)
+                /* draw the grid */
+                griddata.update_heat(raw_cow_data[idx]);
+                renderTexture.draw(griddata.grid);
+
+                /* draw the receivers */
+                for (auto& circle : griddata.rx_cicles)
                 {
-                    renderTexture.draw(element);
+                    renderTexture.draw(circle);
+                }
+
+                /* draw the transmitters */
+                for (auto& data : griddata.txdata)
+                {
+                    renderTexture.draw(data.transmitter);
+                    for (auto& element : data.indicators)
+                    {
+                        renderTexture.draw(element);
+                    }
+                }
+
+                renderTexture.display();
+
+                // Save the render texture to a file
+                sf::Texture texture = renderTexture.getTexture();
+                sf::Image image = texture.copyToImage();
+                if (!image.saveToFile(filename + str(idx) + ".png"))
+                {
+                    spdlog::error("Failed to save image!");
                 }
             }
-
-            renderTexture.display();
-
-            // Save the render texture to a file
-            sf::Texture texture = renderTexture.getTexture();
-            sf::Image image = texture.copyToImage();
-            if (!image.saveToFile(filename))
+            else
             {
-                spdlog::error("Failed to save image!");
+                spdlog::error("Failed to create render texture!");
             }
-
-            return;
         }
-
-        spdlog::error("Failed to create render texture!");
     }
 }
