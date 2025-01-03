@@ -22,8 +22,8 @@ struct GraphicsHelper
 {
 	Logger& logger;
 	unsigned num_tx, num_rx;
-	unsigned rows;
-	unsigned cols;
+	unsigned known_height;
+	unsigned known_width;
 	std::vector<double_v> raw_cow_data; // raw split data that shows signal strength of each COW
 	std::vector<double_v> raw_mrg_data; // merged data that shows SINR based on strongest signal
 	std::vector<size_t>   cow_sigids;   // max signal ids for each pixel, to be used with merged
@@ -35,14 +35,14 @@ struct GraphicsHelper
 
 	void init(const double& inoise_factor)
 	{
-		raw_cow_data.assign(num_tx, double_v(rows * cols)); // resize the part with individual cow heat data (1.)
+		raw_cow_data.assign(num_tx, double_v(known_height * known_width)); // resize the part with individual cow heat data (1.)
 		noise_factor = inoise_factor;
 	}
 
 	void rqst_secondary_mem()
 	{
-		raw_mrg_data.assign(num_tx, double_v(rows * cols)); // resize the part with merged cow heat data (2.)
-		cow_sigids.resize(rows * cols);   // cow id to use as signal source (3.) - this can be a local variable
+		raw_mrg_data.assign(num_tx, double_v(known_height * known_width)); // resize the part with merged cow heat data (2.)
+		cow_sigids.resize(known_height * known_width);   // cow id to use as signal source (3.) - this can be a local variable
 		rx_ids_p_idx.resize(num_rx);      // indices inside the merged cow heat data to represent receiver SINR. See (2.) (4.)
 	}
 
@@ -69,11 +69,11 @@ struct GraphicsHelper
 
 		for (auto& txid : input)
 		{
-			for (size_t row = 0; row < rows; ++row)
+			for (size_t row = 0; row < known_height; ++row)
 			{
 				//logger.write("cow " + str(cow_idx) + '\n');
 
-				for (size_t col = 0; col < cols; ++col)
+				for (size_t col = 0; col < known_width; ++col)
 				{
 					double num = lin2dB(raw_cow_data[txid][index]); // already filled with heat from "setup_tx" now convert
 					raw_cow_data[txid][index] = num;
@@ -88,11 +88,11 @@ struct GraphicsHelper
 	{
 		auto& renderarea = graphics::render_space;
 
-		if (rows != renderarea.y || rows != renderarea.x)
+		if (known_height != renderarea.y || known_height != renderarea.x)
 		{
-			rows = renderarea.y;
-			cols = renderarea.x;
-			raw_cow_data.resize(raw_cow_data.size(), double_v(rows * cols));
+			known_height = renderarea.y;
+			known_width = renderarea.x;
+			raw_cow_data.resize(raw_cow_data.size(), double_v(known_height * known_width));
 			rqst_secondary_mem();
 		}
 
@@ -100,8 +100,8 @@ struct GraphicsHelper
 			power(" + str(state.settings.power) + \
 			") antenna_dir (" + str(state.settings.theta_c) + \
 			") scan_angle(" + str(state.settings.alpha) + \
-			") rows(" + str(rows) + \
-			") cols(" + str(cols));
+			") known_height(" + str(known_height) + \
+			") known_width(" + str(known_width));
 			//") placement(" + str(placement) + ")");
 
 		cow.update(state.settings, state.location);
@@ -121,7 +121,7 @@ struct GraphicsHelper
 		{
 			spdlog::info("Setting up TX " + str(cow.sid()) + " for GUI");
 
-			cow.init_gui(rows, cols);
+			cow.init_gui(known_width, known_height);
 			cow.update(lut_power_list[cow.sid()], lut_scan_angle_list[cow.sid()]);
 			cow.heatmap(raw_cow_data[cow.sid()], debug_steps);
 		}
@@ -149,11 +149,11 @@ struct GraphicsHelper
 					{
 						auto& renderarea = graphics::render_space;
 
-						if (rows != renderarea.y || rows != renderarea.x)
+						if (known_height != renderarea.y || known_height != renderarea.x)
 						{
-							rows = renderarea.y;
-							cols = renderarea.x;
-							raw_cow_data.resize(raw_cow_data.size(), double_v(rows * cols));
+							known_height = renderarea.y;
+							known_width = renderarea.x;
+							raw_cow_data.resize(raw_cow_data.size(), double_v(known_height * known_width));
 							rqst_secondary_mem();
 						}
 
@@ -203,9 +203,9 @@ struct GraphicsHelper
 		size_t pxl_idx = 0;
 		double num = 0;
 
-		for (unsigned row = 0; row < rows; ++row)
+		for (unsigned row = 0; row < known_height; ++row)
 		{
-			for (unsigned col = 0; col < cols; ++col)
+			for (unsigned col = 0; col < known_width; ++col)
 			{
 				for (auto& cow : txlist)
 				{
@@ -249,9 +249,9 @@ struct GraphicsHelper
 
 		size_t index = 0;
 
-		for (size_t row = 0; row < rows; ++row)
+		for (size_t row = 0; row < known_height; ++row)
 		{
-			for (size_t col = 0; col < cols; ++col)
+			for (size_t col = 0; col < known_width; ++col)
 			{
 				/* find max and the corresponding cow-id (that becomes SIGNAL) */
 				double max_value = sep_channels.first;
@@ -286,9 +286,9 @@ struct GraphicsHelper
 			rx_coords_hash_lut[loc.x].emplace(loc.y);
 		}
 
-		for (size_t row = 0; row < rows; ++row)
+		for (size_t row = 0; row < known_height; ++row)
 		{
-			for (size_t col = 0; col < cols; ++col)
+			for (size_t col = 0; col < known_width; ++col)
 			{
 				const unsigned& cow_idx = cow_sigids[px_index];
 				const double& signal = raw_cow_data[cow_idx][px_index];
@@ -350,8 +350,8 @@ struct GraphicsHelper
 			init_states,
 			raw_cow_data,
 			raw_mrg_data,
-			rows,
-			cols,
+			known_height,
+			known_width,
 			min_and_max.first,
 			min_and_max.second,
 			sync,
@@ -397,8 +397,8 @@ struct GraphicsHelper
 				init_states,
 				mobile_stations_loc,
 				raw_cow_data[cow.sid()],
-				rows,
-				cols,
+				known_height,
+				known_width,
 				min_and_max_d.first,
 				min_and_max_d.second);
 
@@ -407,8 +407,8 @@ struct GraphicsHelper
 				init_states,
 				mobile_stations_loc,
 				raw_mrg_data[cow.sid()],
-				rows,
-				cols,
+				known_height,
+				known_width,
 				min_and_max.first,
 				min_and_max.second);
 		}
@@ -423,8 +423,8 @@ struct GraphicsHelper
 		:
 		num_tx(num_transmitters),
 		num_rx(num_receivers),
-		rows(pixel_rows),
-		cols(pixel_cols),
+		known_height(pixel_rows),
+		known_width(pixel_cols),
 		is_rendering(true),
 		raw_cow_data(num_tx),
 		raw_mrg_data(num_tx),
