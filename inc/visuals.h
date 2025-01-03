@@ -76,6 +76,7 @@ namespace graphics
         sf::Font font;
 
         bool debug_mode;
+
         /* WARNING: if you're building the mrg-data model, do that first
         before converting debug model to dBm (all interference and thermal noise are ADDITIVE sources of noise!) */
         void logify_intermediate_calc(double_v& lin_output)
@@ -608,6 +609,9 @@ namespace graphics
         sf::View view = window.getDefaultView();
 
         /* init variables */
+        int debounce_txid = -1;
+        float debounce_timer = 0.0f;
+        float debounce_delay = 0.5f; // 100ms delay
         float zoomLevel = 1.0f;
         bool state_changed = true;
         bool panning = false;
@@ -733,9 +737,17 @@ namespace graphics
 
                                 auto& id = tx_dragging->id;
 
-                                prev[id].location = curr[id].location;
-                                curr[id].location = griddata.grid_loc_2_state_loc(event.mouseButton.x, event.mouseButton.y);
-                                sync.event_render(render_tx_id);
+								auto potential_new_loc = griddata.grid_loc_2_state_loc(event.mouseButton.x, event.mouseButton.y);
+								if (potential_new_loc != curr[id].location)
+								{
+									prev[id].location = curr[id].location;
+
+									curr[id].location = potential_new_loc;
+									griddata.set_tx_position(id, event.mouseButton.x, event.mouseButton.y);
+
+									debounce_timer = 0.0f;
+									debounce_txid = id;
+								}
 
                                 break;
                             }
@@ -772,6 +784,9 @@ namespace graphics
                             {
                                 curr[id].location = potential_new_loc;
                                 griddata.set_tx_position(id, event.mouseButton.x, event.mouseButton.y);
+
+                                debounce_timer = 0.0f;
+                                debounce_txid = id;
                             }
                             else
                             {
@@ -804,7 +819,8 @@ namespace graphics
                         curr[id].location = griddata.grid_loc_2_state_loc(event.mouseMove.x, event.mouseMove.y);
                         griddata.set_tx_position(id, event.mouseMove.x, event.mouseMove.y);
 
-                        sync.emplace_state(curr[id]);
+                        debounce_timer = 0.0f;
+                        debounce_txid = id;
                     }
 
                     if (panning)
@@ -1071,7 +1087,8 @@ namespace graphics
                             curr[i].location.x = griddata.grid_2_state_x(i);
                             griddata.update_tx_vertex(i);
 
-                            sync.emplace_state(curr[i]);
+                            debounce_timer = 0.0f;
+                            debounce_txid = i;
                         }
 
                         ImGui::SameLine();
@@ -1089,7 +1106,8 @@ namespace graphics
                             curr[i].location.y = griddata.grid_2_state_y(i);
                             griddata.update_tx_vertex(i);
 
-                            sync.emplace_state(curr[i]);
+                            debounce_timer = 0.0f;
+                            debounce_txid = i;
                         }
 
                         ImGui::SameLine();
@@ -1107,7 +1125,9 @@ namespace graphics
                         if (ImGui::SliderFloat(tx_power_slider[i].c_str(), &power_dBm[i], -30.0f, +30.0f, "%.2f dBm"))
                         {
                             curr[i].settings.power = cached::dBm2watt(power_dBm[i]);
-                            sync.emplace_state(curr[i]);
+
+                            debounce_timer = 0.0f;
+                            debounce_txid = i;
                         }
 
                         ImGui::SameLine();
@@ -1126,7 +1146,9 @@ namespace graphics
                             curr[i].settings.theta_c = cached::deg2rad(theta_deg[i]);
                             griddata.rotation_update(M_PIl / 2 - curr[i].settings.theta_c, i);
 
-                            sync.emplace_state(curr[i]);
+                            debounce_timer = 0.0f;
+                            debounce_txid = i;
+
                         }
 
                         ImGui::SameLine();
@@ -1147,7 +1169,9 @@ namespace graphics
                         {
                             curr[i].settings.alpha = cached::deg2rad(scan_deg[i]);
                             griddata.scan_angle_update(i);
-                            sync.emplace_state(curr[i]);
+
+                            debounce_timer = 0.0f;
+                            debounce_txid = i;
                         }
 
                         ImGui::SameLine();
@@ -1157,8 +1181,18 @@ namespace graphics
                             griddata.scan_angle_update(i);
                             sync.emplace_state(curr[i]);
                         }
+
+
                     } // end TX header (if)
                 } // end TX header section (for loop)
+
+                debounce_timer += ImGui::GetIO().DeltaTime;
+                if (debounce_txid != -1 && debounce_timer >= debounce_delay)
+                {
+                    sync.emplace_state(curr[debounce_txid]);
+                    debounce_timer = 0.0f; // Reset timer after update
+                    debounce_txid = -1;
+                }
             }
 
             if (sync.got_updates(render_tx_id))
