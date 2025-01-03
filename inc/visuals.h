@@ -149,8 +149,9 @@ namespace graphics
         void draw_legend(sf::RenderWindow& window) {
             // Legend dimensions
             const float legendWidth = 55.f;
-            const float legendHeight = 400.f;
-            //const float bar_height = legendHeight / 50.f;
+            const float legendHeight = 1000.f;
+            const float steps = 25.0f; // labels
+
             const sf::Vector2f legendPos(data_width + offset_width + 30.f, offset_height); // Place on the right side
 
             // Create the legend gradient
@@ -180,19 +181,20 @@ namespace graphics
             labelMax.setString(str(static_cast<int>(curr_pxl_range[1])) + " dB" + (debug_mode ? "m" : ""));
             labelMax.setCharacterSize(15);
             labelMax.setFillColor(sf::Color::White);
-            labelMax.setPosition(legendPos.x + legendWidth + 5.f, legendPos.y - 10.f);
+            labelMax.setPosition(legendPos.x + legendWidth + 5.f, legendPos.y);
             window.draw(labelMax);
 
             labelMid.setFont(font);
             labelMid.setCharacterSize(15);
             labelMid.setFillColor(sf::Color::White);
-            int steps = legendHeight / 100.0;
-            float range = curr_pxl_range[0] + curr_pxl_range[1];
+            float tick_interval = legendHeight / steps;
+            float range_steps = (curr_pxl_range[1] - curr_pxl_range[0]) / steps;
 
             for (int i = 1; i < steps; ++i)
             {
-                labelMid.setString(str(static_cast<int>(i * range / steps)) + " dB" + (debug_mode ? "m" : ""));
-                labelMid.setPosition(legendPos.x + legendWidth + 5.f, legendPos.y + i * 100);
+                float signal_value = curr_pxl_range[0] + i * range_steps;
+                labelMid.setString(str(static_cast<int>(signal_value)) + " dB" + (debug_mode ? "m" : ""));
+                labelMid.setPosition(legendPos.x + legendWidth + 5.f, legendPos.y + legendHeight - i * tick_interval);
                 window.draw(labelMid);
             }
 
@@ -830,7 +832,9 @@ namespace graphics
                             else
                             {
                                 ptr_live_data = &mrg_cow_data;
-                                griddata.debug_mode = false;
+                                griddata.debug_mode = true;
+								griddata.curr_pxl_range[0] = min_color_span;
+								griddata.curr_pxl_range[1] = max_color_span;
                             }
 
                             sync.event_render(render_tx_id);
@@ -967,6 +971,8 @@ namespace graphics
                     {
                         ptr_live_data = &mrg_cow_data;
                         griddata.debug_mode = false;
+                        griddata.curr_pxl_range[0] = min_color_span;
+                        griddata.curr_pxl_range[1] = max_color_span;
                     }
 
                     sync.event_render(render_tx_id);
@@ -1004,12 +1010,12 @@ namespace graphics
 
                 /* Add sliders for minand max values */
                 ImGui::Text("Signal Min and Max");
-                if (ImGui::SliderFloat("Min##slider", &griddata.curr_pxl_range[0], -300.0f, 50.0f, "%.2f dB") ||
-                    ImGui::InputFloat("Min##input", &griddata.curr_pxl_range[0], -300.0f, 50.0f, "%.2f"))
+                if (ImGui::SliderFloat("Min##slider", &griddata.curr_pxl_range[0], min_color_span, max_color_span, "%.2f dB") ||
+                    ImGui::InputFloat("Min##input", &griddata.curr_pxl_range[0], min_color_span, max_color_span, "%.2f"))
                     sync.event_render(render_tx_id);
 
-                if (ImGui::SliderFloat("Max##slider", &griddata.curr_pxl_range[1], -299.0f, 50.0f, "%.2f dB") ||
-                    ImGui::InputFloat("Max##input", &griddata.curr_pxl_range[1], -299.0f, 50.0f, "%.2f"))
+                if (ImGui::SliderFloat("Max##slider", &griddata.curr_pxl_range[1], min_color_span, max_color_span, "%.2f dB") ||
+                    ImGui::InputFloat("Max##input", &griddata.curr_pxl_range[1], min_color_span, max_color_span, ""%.2f"))
                     sync.event_render(render_tx_id);
 
                 // Ensure minval is always less than maxval
