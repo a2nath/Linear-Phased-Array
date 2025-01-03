@@ -203,24 +203,6 @@ struct GraphicsHelper
 		);
 	}
 
-
-	/* returns relative min and max sinr between transmitters */
-	Pair<float> compute_colorspan(const std::vector<std::vector<double>>& heatdata,
-		float float_min = std::numeric_limits<float>::max(),
-		float float_max = std::numeric_limits<float>::lowest())
-	{
-		for (int tx_id = 0; tx_id < heatdata.size(); ++tx_id)
-		{
-			auto [fmin, fmax] = std::minmax_element(heatdata[tx_id].begin(), heatdata[tx_id].end());
-
-			float_min = std::min((float)*fmin, float_min);
-			float_max = std::max((float)*fmax, float_max);
-		}
-
-		return { float_min, float_max };
-	}
-
-
 	void generate_interference_data(const cow_v& txlist)
 	{
 		spdlog::info("Create interference data");
@@ -269,8 +251,6 @@ struct GraphicsHelper
 		//rqst_secondary_mem();
 		//
 		//setup_tx(txlist, bs_txpower, scan_alpha_list, rows, cols);
-
-		Pair<float> sep_channels = compute_colorspan(raw_cow_data);
 
 
 		size_t index = 0;
@@ -340,8 +320,6 @@ struct GraphicsHelper
 			}
 		}
 
-		Pair<float> com_channels = compute_colorspan({ raw_cow_data.back() });
-
 	}
 
 	void render(cow_v& txlist,
@@ -364,8 +342,7 @@ struct GraphicsHelper
 			}
 		}
 
-		Pair<float> min_and_max = compute_colorspan(raw_cow_data);
-		min_and_max = compute_colorspan(raw_mrg_data, min_and_max.first, min_and_max.second);
+		spdlog::info("Beginning Visualization from Initial TX states");
 
 		graphics::render(logger,
 			mobile_stations_loc,
@@ -374,8 +351,6 @@ struct GraphicsHelper
 			raw_mrg_data,
 			known_height,
 			known_width,
-			min_and_max.first,
-			min_and_max.second,
 			sync,
 			is_rendering);
 	}
@@ -400,32 +375,26 @@ struct GraphicsHelper
 		}
 		// else capture plot as it is
 
-		Pair<float> min_and_max_d = compute_colorspan(raw_cow_data);
-		Pair<float> min_and_max = compute_colorspan(raw_mrg_data);// , min_and_max.first, min_and_max.second);
+		spdlog::info("Capturing plots\n\tDebug Plots");
 
+		graphics::capture_plot(logger,
+			"transmitter_dbg_",
+			init_states,
+			mobile_stations_loc,
+			raw_cow_data,
+			known_height,
+			known_width);
 
-		for (auto& cow : txlist)
-		{
-			graphics::capture_plot(logger,
-				"transmitter_dbg_" + str(cow.sid()) + ".png",
-				init_states,
-				mobile_stations_loc,
-				raw_cow_data[cow.sid()],
-				known_height,
-				known_width,
-				min_and_max_d.first,
-				min_and_max_d.second);
+		spdlog::info("\tInterference Plots");
 
-			graphics::capture_plot(logger,
-				"transmitter_int_" + str(cow.sid()) + ".png",
-				init_states,
-				mobile_stations_loc,
-				raw_mrg_data[cow.sid()],
-				known_height,
-				known_width,
-				min_and_max.first,
-				min_and_max.second);
-		}
+		graphics::capture_plot(logger,
+			"transmitter_int_",
+			init_states,
+			mobile_stations_loc,
+			raw_mrg_data,
+			known_height,
+			known_width);
+
 	}
 
 	GraphicsHelper(const size_t num_transmitters,
