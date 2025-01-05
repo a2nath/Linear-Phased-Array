@@ -55,7 +55,6 @@ namespace graphics
 
     struct HeatGrid
     {
-        const float padding;
         const float offset_height, offset_width;
         const unsigned& data_height;
         const unsigned& data_width;
@@ -66,16 +65,16 @@ namespace graphics
 
         sf::Vector2u bounds_lower, bounds_upper, window_size;
 
+        sf::VertexArray grid;
         const placement_v& rx_locations;
         const std::vector<State>& txstates;
 
-        sf::VertexArray grid;
-        std::vector<sf::CircleShape> rx_cicles;
-
-        std::vector<txvertex> txdata;
-        sf::Font font;
-
         bool debug_mode;
+
+        std::vector<sf::CircleShape> rx_cicles;
+        std::vector<txvertex> txdata;
+
+        sf::Font font;
 
         /* WARNING: if you're building the mrg-data model, do that first
         before converting debug model to dBm (all interference and thermal noise are ADDITIVE sources of noise!) */
@@ -163,7 +162,14 @@ namespace graphics
             return sf::Color(r, g, b);
         }
 
-        void draw_legend(sf::RenderWindow& window) {
+        void reset_span(const Pair<float>& new_range)
+        {
+            std::swap(prev_pxl_range, curr_pxl_range);
+            curr_pxl_range[0] = new_range.first;
+            curr_pxl_range[1] = new_range.second;
+        }
+
+        void draw_legend(sf::RenderTarget& window) {
             // Legend dimensions
             const float legendWidth = 55.f;
             const float legendHeight = 1000.f;
@@ -193,12 +199,13 @@ namespace graphics
             // Labels for the legend
 
             sf::Text labelMin, labelMax, labelMid;
+            float labeloffset = -8.0f;
 
             labelMax.setFont(font);
             labelMax.setString(str(static_cast<int>(curr_pxl_range[1])) + " dB" + (debug_mode ? "m" : ""));
             labelMax.setCharacterSize(15);
             labelMax.setFillColor(sf::Color::White);
-            labelMax.setPosition(legendPos.x + legendWidth + 5.f, legendPos.y);
+            labelMax.setPosition(legendPos.x + legendWidth + 5.f, legendPos.y + labeloffset);
             window.draw(labelMax);
 
             labelMid.setFont(font);
@@ -211,7 +218,7 @@ namespace graphics
             {
                 float signal_value = curr_pxl_range[0] + i * range_steps;
                 labelMid.setString(str(static_cast<int>(signal_value)) + " dB" + (debug_mode ? "m" : ""));
-                labelMid.setPosition(legendPos.x + legendWidth + 5.f, legendPos.y + legendHeight - i * tick_interval);
+                labelMid.setPosition(legendPos.x + legendWidth + 5.f, legendPos.y + legendHeight - i * tick_interval + labeloffset);
                 window.draw(labelMid);
             }
 
@@ -221,6 +228,30 @@ namespace graphics
             labelMin.setFillColor(sf::Color::White);
             labelMin.setPosition(legendPos.x + legendWidth + 5.f, legendPos.y + legendHeight - 10.f);
             window.draw(labelMin);
+        }
+
+        void draw(sf::RenderTarget& window)
+        {
+            /* draw the grid */
+            window.draw(grid);
+
+            /* draw the receivers */
+            for (auto& circle : rx_cicles)
+            {
+                window.draw(circle);
+            }
+
+            /* draw the transmitters */
+            for (auto& data : txdata)
+            {
+                window.draw(data.transmitter);
+                for (auto& element : data.indicators)
+                {
+                    window.draw(element);
+                }
+            }
+
+            draw_legend(window);
         }
 
         void update_panning(sf::Vector2i& moved_offset)
@@ -473,9 +504,9 @@ namespace graphics
             const float& imax,
             const sf::Vector2u& iwindow_size,
             const placement_v& irx_locations,
-            const vector<State>& curr_state)
+            const vector<State>& curr_state,
+            const float padding = 30.0f)
             :
-            padding(30.0f),
             offset_height(padding),
             offset_width(padding),
             data_width(icols),
@@ -484,9 +515,9 @@ namespace graphics
             pixel_height(iwindow_size.y / irows),
             bounds_lower({0, 0}),
             bounds_upper(iwindow_size),
+            grid(sf::Quads, irows * icols * 4),
             rx_locations(irx_locations),
             txstates(curr_state),
-            grid(sf::Quads, irows * icols * 4),
             debug_mode(false)
         {
             init_thresholds[0] = 0.25; // Cyan to Green
@@ -510,6 +541,38 @@ namespace graphics
             }
 
             resize({ data_width, data_height });
+        }
+
+        HeatGrid(
+            const unsigned& icols,
+            const unsigned& irows,
+            const placement_v& irx_locations,
+            const vector<State>& curr_state,
+            const float padding = 30.0f)
+            :
+            offset_height(padding),
+            offset_width(padding),
+            data_width(icols),
+            data_height(irows),
+            pixel_width(icols / icols),
+            pixel_height(irows / irows),
+            bounds_lower({ 0, 0 }),
+            bounds_upper({ icols, irows }),
+            grid(sf::Quads, irows* icols * 4),
+            rx_locations(irx_locations),
+            txstates(curr_state),
+            debug_mode(false)
+        {
+            init_thresholds[0] = 0.25; // Cyan to Green
+            init_thresholds[1] = 0.50; // Green to Yellow
+            init_thresholds[2] = 0.81; // Yellow to Red
+
+            init(bounds_lower, bounds_upper);
+
+            if (!font.loadFromFile("font/OpenSans-Light.ttf"))
+            {
+                spdlog::warn("Font file did not load for SFML library");
+            }
         }
     };
 
@@ -578,20 +641,70 @@ namespace graphics
         curr_pos += delta;
     }
 
+    void save(HeatGrid& griddata, std::vector<double_v>& signal_data, int tx_idx, sf::RenderWindow* window = nullptr)
+    {
+        int pixel_width = 1;
+        int pixel_height = 1;
+
+        sf::RenderTexture renderTexture;
+        Dimensions<unsigned> size = { griddata.data_width * pixel_width + (unsigned)griddata.offset_width + 150,
+            griddata.data_height * pixel_height + 2 * (unsigned)griddata.offset_height };
+
+        if (window)
+        {
+            auto window_size = window->getSize();
+            size.x = max(window_size.x * pixel_width, size.x);
+            size.y = max(window_size.y * pixel_height, size.y);
+        }
+
+        std::string name = griddata.debug_mode ? "transmitter_dbg_ " : "transmitter_int_";
+
+        if (renderTexture.create(size.x, size.y))
+        {
+            renderTexture.clear();
+
+            /* draw the grid */
+            griddata.update_heat(signal_data[tx_idx]);
+            griddata.draw(renderTexture);
+
+#ifdef CONTROLS
+            if (window)
+            {
+                ImGui::SFML::Render(renderTexture);
+            }
+#endif
+            renderTexture.display();
+
+
+            sf::Texture texture = renderTexture.getTexture();
+            sf::Image image = texture.copyToImage();
+            if (!image.saveToFile(name + str(tx_idx) + "." + timestamp() + ".png"))
+            {
+                spdlog::error("Failed to save image!");
+            }
+
+        }
+        else
+        {
+            spdlog::error("Failed to create render texture!");
+        }
+    }
+
     /*    G U I    */
     int render(
         Logger& logger,
         const placement_v& init_rx_locations,
-        const state_v& tx_states,
-        std::vector<double_v>& raw_cow_data,
-        const std::vector<double_v>& mrg_cow_data,
+        const state_v& init_states,
+        state_v& curr_states,
+        const std::vector<double_v>& raw_dbg_lin_data,
+        std::vector<double_v>& raw_dbg_dBm_data,
+        std::vector<double_v>& mrg_cow_data,
         const unsigned& grid_rows,
         const unsigned& grid_cols,
         DataSync& sync,
         bool& is_rendering)
     {
         std::signal(SIGINT, sig_handler);
-
 
         size_t render_width = grid_cols + 800;
         size_t render_height = grid_rows + 500;
@@ -620,18 +733,19 @@ namespace graphics
         float zoom_change_factor = 1.1f;
         long pan_adj_factor = 10;
         int render_tx_id = 0;
-        size_t tx_count = tx_states.size();
+        size_t tx_count = init_states.size();
 
         /* set the states, current (working variable), previous (for undo), init (for reset) */
-        auto& init = tx_states;
+
+        auto& init = init_states;
+        auto& curr = curr_states;
+        curr = init;
+
+        state_v prev = init;
         txvertex* tx_dragging = nullptr;
 
         Pair<float> min_and_max = compute_colorspan(mrg_cow_data);
-        const std::vector<std::vector<double>>* ptr_live_data = &mrg_cow_data;
-
-        state_v curr, prev;
-        curr = init;
-        prev = init;
+        std::vector<std::vector<double>>* ptr_live_data = &mrg_cow_data;
 
         HeatGrid griddata(grid_cols, grid_rows, min_and_max.first, min_and_max.second, window_size, init_rx_locations, curr);
 
@@ -712,9 +826,7 @@ namespace graphics
                 }
                 case sf::Event::MouseWheelScrolled:
                 {
-
                     zoom_request = event.mouseWheelScroll.delta - mouse_delta_thresh;
-
                     break;
                 }
                 case sf::Event::MouseButtonPressed:
@@ -868,7 +980,7 @@ namespace graphics
                         {
                             if (griddata.debug_mode == false)
                             {
-                                ptr_live_data = &raw_cow_data;
+                                ptr_live_data = &raw_dbg_dBm_data;
                                 griddata.debug_mode = true;
                             }
                             else
@@ -1006,7 +1118,7 @@ namespace graphics
                 {
                     if (griddata.debug_mode == false)
                     {
-                        ptr_live_data = &raw_cow_data;
+                        ptr_live_data = &raw_dbg_dBm_data;
                         griddata.debug_mode = true;
                     }
                     else
@@ -1120,7 +1232,6 @@ namespace graphics
                         if (ImGui::SliderFloat(tx_power_slider[i].c_str(), &power_dBm[i], -30.0f, +30.0f, "%.2f dBm"))
                         {
                             curr[i].settings.power = cached::dBm2watt(power_dBm[i]);
-
                             debounce_timer = 0.0f;
                             debounce_txid = i;
                         }
@@ -1132,12 +1243,10 @@ namespace graphics
                             sync.emplace_state(curr[i]);
                         }
 
-                        /* antenna-power mechanism for each transmitter */
                         ImGui::Text("Antenna Direction");
 
                         if (ImGui::SliderAngle(tx_dir_slider[i].c_str(), &theta_deg[i], 0.0f, 359.9f, "%.2f deg"))
                         {
-                            /* draw the placement direction indicators for each tower */
                             curr[i].settings.theta_c = cached::deg2rad(theta_deg[i]);
                             griddata.rotation_update(M_PIl / 2 - curr[i].settings.theta_c, i);
 
@@ -1149,7 +1258,6 @@ namespace graphics
                         ImGui::SameLine();
                         if (ImGui::InputFloat(tx_dir_inp[i].c_str(), &theta_deg[i], 0.0f, 359.9f, "%.2f", ImGuiInputTextFlags_EnterReturnsTrue))
                         {
-                            /* draw the placement direction indicators for each tower */
                             curr[i].settings.theta_c = cached::deg2rad(theta_deg[i]);
                             griddata.rotation_update(M_PIl / 2 - curr[i].settings.theta_c, i);
 

@@ -24,20 +24,21 @@ struct GraphicsHelper
 	unsigned num_tx, num_rx;
 	unsigned known_height;
 	unsigned known_width;
-	std::vector<double_v> raw_cow_data; // raw split data that shows signal strength of each COW
+	double noise_factor;
+	std::vector<double_v> raw_dbg_lin_data; // raw split data that shows signal strength of each COW
+	std::vector<double_v> raw_dbg_dBm_data; // merged data that shows SINR based on strongest signal
 	std::vector<double_v> raw_mrg_data; // merged data that shows SINR based on strongest signal
 	std::vector<size_t>   cow_sigids;   // max signal ids for each pixel, to be used with merged
 	std::vector<size_t>   rx_ids_p_idx; // rx index to find the SINR value from the mrg lut data
-	state_v init_states;
+	state_v curr_states;
 	Bench btime;
 
 	bool verbose;
 	bool is_rendering;
-	double noise_factor;
 
 	inline bool ready() const
 	{
-		return raw_cow_data.size() > 0;
+		return raw_dbg_lin_data.size() > 0;
 	}
 
 	//void rqst_secondary_mem()
@@ -61,13 +62,13 @@ struct GraphicsHelper
 		cow.update(state.settings, state.location);
 
 		/* update cow heat data */
-		cow.heatmap(raw_cow_data[cow.sid()]);
+		cow.heatmap(raw_dbg_lin_data[cow.sid()]);
 	}
 
 	/* GUI setup for all cows together, inputs: rows, cols */
 	void setup_tx(cow_v& cows, const double_v& lut_power_list, const double_v& lut_scan_angle_list)
 	{
-		raw_cow_data.assign(num_tx, double_v(known_width * known_height));
+		raw_dbg_lin_data.assign(num_tx, double_v(known_width * known_height));
 		spdlog::info("Setting up " + str(cows.size()) + " transmitters in visuals");
 
 		for (auto& cow : cows)
@@ -76,7 +77,7 @@ struct GraphicsHelper
 
 			cow.init_gui(known_width, known_height);
 			cow.update_minimal(lut_power_list[cow.sid()], lut_scan_angle_list[cow.sid()]);
-			cow.heatmap(raw_cow_data[cow.sid()]);
+			cow.heatmap(raw_dbg_lin_data[cow.sid()]);
 		}
 	}
 
@@ -108,7 +109,7 @@ struct GraphicsHelper
 						{
 							known_height = renderarea.y;
 							known_width = renderarea.x;
-							raw_cow_data.resize(raw_cow_data.size(), double_v(known_height * known_width));
+							raw_dbg_lin_data.resize(raw_dbg_lin_data.size(), double_v(known_height * known_width));
 						}
 
 						sync.resize_event = false;
@@ -178,12 +179,12 @@ struct GraphicsHelper
 				{
 					auto& cow_idx = cow.sid();
 
-					const double& signal = raw_cow_data[cow_idx][pxl_idx];
+					const double& signal = raw_dbg_lin_data[cow_idx][pxl_idx];
 					double interference = 0;
 
 					for (unsigned c = (cow_idx + 1) % txlist.size(); c != cow_idx;)
 					{
-						interference += raw_cow_data[c][pxl_idx];
+						interference += raw_dbg_lin_data[c][pxl_idx];
 						c = (c + 1) % txlist.size();
 					}
 
@@ -198,7 +199,7 @@ struct GraphicsHelper
 	void debug_mode_max_signal_map(cow_v& txlist,
 		const placement_v& mobile_stations_loc)
 	{
-		//if (raw_cow_data[0].empty())
+		//if (raw_dbg_lin_data[0].empty())
 		//{
 		//	spdlog::critical("Visualization not enabled, exiting render() function");
 		//	return;
@@ -222,9 +223,9 @@ struct GraphicsHelper
 
 				for (auto& cow : txlist)
 				{
-					if (max_value < raw_cow_data[cow.sid()][index])
+					if (max_value < raw_dbg_lin_data[cow.sid()][index])
 					{
-						max_value = raw_cow_data[cow.sid()][index];
+						max_value = raw_dbg_lin_data[cow.sid()][index];
 						cow_idx = cow.sid();
 					}
 				}
@@ -254,13 +255,13 @@ struct GraphicsHelper
 			for (size_t col = 0; col < known_width; ++col)
 			{
 				const unsigned& cow_idx = cow_sigids[px_index];
-				const double& signal = raw_cow_data[cow_idx][px_index];
+				const double& signal = raw_dbg_lin_data[cow_idx][px_index];
 
 				double interference = 0;
 
 				for (unsigned c = (cow_idx + 1) % txlist.size(); c != cow_idx;)
 				{
-					interference += raw_cow_data[c][px_index];
+					interference += raw_dbg_lin_data[c][px_index];
 					c = (c + 1) % txlist.size();
 				}
 
@@ -285,6 +286,8 @@ struct GraphicsHelper
 		const double_v& lut_power_list,
 		const double_v& lut_scan_angle_list)
 	{
+		state_v init_states;
+
 		if (!ready())
 		{
 			/* fill the TX indivisual simulation data across the entire grid */
@@ -304,7 +307,9 @@ struct GraphicsHelper
 		graphics::render(logger,
 			mobile_stations_loc,
 			init_states,
-			raw_cow_data,
+			curr_states,
+			raw_dbg_lin_data,
+			raw_dbg_dBm_data,
 			raw_mrg_data,
 			known_height,
 			known_width,
@@ -324,10 +329,10 @@ struct GraphicsHelper
 			setup_tx(txlist, bs_txpower, scan_alpha_list);
 			generate_interference_data(txlist);
 
-			init_states.clear();
+			curr_states.clear();
 			for (auto& tx : txlist)
 			{
-				init_states.emplace_back(tx.get_state());
+				curr_states.emplace_back(tx.get_state());
 			}
 		}
 		// else capture plot as it is
@@ -336,9 +341,9 @@ struct GraphicsHelper
 
 		graphics::capture_plot(logger,
 			"transmitter_dbg_",
-			init_states,
+			curr_states,
 			mobile_stations_loc,
-			raw_cow_data,
+			raw_dbg_lin_data,
 			known_height,
 			known_width,
 			true);
@@ -347,7 +352,7 @@ struct GraphicsHelper
 
 		graphics::capture_plot(logger,
 			"transmitter_int_",
-			init_states,
+			curr_states,
 			mobile_stations_loc,
 			raw_mrg_data,
 			known_height,
@@ -355,28 +360,30 @@ struct GraphicsHelper
 
 	}
 
-	GraphicsHelper(const size_t num_transmitters,
+	GraphicsHelper(Logger& ilogger,
+		const size_t num_transmitters,
 		const size_t num_receivers,
 		const unsigned& pixel_rows,
 		const unsigned& pixel_cols,
-		Logger& ilogger,
 		const double& inoise_factor,
 		const bool& iverbose = true)
 		:
+		logger(ilogger),
 		num_tx(num_transmitters),
 		num_rx(num_receivers),
 		known_height(pixel_rows),
 		known_width(pixel_cols),
-		verbose(iverbose),
-		is_rendering(true),
-		raw_cow_data(num_tx),
+		noise_factor(inoise_factor),
+		raw_dbg_lin_data(num_tx),
 		raw_mrg_data(num_tx),
-		logger(ilogger),
-		noise_factor(inoise_factor)
+		is_rendering(true),
+		verbose(iverbose)
 	{
-		raw_cow_data.clear();
+		raw_dbg_lin_data.clear();
+		raw_dbg_dBm_data.clear();
 		raw_mrg_data.clear();
 	}
+
 };
 #endif
 
@@ -694,8 +701,8 @@ public:
 		antenna_spacing(args.antenna_spacing),
 		antenna_dims(args.antenna_dims),
 		system_noise_factor_w(dBm2watt(getThermalSystemNoise(args.bandwidth, args.system_noise))),
-		visuals(args.base_station_count, args.mobile_station_count,
-			args.field_size[0], args.field_size[1], ilogger, system_noise_factor_w),
+		visuals(ilogger, args.base_station_count, args.mobile_station_count,
+			args.field_size[0], args.field_size[1], system_noise_factor_w),
 		bs_tx_requested_power_watts(args.tx_powerlist().data),
 		bs_requested_scan_alpha_rad(args.tx_alphalist().data),
 		ms2bs_requested_bindings(args.ms_id_selections.binding_data)
