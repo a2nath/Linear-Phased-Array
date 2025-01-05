@@ -601,6 +601,7 @@ namespace graphics
 
 		State& operator=(const State& b)
 		{
+			tx_idx = b.tx_idx;
 			settings = b.settings;
 			location = b.location;
 			return *this;
