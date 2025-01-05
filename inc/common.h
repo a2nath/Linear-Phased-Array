@@ -656,8 +656,12 @@ namespace graphics
 
 		inline void event_render(const int& idx)
 		{
-			std::scoped_lock<std::mutex> lock(graphics::render_mutex);  // Lock the mutex
-			render_tx_id = idx;
+			std::scoped_lock<std::mutex> lock(graphics::compute_sim_mutex);  // Lock the mutex
+			if (mainq.empty())
+			{
+				std::scoped_lock<std::mutex> lock(graphics::render_mutex);  // Lock the mutex
+				render_tx_id = idx;
+			}
 		}
 
 		bool got_updates(const int& def_render_id)

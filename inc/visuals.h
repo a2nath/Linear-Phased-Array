@@ -964,10 +964,7 @@ namespace graphics
                                 curr[i] = prev[i];
                             }
 
-                            if (sync.mainq.empty())
-                            {
-                                sync.event_render(render_tx_id);
-                            }
+                            sync.event_render(render_tx_id);
 
                             /* undo the color thresholds */
                             griddata.undo();
