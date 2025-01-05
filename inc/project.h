@@ -87,10 +87,10 @@ struct GraphicsHelper
 			{
 				while (is_rendering)
 				{
-					std::unique_lock<std::mutex> lock_compute(graphics::graphics_data_mutex);  // Lock the mutex
+					std::unique_lock<std::mutex> lock_compute(graphics::compute_sim_mutex);  // Lock the mutex
 					graphics::consig.wait(lock_compute, [&]()
 						{
-							return sync.compute_tx_id > 0 || sync.resize_event || !is_rendering;
+							return sync.is_computing > 0 || sync.resize_event || !is_rendering;
 						}
 					);  // Wait for new data or rendering to stop
 
@@ -146,7 +146,7 @@ struct GraphicsHelper
 						}
 					}
 
-					sync.compute_tx_id = 0;
+					sync.is_computing = 0;
 
 					std::scoped_lock<std::mutex> lock_render(graphics::render_mutex);  // Lock the mutex
 					sync.render_tx_id = last_render_id;

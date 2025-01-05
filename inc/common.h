@@ -589,7 +589,6 @@ namespace graphics
 {
 	extern std::mutex compute_sim_mutex;          // Mutex to protect the shared queue
 	extern std::mutex render_mutex;
-	extern std::mutex graphics_data_mutex;
 	extern std::condition_variable consig;      // Condition variable to signal the consumer thread
 	extern Dimensions<unsigned> render_space;
 
@@ -631,17 +630,18 @@ namespace graphics
 	struct DataSync
 	{
 		/* signal the tx number */
-		int compute_tx_id, render_tx_id, def_render_tx_id;
+		int is_computing, dgb_tx_id, render_tx_id, def_render_tx_id;
 		bool resize_event;
 		std::queue<State*> mainq;
 		std::vector<std::queue<State*>> pending;
 
+
 		inline void emplace_state(State& state)
 		{
-			std::scoped_lock<std::mutex> lock(graphics::graphics_data_mutex);  // Lock the mutex
+			std::scoped_lock<std::mutex> lock(graphics::compute_sim_mutex);  // Lock the mutex
 			mainq.emplace(&state);
 
-			compute_tx_id = 1;
+			is_computing = 1;
 		}
 
 		inline void event_resize(const unsigned& width, const unsigned& height, const int& def_render_id)
@@ -663,10 +663,10 @@ namespace graphics
 		bool got_updates(const int& def_render_id)
 		{
 			def_render_tx_id = def_render_id;
-			return compute_tx_id > 0 || render_tx_id >= 0 || resize_event;
+			return is_computing > 0 || dgb_tx_id >= 0 || render_tx_id >= 0 || resize_event;
 		}
 
-		DataSync(int num_tx) : compute_tx_id(0), render_tx_id(-1), def_render_tx_id(-1), \
+		DataSync(int num_tx) : is_computing(0), render_tx_id(-1), def_render_tx_id(-1), \
 			resize_event(false), pending(num_tx)
 		{
 		}
