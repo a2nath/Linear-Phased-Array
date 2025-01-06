@@ -1357,7 +1357,7 @@ namespace graphics
                 debounce_txid = -1;
             }
 
-            if (zoom_request != 0 && !ImGui::IsWindowHovered())
+            if (zoom_request != 0 && !ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)) // menu scrolls, grid zooms.
             {
                 if (zoom_request > 0)
                     zoom_in(window, view, zoomLevel, zoom_change_factor);
