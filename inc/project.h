@@ -81,6 +81,28 @@ struct GraphicsHelper
 		}
 	}
 
+	void generate_data_debug(cow_v& txlist)
+	{
+		spdlog::info("Translate linear to dBm values in debug");
+
+		for (int i = 0; i < txlist.size(); ++i)
+		{
+			size_t index = 0;
+
+			for (size_t row = 0; row < known_height; ++row)
+			{
+				//logger.write("cow " + str(cow_idx) + '\n');
+
+				for (size_t col = 0; col < known_width; ++col)
+				{
+					raw_dbg_dBm_data[i][index] = cached::watt2dBm(raw_dbg_lin_data[i][index]); // already filled with heat from "setup_tx" now convert
+					++index;
+				}
+
+			}
+		}
+	};
+
 	std::thread gui_change_detect(cow_v& txlist, graphics::DataSync& sync)
 	{
 		return std::thread([&]()
@@ -94,49 +116,46 @@ struct GraphicsHelper
 						}
 					);  // Wait for new data or rendering to stop
 
-					if (!is_rendering) break;
+					if (!is_rendering)
+					{
+						break;
+					}
 
 					if (verbose)
 					{
 						btime.bench_start();
 					}
 
-					if (sync.resize_event)
+					if (sync.is_debugging && sync.mainq.empty())
 					{
-						auto& renderarea = graphics::render_space;
-
-						if (known_height != renderarea.y || known_height != renderarea.x)
-						{
-							known_height = renderarea.y;
-							known_width = renderarea.x;
-							raw_dbg_lin_data.resize(raw_dbg_lin_data.size(), double_v(known_height * known_width));
-						}
-
-						sync.resize_event = false;
+						generate_data_debug(txlist);
 
 						if (verbose)
 						{
 							btime.mark();
-							spdlog::info("Heat Checker Thread: Resize done in " + str(btime.get()) + " milliseconds");
+							spdlog::info("Debug data rebuilt in " + str(btime.get()) + " milliseconds");
 						}
+
 					}
 
-					int last_render_id = sync.def_render_tx_id;
-
-					if (verbose)
-					{
-						btime.mark();
-					}
 
 					while (sync.mainq.size())
 					{
 						auto& state = *sync.mainq.front();
-						last_render_id = state.tx_idx;
 
 						update_tx(txlist[state.tx_idx], state);
-						generate_interference_data(txlist);
 
-						sync.mainq.pop();
+						if (sync.is_debugging)
+						{
+							generate_data_debug(txlist);
+							async_generate_data_intf(txlist); // no rush when viewing in debug mode
+						}
+						else
+						{
+							generate_data_intf(txlist);
+						}
+
+						sync.pop();
 
 						if (verbose)
 						{
@@ -146,24 +165,21 @@ struct GraphicsHelper
 						}
 					}
 
-					sync.is_computing = 0;
-
-					std::scoped_lock<std::mutex> lock_render(graphics::render_mutex);  // Lock the mutex
-					sync.render_tx_id = last_render_id;
-
 					if (verbose)
 					{
 						btime.bench_stop();
 						spdlog::info("Total time to finish thread: " + str(btime.get()) + " milliseconds");
 					}
 
+					sync.is_computing = 0;
+					sync.render_tx_id = sync.def_render_tx_id;
+
 					graphics::consig.notify_one();
 				}
-			}
-		);
+			});
 	}
 
-	void generate_interference_data(const cow_v& txlist)
+	void generate_data_intf(const cow_v& txlist)
 	{
 		spdlog::info("Create interference data");
 		raw_mrg_data.assign(num_tx, double_v(known_height * known_width));
@@ -294,7 +310,7 @@ struct GraphicsHelper
 			setup_tx(txlist, lut_power_list, lut_scan_angle_list);
 
 			/* fill the overall interference simulation across the entire grid */
-			generate_interference_data(txlist);
+			generate_data_intf(txlist);
 
 			for (auto& tx : txlist)
 			{
@@ -317,6 +333,18 @@ struct GraphicsHelper
 			is_rendering);
 	}
 
+	inline std::future<void> async_generate_data_intf(const cow_v& txlist)
+	{
+		spdlog::info("- Async - ");
+		return std::async(std::launch::async, [&]()
+			{
+				generate_data_intf(txlist);
+			});
+
+		// Optionally wait for the future if synchronization is needed later
+		// future.wait();
+	}
+
 	void plot(cow_v& txlist,
 		const placement_v& mobile_stations_loc,
 		const placement_v& base_stations_loc,
@@ -327,7 +355,7 @@ struct GraphicsHelper
 		if (!ready())
 		{
 			setup_tx(txlist, bs_txpower, scan_alpha_list);
-			generate_interference_data(txlist);
+			generate_data_intf(txlist);
 
 			curr_states.clear();
 			for (auto& tx : txlist)
@@ -357,7 +385,6 @@ struct GraphicsHelper
 			raw_mrg_data,
 			known_height,
 			known_width);
-
 	}
 
 	GraphicsHelper(Logger& ilogger,
@@ -383,7 +410,6 @@ struct GraphicsHelper
 		raw_dbg_dBm_data.clear();
 		raw_mrg_data.clear();
 	}
-
 };
 #endif
 

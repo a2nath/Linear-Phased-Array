@@ -76,22 +76,8 @@ namespace graphics
 
         sf::Font font;
 
-        /* WARNING: if you're building the mrg-data model, do that first
-        before converting debug model to dBm (all interference and thermal noise are ADDITIVE sources of noise!) */
-        void logify_intermediate_calc(double_v& lin_output)
-        {
-            size_t index = 0;
-			for (size_t row = 0; row < data_height; ++row)
-			{
-				//logger.write("cow " + str(cow_idx) + '\n');
 
-				for (size_t col = 0; col < data_width; ++col)
 
-					lin_output[index] = lin2dB(lin_output[index]); // already filled with heat from "setup_tx" now convert
-				++index;
-			}
-
-        }
 
         //sf::Color monocolorgrid(const double& raw, unsigned& tx_id)
         //{
@@ -727,12 +713,14 @@ namespace graphics
         float debounce_delay = 0.5f; // 100ms delay
         float zoom_request = 0.0f;
         float zoomLevel = 1.0f;
-        bool state_changed = true;
         bool panning = false;
         float mouse_delta_thresh = 0.01f;
         float zoom_change_factor = 1.1f;
         long pan_adj_factor = 10;
         int render_tx_id = 0;
+
+        State debug_state;
+
         size_t tx_count = init_states.size();
 
         /* set the states, current (working variable), previous (for undo), init (for reset) */
@@ -791,7 +779,17 @@ namespace graphics
                         }
                     );
 
-                    if (!is_rendering) break;
+                    if (!is_rendering)
+                    {
+                        break;
+                    }
+
+                    if (sync.is_debugging && sync.debug_interrupt)
+                    {
+                        griddata.reset_span(compute_colorspan(*ptr_live_data));
+                        sync.debug_interrupt = false;
+                    }
+
 
                     griddata.update_heat((*ptr_live_data)[sync.render_tx_id]);
                     sync.render_tx_id = -1;
@@ -811,6 +809,7 @@ namespace graphics
 #ifdef CONTROLS
                 ImGui::SFML::ProcessEvent(event);
 #endif
+
                 switch (event.type)
                 {
                 case sf::Event::Closed:
@@ -844,17 +843,17 @@ namespace graphics
 
                                 auto& id = tx_dragging->id;
 
-								auto potential_new_loc = griddata.grid_loc_2_state_loc(event.mouseButton.x, event.mouseButton.y);
-								if (potential_new_loc != curr[id].location)
-								{
-									prev[id].location = curr[id].location;
+                                auto potential_new_loc = griddata.grid_loc_2_state_loc(event.mouseButton.x, event.mouseButton.y);
+                                if (potential_new_loc != curr[id].location)
+                                {
+                                    prev[id].location = curr[id].location;
 
-									curr[id].location = potential_new_loc;
-									griddata.set_tx_position(id, event.mouseButton.x, event.mouseButton.y);
+                                    curr[id].location = potential_new_loc;
+                                    griddata.set_tx_position(id, event.mouseButton.x, event.mouseButton.y);
 
-									debounce_timer = 0.0f;
-									debounce_txid = id;
-								}
+                                    debounce_timer = 0.0f;
+                                    debounce_txid = id;
+                                }
 
                                 break;
                             }
@@ -964,7 +963,7 @@ namespace graphics
                                 curr[i] = prev[i];
                             }
 
-                            sync.event_render(render_tx_id);
+                            sync.event_render(render_tx_id); // moved the if statement to check for mainq->empty() and made it MT safe
 
                             /* undo the color thresholds */
                             griddata.undo();
@@ -979,16 +978,39 @@ namespace graphics
                             {
                                 ptr_live_data = &raw_dbg_dBm_data;
                                 griddata.debug_mode = true;
+
+                                if (ptr_live_data->empty())
+                                {
+                                    ptr_live_data->assign(raw_dbg_lin_data.size(), double_v(griddata.data_width * griddata.data_height));
+
+                                    debug_state = curr[render_tx_id];
+                                    sync.event_debug(debug_state);
+                                }
+                                else
+                                {
+                                    if (debug_state != curr[render_tx_id])
+                                    {
+                                        debug_state = curr[render_tx_id];
+                                        sync.event_debug(debug_state);
+                                    }
+                                    else
+                                    {
+                                        sync.event_render(render_tx_id);
+                                    }
+
+                                }
+
+                                sync.debug_interrupt = true;
                             }
                             else
                             {
                                 ptr_live_data = &mrg_cow_data;
-                                griddata.debug_mode = true;
+                                griddata.debug_mode = false;
                                 griddata.curr_pxl_range[0] = min_and_max.first;
                                 griddata.curr_pxl_range[1] = min_and_max.second;
                             }
 
-                            sync.event_render(render_tx_id);
+                            sync.set_debug(griddata.debug_mode);
                         }
                         break;
                     }
@@ -1117,6 +1139,29 @@ namespace graphics
                     {
                         ptr_live_data = &raw_dbg_dBm_data;
                         griddata.debug_mode = true;
+
+                        if (ptr_live_data->empty())
+                        {
+                            ptr_live_data->assign(raw_dbg_lin_data.size(), double_v(griddata.data_width * griddata.data_height));
+
+                            debug_state = curr[render_tx_id];
+                            sync.event_debug(debug_state);
+                        }
+                        else
+                        {
+                            if (debug_state != curr[render_tx_id])
+                            {
+                                debug_state = curr[render_tx_id];
+                                sync.event_debug(debug_state);
+                            }
+                            else
+                            {
+                                sync.event_render(render_tx_id);
+                            }
+
+                        }
+
+                        sync.debug_interrupt = true;
                     }
                     else
                     {
@@ -1126,7 +1171,7 @@ namespace graphics
                         griddata.curr_pxl_range[1] = min_and_max.second;
                     }
 
-                    sync.event_render(render_tx_id);
+                    sync.set_debug(griddata.debug_mode);
                 }
             }
 
@@ -1229,6 +1274,7 @@ namespace graphics
                         if (ImGui::SliderFloat(tx_power_slider[i].c_str(), &power_dBm[i], -30.0f, +30.0f, "%.2f dBm"))
                         {
                             curr[i].settings.power = cached::dBm2watt(power_dBm[i]);
+
                             debounce_timer = 0.0f;
                             debounce_txid = i;
                         }
@@ -1237,6 +1283,7 @@ namespace graphics
                         if (ImGui::InputFloat(tx_power_inp[i].c_str(), &power_dBm[i], -30.0f, +30.0f, "%.2f", ImGuiInputTextFlags_EnterReturnsTrue))
                         {
                             curr[i].settings.power = cached::dBm2watt(power_dBm[i]);
+
                             sync.emplace_state(curr[i]);
                         }
 
