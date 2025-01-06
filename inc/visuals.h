@@ -1346,15 +1346,15 @@ namespace graphics
 
                     } // end TX header (if)
                 } // end TX header section (for loop)
+            }
 
-                debounce_timer += ImGui::GetIO().DeltaTime;
-                if (debounce_txid != -1 && debounce_timer >= debounce_delay)
-                {
-                    sync.emplace_state(curr[debounce_txid]);
-                    debounce_timer = 0.0f; // Reset timer after update
-                    debounce_txid = -1;
-                }
+            debounce_timer += ImGui::GetIO().DeltaTime;
+            if (debounce_txid != -1 && debounce_timer >= debounce_delay)
+            {
+                sync.emplace_state(curr[debounce_txid]);
 
+                debounce_timer = 0.0f; // Reset timer after update
+                debounce_txid = -1;
             }
 
             if (zoom_request != 0 && !ImGui::IsWindowHovered())
