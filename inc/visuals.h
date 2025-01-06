@@ -947,6 +947,18 @@ namespace graphics
                 {
                     switch (event.key.scancode)
                     {
+                    case sf::Keyboard::Scan::S:
+                    {
+                        if (event.key.control && event.key.shift)
+                        {
+                            save(griddata, *ptr_live_data, render_tx_id, &window);
+                        }
+                        else if (event.key.control)
+                        {
+                            save(griddata, *ptr_live_data, render_tx_id);
+                        }
+                        break;
+                    }
                     case sf::Keyboard::Scan::Z:
                     {
                         if (event.key.control)
@@ -1006,8 +1018,9 @@ namespace graphics
                             {
                                 ptr_live_data = &mrg_cow_data;
                                 griddata.debug_mode = false;
-                                griddata.curr_pxl_range[0] = min_and_max.first;
-                                griddata.curr_pxl_range[1] = min_and_max.second;
+
+                                griddata.reset_span(min_and_max);
+                                sync.event_render(render_tx_id);
                             }
 
                             sync.set_debug(griddata.debug_mode);
@@ -1167,8 +1180,9 @@ namespace graphics
                     {
                         ptr_live_data = &mrg_cow_data;
                         griddata.debug_mode = false;
-                        griddata.curr_pxl_range[0] = min_and_max.first;
-                        griddata.curr_pxl_range[1] = min_and_max.second;
+
+                        griddata.reset_span(min_and_max);
+                        sync.event_render(render_tx_id);
                     }
 
                     sync.set_debug(griddata.debug_mode);
@@ -1351,39 +1365,17 @@ namespace graphics
                     zoom_out(window, view, zoomLevel, zoom_change_factor);
             }
 
+            zoom_request = 0; // reset and forget if tried to "scroll" inside the grid
+
             if (sync.got_updates(render_tx_id))
             {
-                consig.notify_one(); // either have [render_tx_id] set or [compute_tx_id] set, not both
+                consig.notify_one(); // either have [render_tx_id] set or [is_computing] set, not both
             }
-
-            zoom_request = 0;
 
             ImGui::End();
 #endif
-
             window.clear();
-
-            /* draw the grid */
-            window.draw(griddata.grid);
-
-            /* draw the receivers */
-            for (auto& circle : griddata.rx_cicles)
-            {
-                window.draw(circle);
-            }
-
-            /* draw the transmitters */
-            for (auto& data : griddata.txdata)
-            {
-                window.draw(data.transmitter);
-                for (auto& element : data.indicators)
-                {
-                    window.draw(element);
-                }
-            }
-
-            /* create a legend */
-            griddata.draw_legend(window);
+            griddata.draw(window);
 
 #ifdef CONTROLS
             ImGui::SFML::Render(window);  // Render ImGui over SFML content
