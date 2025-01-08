@@ -103,6 +103,51 @@ struct GraphicsHelper
 		}
 	};
 
+	void generate_data_intf(const cow_v& txlist)
+	{
+		spdlog::info("Create interference data");
+		raw_mrg_data.assign(num_tx, double_v(known_height * known_width));
+
+		size_t pxl_idx = 0;
+		double num = 0;
+
+		for (unsigned row = 0; row < known_height; ++row)
+		{
+			for (unsigned col = 0; col < known_width; ++col)
+			{
+				for (auto& cow : txlist)
+				{
+					auto& cow_idx = cow.sid();
+
+					const double& signal = raw_dbg_lin_data[cow_idx][pxl_idx];
+					double interference = 0;
+
+					for (unsigned c = (cow_idx + 1) % txlist.size(); c != cow_idx;)
+					{
+						interference += raw_dbg_lin_data[c][pxl_idx];
+						c = (c + 1) % txlist.size();
+					}
+
+					raw_mrg_data[cow_idx][pxl_idx] = lin2dB(signal / (interference + noise_factor));
+				}
+
+				++pxl_idx;
+			}
+		}
+	}
+
+	inline std::future<void> async_generate_data_intf(const cow_v& txlist)
+	{
+		spdlog::info("- Async - ");
+		return std::async(std::launch::async, [&]()
+			{
+				generate_data_intf(txlist);
+			});
+
+		// Optionally wait for the future if synchronization is needed later
+		// future.wait();
+	}
+
 	std::thread gui_change_detect(cow_v& txlist, graphics::DataSync& sync)
 	{
 		return std::thread([&]()
@@ -135,9 +180,7 @@ struct GraphicsHelper
 							btime.mark();
 							spdlog::info("Debug data rebuilt in " + str(btime.get()) + " milliseconds");
 						}
-
 					}
-
 
 					while (sync.mainq.size())
 					{
@@ -177,39 +220,6 @@ struct GraphicsHelper
 					graphics::consig.notify_one();
 				}
 			});
-	}
-
-	void generate_data_intf(const cow_v& txlist)
-	{
-		spdlog::info("Create interference data");
-		raw_mrg_data.assign(num_tx, double_v(known_height * known_width));
-
-		size_t pxl_idx = 0;
-		double num = 0;
-
-		for (unsigned row = 0; row < known_height; ++row)
-		{
-			for (unsigned col = 0; col < known_width; ++col)
-			{
-				for (auto& cow : txlist)
-				{
-					auto& cow_idx = cow.sid();
-
-					const double& signal = raw_dbg_lin_data[cow_idx][pxl_idx];
-					double interference = 0;
-
-					for (unsigned c = (cow_idx + 1) % txlist.size(); c != cow_idx;)
-					{
-						interference += raw_dbg_lin_data[c][pxl_idx];
-						c = (c + 1) % txlist.size();
-					}
-
-					raw_mrg_data[cow_idx][pxl_idx] = lin2dB(signal / (interference + noise_factor));
-				}
-
-				++pxl_idx;
-			}
-		}
 	}
 
 	void debug_mode_max_signal_map(cow_v& txlist,
@@ -331,18 +341,6 @@ struct GraphicsHelper
 			known_width,
 			sync,
 			is_rendering);
-	}
-
-	inline std::future<void> async_generate_data_intf(const cow_v& txlist)
-	{
-		spdlog::info("- Async - ");
-		return std::async(std::launch::async, [&]()
-			{
-				generate_data_intf(txlist);
-			});
-
-		// Optionally wait for the future if synchronization is needed later
-		// future.wait();
 	}
 
 	void plot(cow_v& txlist,
