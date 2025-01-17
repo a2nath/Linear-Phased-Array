@@ -53,10 +53,11 @@ Following this, you’ll find a specific example that demonstrates how a phased 
 There are **3 "Cellular on Wheels (COWs)"** portable base stations, each equipped to drive a **linear scan antenna array** with up to **8 elements**. The layout consists of **12 non-VIP** spectator zones and **3 VIP** spectator zones. The goal 🎯 is to ensure all clients in the simulation receive at least **24 dB of SINR** ("SNR") signal quality or at least **3 VIP** zones are above the cut off if there exists no solution to the specific scenario. 📶
 
 More details on the linear scan antenna array as [follows.](https://en.wikipedia.org/wiki/Phased_array)
+
 <p align="center">
 <img src="images/280px-Phased_array_animation_with_arrow_10frames_371x400px_100ms.gif?raw=true" width="400" alt="How it works">
 
-In this project, the **scan angles** vary between **-90°** and **+90°**, with each **COW** placed at an orientation of **0° (theta)** (facing East). The **theta-C angle** is used to represent the scan angle, as shown in the image. 
+In this project, **theta-C° angle** represents the direction of the transmitter relative to EAST (0°), as shown in the image. This is the direction in which the transmitter is physically pointing. On the other hand, **scan angle°, θ** vary between **-90°** and **+90°**, relative to **theta-C° angle**, or from the perpendicular axis to the array of antennas.
 
 </p>
 <p align="center"><img src="images/Phasearray.gif?raw=true" width="400" alt="How it works">
@@ -70,10 +71,11 @@ In this project, the **scan angles** vary between **-90°** and **+90°**, with 
 - **Array Width Limit**: The overall width of the array cannot exceed **240cm**.
 - **Power Control**: Each modulated downlink stream can be driven with power ranging from **-30 dBm** to **+30 dBm**, in **1 dB** steps between timeslots. 
 
-## 💡 Solution 
-### Matlab Solution
 
-<details open>
+<details>
+
+ ## 💡 Solution 
+### Matlab Solution
 
 Initial proposal and source code along with optimizations have been made. Some of the visual effects of using linear scan antenna array can be found below: 
 
@@ -89,18 +91,11 @@ Initial proposal and source code along with optimizations have been made. Some o
 <img src="images/antenna-profile2.png?raw=true" width="800" alt="Log scan #3">
 </p>
 
-<p align="center">
-<img src="images/bs3_lin.png?raw=true" width="800" alt="Linear plot with focus on MS #5">
-</p>
 </details>
 
 ### CPP Solution and Simulation Output 🖥️
 
 Overall antenna antenna patterns from using Linear Phase Array, 5 panels each of size 20 cm x 40 cm, scan-angle +40 degrees, frequency 1.9 GHz. CPP implementation using ImGUI and SFML using the following parameters in the `init.json` file
-
-<p align="center">
-<img src="images/overall.png?raw=true" width="800" alt="1000 meters x 1000 meters field">
-</p>
 
 #### Input 📥
 
@@ -219,23 +214,67 @@ This output can now be integrated into **Deep Q-Learning Networks (DQN)** or **R
 - **Output** is ready for **DQN** and **RL** applications. 
 
 
-#### Plot GUI heatgraphs from each tranmitters
 
 <details open>
-Tx1
+ 
+## Plot GUI heatgraphs and example interference pattern 
+
+### Scenario 1
+
+_Perspective_ is from the middle transmitter, TX2. It is having the most influence on all 15 clients because the TX power is +29 dBm as shown in the control panel to the right. TX1 and TX3 are set to 0 dBm. The scan angles are 0 for all 3 TXs, therefore the radiation pattern is symmetric and can reach handsets on the left-side and handsets on the right-side equally. 
+
+**Outcome**
+
+Bind TX1 single stream link to STA 13, 14, or 15 across 3 timeslots for _highest_ SNR in the range of 48-72 dB. However, we can also use STA 3, 4, 8, or 11 since all of them have 21-48 dB of SNR. 
+
 <p align="center">
-<img src="images/transmitter_0.png?raw=true" width="800" alt="1000 meters x 1000 meters field">
+<img src="images/state1.PNG?raw=true" width="800" alt="1000 meters x 1000 meters field">
 </p>
 
-Tx2
+### Scenario 2
+
+_Perspective_ is from the left transmitter or TX1 with a strong signal of +30 dBm, like TX3. Control panel on the right will show the output power of the Linear Antenna Arrays, TX1, TX2 and TX3. Here TX2 is set to the lower +10 dBm output so its _influence_ is much lower on the heat graph. 
+
+The scan angles are 0 for all 3 TXs, therefore the radiation pattern is symmetric for each transmitter looking at them individually. However, with the interference pattern the _perspective_ of TX1 is very different. 
+
+Notice that the signal-to-noise ratio closer to TX3 is < 7 dB (blue-ish), because both TX1 and TX3 having the same energy output causes them to clash and interference is at a maximum from TX1's _perspective_. Vice-version, TX3's power closer to TX1 will have maximum interference, therefore the SNR (not shown) is lowest in the blue.
+
+**Outcome**
+
+Bind TX1 single stream link to STA 7, 10, or 12 across 3 timeslots for _highest_ SNR in the range of 34-62 dB. However, we can also use STA 1, 8, 9, or 11 since all of them have 21-48 dB of SNR. 
+
 <p align="center">
-<img src="images/transmitter_1.png?raw=true" width="800" alt="1000 meters x 1000 meters field">
+<img src="images/state2.PNG?raw=true" width="800" alt="1000 meters x 1000 meters field">
 </p>
 
-Tx3
+### Scenario 3
+
+_Perspective_ again, is from the left transmitter or TX1 with a strong signal of +30 dBm, like TX3. The only difference since last image is the location of TX3. Control panel on the right will show the output power of the Linear Antenna Arrays, TX1, TX2 and TX3. Here TX2 is set to the lower 10 dBm output so its _influence_ is much lower on the heat graph. 
+
+The scan angles are 0 for all 3 TXs, therefore the radiation pattern is symmetric for each transmitter looking at them individually. In this scenario both TX1 and TX3 are placed almost at the same Y value to show the interference more clearly; see how very little places in the grid have SNR at 48+ dB (bright red)? This is because of the interference coming from TX3. Once switching to TX3's _perspective_, the heat map will be very similar.
+
+**Outcome**
+
+There are more STAs if not all, closer to 7 dB SNR. 
+
 <p align="center">
-<img src="images/transmitter_2.png?raw=true" width="800" alt="1000 meters x 1000 meters field">
+<img src="images/state3.PNG?raw=true" width="800" alt="1000 meters x 1000 meters field">
 </p>
+
+### Scenario 4
+
+_Perspective_ is from the middle transmitter, TX2 with a strong signal of +35 dBm therefore the signal is much stronger around STA 13, 14, and 15. TX1's power has been reduced to -10 dBm but TX3 still has +30 dBm output power. Control panel on the right will show the output power of the Linear Antenna Arrays, TX1, TX2 and TX3.
+
+The scan angles are 0 for all 3 TXs, therefore the radiation pattern is symmetric for each transmitter looking at them individually. In this scenario we demonstrate the SNR as the distance increases, and a lot of the original antenna gain is also visible if it weren't for all the interference seen from other transmitters. See Matlab solution above; we call this "clown fingers".
+
+**Outcome**
+
+The effect of antenna [3-dB gain](https://en.wikipedia.org/wiki/Half-power_point) can be seen at STA 2, 3, 6, 7 even though the last two: 6 and 7 are closer to TX3. In the future I need to show the individual plots to make it clearer and prove this stuff better.
+
+<p align="center">
+<img src="images/state4.PNG?raw=true" width="800" alt="1000 meters x 1000 meters field">
+</p>
+
 </details>
 
 
