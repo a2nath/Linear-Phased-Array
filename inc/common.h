@@ -683,6 +683,7 @@ namespace graphics
 		{
 			std::scoped_lock<std::mutex> lock(graphics::compute_sim_mutex);  // Lock the mutex
 			mainq.emplace(&state);
+			def_render_tx_id = state.tx_idx;
 
 			is_computing = 1;
 		}
@@ -719,9 +720,8 @@ namespace graphics
 			}
 		}
 
-		bool got_updates(const int& def_render_id)
+		bool got_updates()
 		{
-			def_render_tx_id = def_render_id;
 			return is_computing > 0 || is_debugging > 0 || render_tx_id >= 0 || resize_event;
 		}
 

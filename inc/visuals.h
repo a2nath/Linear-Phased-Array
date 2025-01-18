@@ -1367,7 +1367,7 @@ namespace graphics
 
             zoom_request = 0; // reset and forget if tried to "scroll" inside the grid
 
-            if (sync.got_updates(render_tx_id))
+            if (sync.got_updates())
             {
                 consig.notify_one(); // either have [render_tx_id] set or [is_computing] set, not both
             }
