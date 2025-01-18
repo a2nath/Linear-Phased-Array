@@ -104,6 +104,8 @@ struct Bench
 		end = std::chrono::steady_clock::now();
 		delta = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
 	}
+
+	Bench() : delta(0) {}
 };
 
 
