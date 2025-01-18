@@ -18,7 +18,6 @@ using namespace std;
 /* define externs */
 std::mutex graphics::compute_sim_mutex;
 std::mutex graphics::render_mutex;
-std::mutex graphics::graphics_data_mutex;
 std::condition_variable graphics::consig;
 Dimensions<unsigned> graphics::render_space;
 
