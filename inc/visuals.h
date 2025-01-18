@@ -755,7 +755,7 @@ namespace graphics
             tx_scan_slider.emplace_back("Scan Angle##slider" + sidx);
             tx_scan_inp.emplace_back("Scan Angle##input" + sidx);
 
-            power_dBm[i] = cached::watt2dBm(init[i].settings.power);
+            power_dBm[i] = watt2dBm(init[i].settings.power);
             theta_deg[i] = rad2deg(init[i].settings.theta_c);
             scan_deg[i] = rad2deg(init[i].settings.alpha);
         }
@@ -1287,7 +1287,7 @@ namespace graphics
 
                         if (ImGui::SliderFloat(tx_power_slider[i].c_str(), &power_dBm[i], -30.0f, +30.0f, "%.2f dBm"))
                         {
-                            curr[i].settings.power = cached::dBm2watt(power_dBm[i]);
+                            curr[i].settings.power = dBm2watt(power_dBm[i]);
 
                             debounce_timer = 0.0f;
                             debounce_txid = i;
@@ -1296,7 +1296,7 @@ namespace graphics
                         ImGui::SameLine();
                         if (ImGui::InputFloat(tx_power_inp[i].c_str(), &power_dBm[i], -30.0f, +30.0f, "%.2f", ImGuiInputTextFlags_EnterReturnsTrue))
                         {
-                            curr[i].settings.power = cached::dBm2watt(power_dBm[i]);
+                            curr[i].settings.power = dBm2watt(power_dBm[i]);
 
                             sync.emplace_state(curr[i]);
                         }
@@ -1305,7 +1305,7 @@ namespace graphics
 
                         if (ImGui::SliderAngle(tx_dir_slider[i].c_str(), &theta_deg[i], 0.0f, 359.9f, "%.2f deg"))
                         {
-                            curr[i].settings.theta_c = cached::deg2rad(theta_deg[i]);
+                            curr[i].settings.theta_c = deg2rad(theta_deg[i]);
                             griddata.rotation_update(M_PIl / 2 - curr[i].settings.theta_c, i);
 
                             debounce_timer = 0.0f;
@@ -1316,7 +1316,7 @@ namespace graphics
                         ImGui::SameLine();
                         if (ImGui::InputFloat(tx_dir_inp[i].c_str(), &theta_deg[i], 0.0f, 359.9f, "%.2f", ImGuiInputTextFlags_EnterReturnsTrue))
                         {
-                            curr[i].settings.theta_c = cached::deg2rad(theta_deg[i]);
+                            curr[i].settings.theta_c = deg2rad(theta_deg[i]);
                             griddata.rotation_update(M_PIl / 2 - curr[i].settings.theta_c, i);
 
                             sync.emplace_state(curr[i]);
@@ -1328,7 +1328,7 @@ namespace graphics
 
                         if (ImGui::SliderFloat(tx_scan_slider[i].c_str(), &scan_deg[i], -90.0, +90.0, "%.2f deg"))
                         {
-                            curr[i].settings.alpha = cached::deg2rad(scan_deg[i]);
+                            curr[i].settings.alpha = deg2rad(scan_deg[i]);
                             griddata.scan_angle_update(i);
 
                             debounce_timer = 0.0f;
@@ -1338,7 +1338,7 @@ namespace graphics
                         ImGui::SameLine();
                         if (ImGui::InputFloat(tx_scan_inp[i].c_str(), &scan_deg[i], -90.0, +90.0, "%.2f", ImGuiInputTextFlags_EnterReturnsTrue))
                         {
-                            curr[i].settings.alpha = cached::deg2rad(scan_deg[i]);
+                            curr[i].settings.alpha = deg2rad(scan_deg[i]);
                             griddata.scan_angle_update(i);
                             sync.emplace_state(curr[i]);
                         }

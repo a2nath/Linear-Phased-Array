@@ -162,7 +162,7 @@ struct Power_Values : MultiData_Setup<double>
 				}
 			}
 
-			row = cached::dBm2watt(row);
+			row = dBm2watt(row);
 		}
 		return true;
 	}
@@ -187,7 +187,7 @@ struct Scan_Values : MultiData_Setup<double>
 					return false;
 				}
 			}
-			row = cached::deg2rad(row);
+			row = deg2rad(row);
 		}
 		return true;
 	}

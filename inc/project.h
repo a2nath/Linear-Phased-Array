@@ -41,13 +41,6 @@ struct GraphicsHelper
 		return raw_dbg_lin_data.size() > 0;
 	}
 
-	//void rqst_secondary_mem()
-	//{
-		 // resize the part with merged cow heat data (2.)
-		//cow_sigids.resize(rows * cols);   // cow id to use as signal source (3.) - this can be a local variable
-		//rx_ids_p_idx.resize(num_rx);      // indices inside the merged cow heat data to represent receiver SINR. See (2.) (4.)
-	//}
-
 	/* GUI setup for simulation changes */
 	void update_tx(Cow& cow, const graphics::State& state)
 	{
@@ -95,7 +88,7 @@ struct GraphicsHelper
 
 				for (size_t col = 0; col < known_width; ++col)
 				{
-					ready_dbg_dBm_data[i][index] = cached::watt2dBm(raw_dbg_lin_data[i][index]); // already filled with heat from "setup_tx" now convert
+					ready_dbg_dBm_data[i][index] = watt2dBm(raw_dbg_lin_data[i][index]); // already filled with heat from "setup_tx" now convert
 					++index;
 				}
 
@@ -715,8 +708,8 @@ public:
 		mobile_station_count(args.mobile_station_count),
 		base_station_count(args.base_station_count),
 		timeslot_count(args.timeslots),
-		sinr_limit_linear(cached::log2lin(args.sinr_limit_dB)),
-		bs_theta_c(cached::deg2rad(args.bs_theta_c)),
+		sinr_limit_linear(log2lin(args.sinr_limit_dB)),
+		bs_theta_c(deg2rad(args.bs_theta_c)),
 		base_stations_loc(args.tx_loc.data),
 		mobile_stations_loc(args.rx_loc.data),
 		bs_antenna_counts(args.bs_antenna_count),
@@ -731,7 +724,7 @@ public:
 		bs_requested_scan_alpha_rad(args.tx_alphalist().data),
 		ms2bs_requested_bindings(args.ms_id_selections.binding_data)
 	{
-		setup(double_v(mobile_station_count, cached::log2lin(args.gain_gtrx)));
+		setup(double_v(mobile_station_count, log2lin(args.gain_gtrx)));
 
 		if (!args.nogui)
 		{
