@@ -1,9 +1,9 @@
 #include "network.h"
 using namespace network_package;
 
-#if defined(__CUDACC__) || !defined(__device__)
+#if defined(__CUDACC__)// || !defined(__device__)
 
-//#else
+#else
 
 static std::vector<unsigned> indices_with_inf;
 static std::vector<unsigned> indices_with_z;
@@ -172,6 +172,7 @@ void AAntenna::numerical_init(PolarArray& polar_data)
 	init(polar_data.array_size, &simulation.phee_minus_alpha_list[0], &simulation.pathloss_list[0], &simulation.gain_RX_grid[0], polar_data.data_ptr);
 	simulation.modified = true;
 }
+
 AAntenna::~AAntenna()
 {
 }
@@ -187,7 +188,3 @@ const double& AAntenna::coeff(const unsigned& rx_sta) const
 	return simulation.hmatrix[rx_sta];
 }
 #endif
-
-
-
-

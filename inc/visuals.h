@@ -683,8 +683,8 @@ namespace graphics
         const state_v& init_states,
         state_v& curr_states,
         const std::vector<double_v>& raw_dbg_lin_data,
-        std::vector<double_v>& raw_dbg_dBm_data,
-        std::vector<double_v>& mrg_cow_data,
+        std::vector<double_v>& ready_dbg_dBm_data,
+        std::vector<double_v>& ready_snr_dB_data,
         const unsigned& grid_rows,
         const unsigned& grid_cols,
         DataSync& sync,
@@ -732,8 +732,8 @@ namespace graphics
         state_v prev = init;
         txvertex* tx_dragging = nullptr;
 
-        Pair<float> min_and_max = compute_colorspan(mrg_cow_data);
-        std::vector<std::vector<double>>* ptr_live_data = &mrg_cow_data;
+        Pair<float> min_and_max = compute_colorspan(ready_snr_dB_data);
+        std::vector<std::vector<double>>* ptr_live_data = &ready_snr_dB_data;
 
         HeatGrid griddata(grid_cols, grid_rows, min_and_max.first, min_and_max.second, window_size, init_rx_locations, curr);
 
@@ -988,7 +988,7 @@ namespace graphics
                         {
                             if (griddata.debug_mode == false)
                             {
-                                ptr_live_data = &raw_dbg_dBm_data;
+                                ptr_live_data = &ready_dbg_dBm_data;
                                 griddata.debug_mode = true;
 
                                 if (ptr_live_data->empty())
@@ -1016,7 +1016,7 @@ namespace graphics
                             }
                             else
                             {
-                                ptr_live_data = &mrg_cow_data;
+                                ptr_live_data = &ready_snr_dB_data;
                                 griddata.debug_mode = false;
 
                                 griddata.reset_span(min_and_max);
@@ -1150,7 +1150,7 @@ namespace graphics
                 {
                     if (griddata.debug_mode == false)
                     {
-                        ptr_live_data = &raw_dbg_dBm_data;
+                        ptr_live_data = &ready_dbg_dBm_data;
                         griddata.debug_mode = true;
 
                         if (ptr_live_data->empty())
@@ -1178,7 +1178,7 @@ namespace graphics
                     }
                     else
                     {
-                        ptr_live_data = &mrg_cow_data;
+                        ptr_live_data = &ready_snr_dB_data;
                         griddata.debug_mode = false;
 
                         griddata.reset_span(min_and_max);

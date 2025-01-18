@@ -26,8 +26,8 @@ struct GraphicsHelper
 	unsigned known_width;
 	double noise_factor;
 	std::vector<double_v> raw_dbg_lin_data; // raw split data that shows signal strength of each COW
-	std::vector<double_v> raw_dbg_dBm_data; // merged data that shows SINR based on strongest signal
-	std::vector<double_v> raw_mrg_data; // merged data that shows SINR based on strongest signal
+	std::vector<double_v> ready_dbg_dBm_data; // merged data that shows SINR based on strongest signal
+	std::vector<double_v> ready_snr_dB_data; // merged data that shows SINR based on strongest signal
 	std::vector<size_t>   cow_sigids;   // max signal ids for each pixel, to be used with merged
 	std::vector<size_t>   rx_ids_p_idx; // rx index to find the SINR value from the mrg lut data
 	state_v curr_states;
@@ -95,7 +95,7 @@ struct GraphicsHelper
 
 				for (size_t col = 0; col < known_width; ++col)
 				{
-					raw_dbg_dBm_data[i][index] = cached::watt2dBm(raw_dbg_lin_data[i][index]); // already filled with heat from "setup_tx" now convert
+					ready_dbg_dBm_data[i][index] = cached::watt2dBm(raw_dbg_lin_data[i][index]); // already filled with heat from "setup_tx" now convert
 					++index;
 				}
 
@@ -106,7 +106,7 @@ struct GraphicsHelper
 	void generate_data_intf(const cow_v& txlist)
 	{
 		spdlog::info("Create interference data");
-		raw_mrg_data.assign(num_tx, double_v(known_height * known_width));
+		ready_snr_dB_data.assign(num_tx, double_v(known_height * known_width));
 
 		size_t pxl_idx = 0;
 		double num = 0;
@@ -128,7 +128,7 @@ struct GraphicsHelper
 						c = (c + 1) % txlist.size();
 					}
 
-					raw_mrg_data[cow_idx][pxl_idx] = lin2dB(signal / (interference + noise_factor));
+					ready_snr_dB_data[cow_idx][pxl_idx] = lin2dB(signal / (interference + noise_factor));
 				}
 
 				++pxl_idx;
@@ -292,7 +292,7 @@ struct GraphicsHelper
 				}
 
 				num = lin2dB(signal / (interference + noise_factor));
-				raw_mrg_data[cow_idx][px_index] = num;
+				ready_snr_dB_data[cow_idx][px_index] = num;
 
 				// it is not one of the RX station coordinates
 				if (!(rx_coords_hash_lut.find(row) == rx_coords_hash_lut.end() || rx_coords_hash_lut[row].find(col) == rx_coords_hash_lut[row].end()))
@@ -335,8 +335,8 @@ struct GraphicsHelper
 			init_states,
 			curr_states,
 			raw_dbg_lin_data,
-			raw_dbg_dBm_data,
-			raw_mrg_data,
+			ready_dbg_dBm_data,
+			ready_snr_dB_data,
 			known_height,
 			known_width,
 			sync,
@@ -380,7 +380,7 @@ struct GraphicsHelper
 			"transmitter_int_",
 			curr_states,
 			mobile_stations_loc,
-			raw_mrg_data,
+			ready_snr_dB_data,
 			known_height,
 			known_width);
 	}
@@ -400,13 +400,13 @@ struct GraphicsHelper
 		known_width(pixel_cols),
 		noise_factor(inoise_factor),
 		raw_dbg_lin_data(num_tx),
-		raw_mrg_data(num_tx),
+		ready_snr_dB_data(num_tx),
 		is_rendering(true),
 		verbose(iverbose)
 	{
 		raw_dbg_lin_data.clear();
-		raw_dbg_dBm_data.clear();
-		raw_mrg_data.clear();
+		ready_dbg_dBm_data.clear();
+		ready_snr_dB_data.clear();
 	}
 };
 #endif
