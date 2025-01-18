@@ -1,10 +1,6 @@
 #include "network.h"
 using namespace network_package;
 
-#if defined(__CUDACC__)// || !defined(__device__)
-
-#else
-
 static std::vector<unsigned> indices_with_inf;
 static std::vector<unsigned> indices_with_z;
 
@@ -187,4 +183,3 @@ const double& AAntenna::coeff(const unsigned& rx_sta) const
 {
 	return simulation.hmatrix[rx_sta];
 }
-#endif
