@@ -726,7 +726,7 @@ namespace graphics
 		}
 
 		DataSync(int num_tx) : is_computing(0), is_debugging(0), render_tx_id(-1), def_render_tx_id(-1), \
-			resize_event(false), pending(num_tx)
+			resize_event(false), debug_interrupt(false), pending(num_tx)
 		{
 		}
 	};
