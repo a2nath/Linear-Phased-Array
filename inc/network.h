@@ -7,51 +7,7 @@
 
 namespace network_package
 {
-	inline double rad2deg(const double& rad)
-	{
-		return rad * 180.0 / M_PIl;
-	}
-	inline double deg2rad(const double& deg)
-	{
-		return deg * M_PIl / 180.0;
-	}
-	inline double log2lin(const double& log)
-	{
-		return pow(10, log / 10);
-	}
-	inline double lin2dB(const double& lin)
-	{
-		return 10 * log10(lin);
-	}
-	inline double dBm2watt(const double& dBm)
-	{
-		return log2lin(dBm - 30);
-	}
-	inline double watt2dBm(const double& lin)
-	{
-		return lin2dB(lin) + 30;
-	}
-
-	inline double getLambda(const double& frequency)
-	{
-		if (frequency > 0)
-		{
-			return C_SPEED / frequency;
-		}
-
-		throw std::invalid_argument("Divide by zero error from passing 0 frequency in getLambda call");
-	}
-
-	/* Get system noise figure in [dBm] with thermal noise by passing B/W in [Mhz], and system noise in [dB] */
-	inline double getThermalSystemNoise(const double& bandwidth, const double& system_noise)
-	{
-		if (bandwidth > 0)
-		{
-			return -174 + round(10 * log10(bandwidth)) + system_noise;
-		}
-
-		throw std::invalid_argument("Bandwidth cannot be zero or when setting system noise factor");
-	}
+	using namespace rf_math;
 
 	/* keep track of sinr and note the configurations and bindings in decreasing order of SINR */
 	struct dataitem_t

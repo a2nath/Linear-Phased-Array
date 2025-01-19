@@ -24,28 +24,22 @@ struct GraphicsHelper
 	unsigned num_tx, num_rx;
 	unsigned known_height;
 	unsigned known_width;
-	std::vector<double_v> raw_cow_data; // raw split data that shows signal strength of each COW
-	std::vector<double_v> raw_mrg_data; // merged data that shows SINR based on strongest signal
+	double noise_factor;
+	std::vector<double_v> raw_dbg_lin_data; // raw split data that shows signal strength of each COW
+	std::vector<double_v> ready_dbg_dBm_data; // merged data that shows SINR based on strongest signal
+	std::vector<double_v> ready_snr_dB_data; // merged data that shows SINR based on strongest signal
 	std::vector<size_t>   cow_sigids;   // max signal ids for each pixel, to be used with merged
 	std::vector<size_t>   rx_ids_p_idx; // rx index to find the SINR value from the mrg lut data
-	state_v init_states;
+	state_v curr_states;
 	Bench btime;
 
 	bool verbose;
 	bool is_rendering;
-	double noise_factor;
 
 	inline bool ready() const
 	{
-		return raw_cow_data.size() > 0;
+		return raw_dbg_lin_data.size() > 0;
 	}
-
-	//void rqst_secondary_mem()
-	//{
-		 // resize the part with merged cow heat data (2.)
-		//cow_sigids.resize(rows * cols);   // cow id to use as signal source (3.) - this can be a local variable
-		//rx_ids_p_idx.resize(num_rx);      // indices inside the merged cow heat data to represent receiver SINR. See (2.) (4.)
-	//}
 
 	/* GUI setup for simulation changes */
 	void update_tx(Cow& cow, const graphics::State& state)
@@ -61,13 +55,13 @@ struct GraphicsHelper
 		cow.update(state.settings, state.location);
 
 		/* update cow heat data */
-		cow.heatmap(raw_cow_data[cow.sid()]);
+		cow.heatmap(raw_dbg_lin_data[cow.sid()]);
 	}
 
 	/* GUI setup for all cows together, inputs: rows, cols */
 	void setup_tx(cow_v& cows, const double_v& lut_power_list, const double_v& lut_scan_angle_list)
 	{
-		raw_cow_data.assign(num_tx, double_v(known_width * known_height));
+		raw_dbg_lin_data.assign(num_tx, double_v(known_width * known_height));
 		spdlog::info("Setting up " + str(cows.size()) + " transmitters in visuals");
 
 		for (auto& cow : cows)
@@ -76,96 +70,35 @@ struct GraphicsHelper
 
 			cow.init_gui(known_width, known_height);
 			cow.update_minimal(lut_power_list[cow.sid()], lut_scan_angle_list[cow.sid()]);
-			cow.heatmap(raw_cow_data[cow.sid()]);
+			cow.heatmap(raw_dbg_lin_data[cow.sid()]);
 		}
 	}
 
-	std::thread gui_change_detect(cow_v& txlist, graphics::DataSync& sync)
+	void generate_data_debug(cow_v& txlist)
 	{
-		return std::thread([&]()
+		spdlog::info("Translate linear to dBm values in debug");
+
+		for (int i = 0; i < txlist.size(); ++i)
+		{
+			size_t index = 0;
+
+			for (size_t row = 0; row < known_height; ++row)
 			{
-				while (is_rendering)
+				//logger.write("cow " + str(cow_idx) + '\n');
+
+				for (size_t col = 0; col < known_width; ++col)
 				{
-					std::unique_lock<std::mutex> lock_compute(graphics::graphics_data_mutex);  // Lock the mutex
-					graphics::consig.wait(lock_compute, [&]()
-						{
-							return sync.compute_tx_id > 0 || sync.resize_event || !is_rendering;
-						}
-					);  // Wait for new data or rendering to stop
-
-					if (!is_rendering) break;
-
-					if (verbose)
-					{
-						btime.bench_start();
-					}
-
-					if (sync.resize_event)
-					{
-						auto& renderarea = graphics::render_space;
-
-						if (known_height != renderarea.y || known_height != renderarea.x)
-						{
-							known_height = renderarea.y;
-							known_width = renderarea.x;
-							raw_cow_data.resize(raw_cow_data.size(), double_v(known_height * known_width));
-						}
-
-						sync.resize_event = false;
-
-						if (verbose)
-						{
-							btime.mark();
-							spdlog::info("Heat Checker Thread: Resize done in " + str(btime.get()) + " milliseconds");
-						}
-					}
-
-					int last_render_id = sync.def_render_tx_id;
-
-					if (verbose)
-					{
-						btime.mark();
-					}
-
-					while (sync.mainq.size())
-					{
-						auto& state = *sync.mainq.front();
-						last_render_id = state.tx_idx;
-
-						update_tx(txlist[state.tx_idx], state);
-						generate_interference_data(txlist);
-
-						sync.mainq.pop();
-
-						if (verbose)
-						{
-							btime.mark();
-							spdlog::info("Heat Checker Thread: Update Done on TX-" + str(state.tx_idx)\
-								+ " in " + str(btime.get()) + " milliseconds");
-						}
-					}
-
-					sync.compute_tx_id = 0;
-
-					std::scoped_lock<std::mutex> lock_render(graphics::render_mutex);  // Lock the mutex
-					sync.render_tx_id = last_render_id;
-
-					if (verbose)
-					{
-						btime.bench_stop();
-						spdlog::info("Total time to finish thread: " + str(btime.get()) + " milliseconds");
-					}
-
-					graphics::consig.notify_one();
+					ready_dbg_dBm_data[i][index] = watt2dBm(raw_dbg_lin_data[i][index]); // already filled with heat from "setup_tx" now convert
+					++index;
 				}
-			}
-		);
-	}
 
-	void generate_interference_data(const cow_v& txlist)
+			}
+		}
+	};
+
+	inline void generate_data_intf(const cow_v& txlist)
 	{
 		spdlog::info("Create interference data");
-		raw_mrg_data.assign(num_tx, double_v(known_height * known_width));
 
 		size_t pxl_idx = 0;
 		double num = 0;
@@ -178,16 +111,16 @@ struct GraphicsHelper
 				{
 					auto& cow_idx = cow.sid();
 
-					const double& signal = raw_cow_data[cow_idx][pxl_idx];
+					const double& signal = raw_dbg_lin_data[cow_idx][pxl_idx];
 					double interference = 0;
 
 					for (unsigned c = (cow_idx + 1) % txlist.size(); c != cow_idx;)
 					{
-						interference += raw_cow_data[c][pxl_idx];
+						interference += raw_dbg_lin_data[c][pxl_idx];
 						c = (c + 1) % txlist.size();
 					}
 
-					raw_mrg_data[cow_idx][pxl_idx] = lin2dB(signal / (interference + noise_factor));
+					ready_snr_dB_data[cow_idx][pxl_idx] = lin2dB(signal / (interference + noise_factor));
 				}
 
 				++pxl_idx;
@@ -195,10 +128,103 @@ struct GraphicsHelper
 		}
 	}
 
+	void assign_generate_data_intf(const cow_v& txlist)
+	{
+		ready_snr_dB_data.assign(num_tx, double_v(known_height * known_width));
+		generate_data_intf(txlist);
+	}
+
+	inline std::future<void> async_generate_data_intf(const cow_v& txlist)
+	{
+		spdlog::info("- Async - ");
+		return std::async(std::launch::async, [&]()
+			{
+				spdlog::info("Generate inf async launched");
+				generate_data_intf(txlist);
+			});
+
+		// Optionally wait for the future if synchronization is needed later
+		// future.wait();
+	}
+
+	std::thread gui_change_detect(cow_v& txlist, graphics::DataSync& sync)
+	{
+		return std::thread([&]()
+			{
+				while (is_rendering)
+				{
+					std::unique_lock<std::mutex> lock_compute(graphics::compute_sim_mutex);  // Lock the mutex
+					graphics::consig.wait(lock_compute, [&]()
+						{
+							return sync.is_computing > 0 || sync.resize_event || !is_rendering;
+						}
+					);  // Wait for new data or rendering to stop
+
+					if (!is_rendering)
+					{
+						break;
+					}
+
+					if (verbose)
+					{
+						btime.bench_start();
+					}
+
+					if (sync.is_debugging && sync.mainq.empty())
+					{
+						generate_data_debug(txlist);
+
+						if (verbose)
+						{
+							btime.mark();
+							spdlog::info("Debug data rebuilt in " + str(btime.get()) + " milliseconds");
+						}
+					}
+
+					while (sync.mainq.size())
+					{
+						auto& state = *sync.mainq.front();
+
+						update_tx(txlist[state.tx_idx], state);
+
+						if (sync.is_debugging)
+						{
+							generate_data_debug(txlist);
+							async_generate_data_intf(txlist); // no rush when viewing in debug mode
+						}
+						else
+						{
+							generate_data_intf(txlist);
+						}
+
+						sync.pop();
+
+						if (verbose)
+						{
+							btime.mark();
+							spdlog::info("Heat Checker Thread: Update Done on TX-" + str(state.tx_idx)\
+								+ " in " + str(btime.get()) + " milliseconds");
+						}
+					}
+
+					if (verbose)
+					{
+						btime.bench_stop();
+						spdlog::info("Total time to finish thread: " + str(btime.get()) + " milliseconds");
+					}
+
+					sync.is_computing = 0;
+					sync.render_tx_id = sync.last_render_tx_id;
+
+					graphics::consig.notify_one();
+				}
+			});
+	}
+
 	void debug_mode_max_signal_map(cow_v& txlist,
 		const placement_v& mobile_stations_loc)
 	{
-		//if (raw_cow_data[0].empty())
+		//if (raw_dbg_lin_data[0].empty())
 		//{
 		//	spdlog::critical("Visualization not enabled, exiting render() function");
 		//	return;
@@ -222,9 +248,9 @@ struct GraphicsHelper
 
 				for (auto& cow : txlist)
 				{
-					if (max_value < raw_cow_data[cow.sid()][index])
+					if (max_value < raw_dbg_lin_data[cow.sid()][index])
 					{
-						max_value = raw_cow_data[cow.sid()][index];
+						max_value = raw_dbg_lin_data[cow.sid()][index];
 						cow_idx = cow.sid();
 					}
 				}
@@ -254,18 +280,18 @@ struct GraphicsHelper
 			for (size_t col = 0; col < known_width; ++col)
 			{
 				const unsigned& cow_idx = cow_sigids[px_index];
-				const double& signal = raw_cow_data[cow_idx][px_index];
+				const double& signal = raw_dbg_lin_data[cow_idx][px_index];
 
 				double interference = 0;
 
 				for (unsigned c = (cow_idx + 1) % txlist.size(); c != cow_idx;)
 				{
-					interference += raw_cow_data[c][px_index];
+					interference += raw_dbg_lin_data[c][px_index];
 					c = (c + 1) % txlist.size();
 				}
 
 				num = lin2dB(signal / (interference + noise_factor));
-				raw_mrg_data[cow_idx][px_index] = num;
+				ready_snr_dB_data[cow_idx][px_index] = num;
 
 				// it is not one of the RX station coordinates
 				if (!(rx_coords_hash_lut.find(row) == rx_coords_hash_lut.end() || rx_coords_hash_lut[row].find(col) == rx_coords_hash_lut[row].end()))
@@ -285,13 +311,15 @@ struct GraphicsHelper
 		const double_v& lut_power_list,
 		const double_v& lut_scan_angle_list)
 	{
+		state_v init_states;
+
 		if (!ready())
 		{
 			/* fill the TX indivisual simulation data across the entire grid */
 			setup_tx(txlist, lut_power_list, lut_scan_angle_list);
 
 			/* fill the overall interference simulation across the entire grid */
-			generate_interference_data(txlist);
+			assign_generate_data_intf(txlist);
 
 			for (auto& tx : txlist)
 			{
@@ -304,8 +332,10 @@ struct GraphicsHelper
 		graphics::render(logger,
 			mobile_stations_loc,
 			init_states,
-			raw_cow_data,
-			raw_mrg_data,
+			curr_states,
+			raw_dbg_lin_data,
+			ready_dbg_dBm_data,
+			ready_snr_dB_data,
 			known_height,
 			known_width,
 			sync,
@@ -319,63 +349,75 @@ struct GraphicsHelper
 		const double_v& bs_theta_c,
 		const double_v& scan_alpha_list)
 	{
-		if (!ready())
+		if (curr_states.empty())
 		{
+			/* fill the TX indivisual simulation data across the entire grid */
 			setup_tx(txlist, bs_txpower, scan_alpha_list);
-			generate_interference_data(txlist);
 
-			init_states.clear();
+			/* fill the overall interference simulation across the entire grid */
+			assign_generate_data_intf(txlist);
+
 			for (auto& tx : txlist)
 			{
-				init_states.emplace_back(tx.get_state());
+				curr_states.emplace_back(tx.get_state());
 			}
 		}
-		// else capture plot as it is
 
-		spdlog::info("Capturing plots\n\tDebug Plots");
+		spdlog::info("Capturing plots");
+		spdlog::info("[1/2]\tDebug Plots");
 
-		graphics::capture_plot(logger,
-			"transmitter_dbg_",
-			init_states,
-			mobile_stations_loc,
-			raw_cow_data,
-			known_height,
-			known_width,
-			true);
+		graphics::HeatGrid griddata(known_width, known_height, mobile_stations_loc, curr_states, 0.0f);
 
-		spdlog::info("\tInterference Plots");
+		if (ready_dbg_dBm_data.empty())
+		{
+			ready_dbg_dBm_data.assign(num_tx, double_v(known_width * known_height));
+		}
+		generate_data_debug(txlist);
 
-		graphics::capture_plot(logger,
-			"transmitter_int_",
-			init_states,
-			mobile_stations_loc,
-			raw_mrg_data,
-			known_height,
-			known_width);
+		griddata.reset_span(graphics::compute_colorspan(ready_dbg_dBm_data));
+		griddata.debug_mode = true;
 
+		for (auto& state : curr_states)
+		{
+			graphics::save(griddata, ready_dbg_dBm_data, state.tx_idx);
+		}
+
+		spdlog::info("[1/2]\tPlot Saved");
+		spdlog::info("[2/2]\tInterference Plots");
+
+		griddata.reset_span(graphics::compute_colorspan(ready_snr_dB_data));
+		griddata.debug_mode = false;
+
+		for (auto& state : curr_states)
+		{
+			graphics::save(griddata, ready_snr_dB_data, state.tx_idx);
+		}
+
+		spdlog::info("[2/2]\tPlot Saved");
 	}
 
-	GraphicsHelper(const size_t num_transmitters,
+	GraphicsHelper(Logger& ilogger,
+		const size_t num_transmitters,
 		const size_t num_receivers,
 		const unsigned& pixel_rows,
 		const unsigned& pixel_cols,
-		Logger& ilogger,
 		const double& inoise_factor,
 		const bool& iverbose = true)
 		:
+		logger(ilogger),
 		num_tx(num_transmitters),
 		num_rx(num_receivers),
 		known_height(pixel_rows),
 		known_width(pixel_cols),
-		verbose(iverbose),
+		noise_factor(inoise_factor),
+		raw_dbg_lin_data(num_tx),
+		ready_snr_dB_data(num_tx),
 		is_rendering(true),
-		raw_cow_data(num_tx),
-		raw_mrg_data(num_tx),
-		logger(ilogger),
-		noise_factor(inoise_factor)
+		verbose(iverbose)
 	{
-		raw_cow_data.clear();
-		raw_mrg_data.clear();
+		raw_dbg_lin_data.clear();
+		ready_dbg_dBm_data.clear();
+		ready_snr_dB_data.clear();
 	}
 };
 #endif
@@ -684,8 +726,8 @@ public:
 		mobile_station_count(args.mobile_station_count),
 		base_station_count(args.base_station_count),
 		timeslot_count(args.timeslots),
-		sinr_limit_linear(cached::log2lin(args.sinr_limit_dB)),
-		bs_theta_c(cached::deg2rad(args.bs_theta_c)),
+		sinr_limit_linear(log2lin(args.sinr_limit_dB)),
+		bs_theta_c(deg2rad(args.bs_theta_c)),
 		base_stations_loc(args.tx_loc.data),
 		mobile_stations_loc(args.rx_loc.data),
 		bs_antenna_counts(args.bs_antenna_count),
@@ -694,13 +736,13 @@ public:
 		antenna_spacing(args.antenna_spacing),
 		antenna_dims(args.antenna_dims),
 		system_noise_factor_w(dBm2watt(getThermalSystemNoise(args.bandwidth, args.system_noise))),
-		visuals(args.base_station_count, args.mobile_station_count,
-			args.field_size[0], args.field_size[1], ilogger, system_noise_factor_w),
+		visuals(ilogger, args.base_station_count, args.mobile_station_count,
+			args.field_size[0], args.field_size[1], system_noise_factor_w),
 		bs_tx_requested_power_watts(args.tx_powerlist().data),
 		bs_requested_scan_alpha_rad(args.tx_alphalist().data),
 		ms2bs_requested_bindings(args.ms_id_selections.binding_data)
 	{
-		setup(double_v(mobile_station_count, cached::log2lin(args.gain_gtrx)));
+		setup(double_v(mobile_station_count, log2lin(args.gain_gtrx)));
 
 		if (!args.nogui)
 		{

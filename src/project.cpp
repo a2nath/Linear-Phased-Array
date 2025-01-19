@@ -18,17 +18,8 @@ using namespace std;
 /* define externs */
 std::mutex graphics::compute_sim_mutex;
 std::mutex graphics::render_mutex;
-std::mutex graphics::graphics_data_mutex;
 std::condition_variable graphics::consig;
 Dimensions<unsigned> graphics::render_space;
-
-cached::Cache<float, float> cached::cache_sin;
-cached::Cache<float, float> cached::cache_dBm2w;
-cached::Cache<float, float> cached::cache_w2dBm;
-cached::Cache<float, float> cached::cache_db2lin;
-cached::Cache<float, float> cached::cache_lin2dB;
-cached::Cache<float, float> cached::cache_pow;
-cached::Cache<float, float> cached::cache_deg2rad;
 
 
 void close(Logger& logger)

@@ -1,10 +1,6 @@
 #include "network.h"
 using namespace network_package;
 
-#if defined(__CUDACC__) || !defined(__device__)
-
-//#else
-
 static std::vector<unsigned> indices_with_inf;
 static std::vector<unsigned> indices_with_z;
 
@@ -42,7 +38,7 @@ void AAntenna::update(
 
 		if (sin_term != 0)
 		{
-			gain_factor_antenna_system *= cached::pow_2(cached::sin(current.panel_count * phee) / sin_term);
+			gain_factor_antenna_system *= pow_2(sin(current.panel_count * phee) / sin_term);
 		}
 
 		/* update the channel matrix */
@@ -90,7 +86,7 @@ void AAntenna::init(
 	const double& pioverlambda = M_PIl / current.lambda;
 	const double& phee_temp = 2 * current.spacing * pioverlambda;
 	const double& pl_temp_meters = 4 * pioverlambda;
-	const double& antenna_dim_factor = 10 * current.antenna_dims.x * current.antenna_dims.y / cached::pow_2(current.lambda);
+	const double& antenna_dim_factor = 10 * current.antenna_dims.x * current.antenna_dims.y / pow_2(current.lambda);
 	double m_factor = current.antenna_dims.x * pioverlambda;
 
 	for (size_t idx = 0; idx < malloc_size; ++idx)
@@ -98,16 +94,16 @@ void AAntenna::init(
 		auto& cell_polar_data = polar_data[idx];
 
 		double theta_minus_thetaC = cell_polar_data.theta - current.theta_c;
-		double m = m_factor * cached::sin(theta_minus_thetaC);
-		double singleant_gain = antenna_dim_factor * cached::pow_2((1 + cached::cos(theta_minus_thetaC)) / 2);
+		double m = m_factor * sin(theta_minus_thetaC);
+		double singleant_gain = antenna_dim_factor * pow_2((1 + cos(theta_minus_thetaC)) / 2);
 
 		if (m != 0)
 		{
-			singleant_gain *= cached::pow_2(cached::sin(m) / m);
+			singleant_gain *= pow_2(sin(m) / m);
 		}
 
-		phee_minus_alpha_list[idx] = phee_temp * cached::sin(theta_minus_thetaC);
-		pathloss_list[idx] = cached::pow_2(pl_temp_meters * cell_polar_data.hype);
+		phee_minus_alpha_list[idx] = phee_temp * sin(theta_minus_thetaC);
+		pathloss_list[idx] = pow_2(pl_temp_meters * cell_polar_data.hype);
 		gain_RX_grid[idx] = singleant_gain * current.panel_count;
 
 		if (pathloss_list[idx] == 0)
@@ -172,6 +168,7 @@ void AAntenna::numerical_init(PolarArray& polar_data)
 	init(polar_data.array_size, &simulation.phee_minus_alpha_list[0], &simulation.pathloss_list[0], &simulation.gain_RX_grid[0], polar_data.data_ptr);
 	simulation.modified = true;
 }
+
 AAntenna::~AAntenna()
 {
 }
@@ -186,8 +183,3 @@ const double& AAntenna::coeff(const unsigned& rx_sta) const
 {
 	return simulation.hmatrix[rx_sta];
 }
-#endif
-
-
-
-

@@ -75,7 +75,9 @@ inline std::string timestamp() {
 
 	return tstamp.str();
 }
-struct Bench
+
+template<class Precision = std::chrono::milliseconds>
+struct BenchMark
 {
 	std::chrono::steady_clock::time_point begin;
 	std::chrono::steady_clock::time_point end;
@@ -93,19 +95,54 @@ struct Bench
 		mark_time = begin;
 	}
 
+	inline virtual void mark()
+	{
+		delta = std::chrono::duration_cast<Precision>(std::chrono::steady_clock::now() - mark_time).count();
+		mark_time = std::chrono::steady_clock::now();
+	}
+
+	inline virtual void bench_stop()
+	{
+		end = std::chrono::steady_clock::now();
+		delta = std::chrono::duration_cast<Precision>(end - begin).count();
+	}
+
+	BenchMark() : delta(0) {}
+};
+using Bench = BenchMark<>;
+
+
+struct FPSBench
+{
+	std::chrono::steady_clock::time_point begin;
+	std::chrono::steady_clock::time_point end;
+	std::chrono::steady_clock::time_point mark_time;
+
+	float delta;
+
+	inline auto get()
+	{
+		return delta;
+	}
+
+	inline void bench_start()
+	{
+		begin = std::chrono::steady_clock::now();
+		mark_time = begin;
+	}
+
 	inline void mark()
 	{
-		delta = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - mark_time).count();
+		delta = std::chrono::duration<float>(std::chrono::steady_clock::now() - mark_time).count();
 		mark_time = std::chrono::steady_clock::now();
 	}
 
 	inline void bench_stop()
 	{
 		end = std::chrono::steady_clock::now();
-		delta = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
+		delta = std::chrono::duration<float>(end - begin).count();
 	}
 };
-
 
 
 template<class T>
@@ -233,137 +270,6 @@ public:
 		stream.open(path(output_dirname / output_filename).string());
 	}
 };
-
-namespace cached
-{
-	template<class U, class V> using Cache = std::unordered_map<U, V>;
-	template<class U> using HashSet        = std::unordered_set<U>;
-	extern Cache<float, float> cache_sin, cache_dBm2w, cache_w2dBm, cache_db2lin, cache_lin2dB, cache_pow, cache_deg2rad;
-
-	inline double deg2rad(const double& deg)
-	{
-		auto ite = cache_deg2rad.find(deg);
-		if (ite == cache_deg2rad.end())
-		{
-			double answer = deg * M_PIl / 180.0;
-			cache_deg2rad.emplace(deg, answer);
-			return answer;
-		}
-
-		return ite->second;
-	}
-
-	inline double pow_2(const double& base)
-	{
-		auto ite = cache_pow.find(base);
-		if (ite == cache_pow.end())
-		{
-			double answer = pow(base, 2);
-			cache_pow.emplace(base, answer);
-			return answer;
-		}
-
-		return ite->second;
-	}
-
-	inline double lin2dB(const double& lin)
-	{
-		auto ite = cache_lin2dB.find(lin);
-		if (ite == cache_lin2dB.end())
-		{
-			double answer = 10 * log10(lin);
-			cache_lin2dB.emplace(lin, answer);
-			return answer;
-		}
-
-		return ite->second;
-	}
-
-	inline double log2lin(double log)
-	{
-		auto ite = cache_db2lin.find(log);
-		if (ite == cache_db2lin.end())
-		{
-			double answer = pow(10, log / 10);
-			cache_db2lin.emplace(log, answer);
-			return answer;
-		}
-
-		return ite->second;
-	}
-
-	inline double watt2dBm(const float& watt)
-	{
-		auto ite = cache_w2dBm.find(watt);
-		if (ite == cache_w2dBm.end())
-		{
-			double answer = lin2dB(watt) + 30;
-			cache_w2dBm.emplace(watt, answer);
-			return answer;
-		}
-
-		return ite->second;
-	}
-
-	inline double dBm2watt(double dBm)
-	{
-		auto ite = cache_dBm2w.find(dBm);
-		if (ite == cache_dBm2w.end())
-		{
-			double answer = log2lin(dBm - 30);
-			cache_dBm2w.emplace(dBm, answer);
-			return answer;
-		}
-
-		return ite->second;
-	}
-
-	inline std::vector<double> deg2rad(const std::vector<double>& log_values)
-	{
-		std::vector<double> output(log_values.size());
-		size_t idx = 0;
-		for (auto& item : log_values)
-		{
-			output[idx++] = deg2rad(item);
-		}
-
-		return output;
-	}
-
-	inline std::vector<double> dBm2watt(const std::vector<double>& dbm_values)
-	{
-		std::vector<double> output(dbm_values.size());
-		size_t idx = 0;
-		for (auto& item : dbm_values)
-		{
-			output[idx++] = dBm2watt(item);
-		}
-		return output;
-	}
-
-	inline double sin(const double& rads)
-	{
-		auto ite = cache_sin.find(rads);
-		if (ite != cache_sin.end())
-		{
-			return ite->second;
-		}
-		else
-		{
-			double val = std::sin(rads);
-			cache_sin.emplace(rads, val);
-			return val;
-		}
-	}
-
-	inline double cos(const double& rads)
-	{
-		return cached::sin((M_PIl / 2.0) - rads);
-	}
-
-}
-
-
 
 template<class Type>
 struct Dimensions
@@ -512,6 +418,89 @@ inline Coordinates<double> pol2cart(const Polar_Coordinates& c)
 }
 
 
+namespace rf_math
+{
+	constexpr inline double rad2deg(const double& rad)
+	{
+		return rad * 180.0 / M_PIl;
+	}
+
+	constexpr inline double deg2rad(const double& deg)
+	{
+		return deg * M_PIl / 180.0;
+	}
+
+	inline std::vector<double> deg2rad(const std::vector<double>& deg_values)
+	{
+		std::vector<double> output(deg_values.size());
+
+		for (size_t idx = 0; idx < output.size(); ++idx)
+		{
+			output[idx] = deg2rad(deg_values[idx]);
+		}
+
+		return output;
+	}
+
+	inline double pow_2(const double& base)
+	{
+		return pow(base, 2);
+	}
+
+	inline double log2lin(const double& log)
+	{
+		return pow(10, log / 10);
+	}
+
+	inline double lin2dB(const double& lin)
+	{
+		return 10 * log10(lin);
+	}
+
+	inline double dBm2watt(const double& dBm)
+	{
+		return log2lin(dBm - 30);
+	}
+
+	inline std::vector<double> dBm2watt(const std::vector<double>& dbm_values)
+	{
+		std::vector<double> output(dbm_values.size());
+
+		for (size_t idx = 0; idx < output.size(); ++idx)
+		{
+			output[idx] = dBm2watt(dbm_values[idx]);
+		}
+
+		return output;
+	}
+
+	inline double watt2dBm(const double& lin)
+	{
+		return lin2dB(lin) + 30;
+	}
+
+	inline double getLambda(const double& frequency)
+	{
+		if (frequency > 0)
+		{
+			return C_SPEED / frequency;
+		}
+
+		throw std::invalid_argument("Divide by zero error from passing 0 frequency in getLambda call");
+	}
+
+	/* Get system noise figure in [dBm] with thermal noise by passing B/W in [Mhz], and system noise in [dB] */
+	inline double getThermalSystemNoise(const double& bandwidth, const double& system_noise)
+	{
+		if (bandwidth > 0)
+		{
+			return -174 + round(10 * log10(bandwidth)) + system_noise;
+		}
+
+		throw std::invalid_argument("Bandwidth cannot be zero or when setting system noise factor");
+	}
+}
+
 /* antenna states */
 using antennadim = Dimensions<float>;
 struct Settings
@@ -589,7 +578,6 @@ namespace graphics
 {
 	extern std::mutex compute_sim_mutex;          // Mutex to protect the shared queue
 	extern std::mutex render_mutex;
-	extern std::mutex graphics_data_mutex;
 	extern std::condition_variable consig;      // Condition variable to signal the consumer thread
 	extern Dimensions<unsigned> render_space;
 
@@ -601,6 +589,7 @@ namespace graphics
 
 		State& operator=(const State& b)
 		{
+			tx_idx = b.tx_idx;
 			settings = b.settings;
 			location = b.location;
 			return *this;
@@ -630,22 +619,28 @@ namespace graphics
 	struct DataSync
 	{
 		/* signal the tx number */
-		int compute_tx_id, render_tx_id, def_render_tx_id;
-		bool resize_event;
+		int is_computing, is_debugging, render_tx_id, last_render_tx_id;
+		bool resize_event, debug_interrupt;
 		std::queue<State*> mainq;
 		std::vector<std::queue<State*>> pending;
 
-		inline void emplace_state(State& state)
-		{
-			std::scoped_lock<std::mutex> lock(graphics::graphics_data_mutex);  // Lock the mutex
-			mainq.emplace(&state);
 
-			compute_tx_id = 1;
+		void pop()
+		{
+			last_render_tx_id = mainq.front()->tx_idx;
+			mainq.pop();
 		}
 
-		inline void event_resize(const unsigned& width, const unsigned& height, const int& def_render_id)
+		inline void emplace_state(State& state)
 		{
-			def_render_tx_id = def_render_id;
+			std::scoped_lock<std::mutex> lock(graphics::compute_sim_mutex);  // Lock the mutex
+			mainq.emplace(&state);
+
+			is_computing = 1;
+		}
+
+		inline void event_resize(const unsigned& width, const unsigned& height)
+		{
 			if (width != render_space.x || height != render_space.y)
 			{
 				resize_event = true;
@@ -653,20 +648,37 @@ namespace graphics
 			}
 		}
 
+		inline void event_debug(State& state)
+		{
+			std::scoped_lock<std::mutex> lock(graphics::compute_sim_mutex);  // Lock the mutex
+			is_computing = 1;
+		}
+
+		inline void set_debug(const int& debug_flag)
+		{
+			std::scoped_lock<std::mutex> lock(graphics::compute_sim_mutex);  // Lock the mutex
+			is_debugging = debug_flag;
+		}
+
 		inline void event_render(const int& idx)
 		{
-			std::scoped_lock<std::mutex> lock(graphics::render_mutex);  // Lock the mutex
-			render_tx_id = idx;
+			std::scoped_lock<std::mutex> lock(graphics::compute_sim_mutex);  // Lock the mutex
+			if (mainq.empty())
+			{
+				std::scoped_lock<std::mutex> lock(graphics::render_mutex);  // Lock the mutex
+
+				render_tx_id = idx;
+				last_render_tx_id = render_tx_id;
+			}
 		}
 
-		bool got_updates(const int& def_render_id)
+		bool got_updates()
 		{
-			def_render_tx_id = def_render_id;
-			return compute_tx_id > 0 || render_tx_id >= 0 || resize_event;
+			return is_computing > 0 || is_debugging > 0 || render_tx_id >= 0 || resize_event;
 		}
 
-		DataSync(int num_tx) : compute_tx_id(0), render_tx_id(-1), def_render_tx_id(-1), \
-			resize_event(false), pending(num_tx)
+		DataSync(int num_tx) : is_computing(0), is_debugging(0), render_tx_id(-1), last_render_tx_id(-1), \
+			resize_event(false), debug_interrupt(false), pending(num_tx)
 		{
 		}
 	};

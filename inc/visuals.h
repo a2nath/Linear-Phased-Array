@@ -55,7 +55,6 @@ namespace graphics
 
     struct HeatGrid
     {
-        const float padding;
         const float offset_height, offset_width;
         const unsigned& data_height;
         const unsigned& data_width;
@@ -66,33 +65,19 @@ namespace graphics
 
         sf::Vector2u bounds_lower, bounds_upper, window_size;
 
+        sf::VertexArray grid;
         const placement_v& rx_locations;
         const std::vector<State>& txstates;
 
-        sf::VertexArray grid;
-        std::vector<sf::CircleShape> rx_cicles;
-
-        std::vector<txvertex> txdata;
-        sf::Font font;
-
         bool debug_mode;
 
-        /* WARNING: if you're building the mrg-data model, do that first
-        before converting debug model to dBm (all interference and thermal noise are ADDITIVE sources of noise!) */
-        void logify_intermediate_calc(double_v& lin_output)
-        {
-            size_t index = 0;
-			for (size_t row = 0; row < data_height; ++row)
-			{
-				//logger.write("cow " + str(cow_idx) + '\n');
+        std::vector<sf::CircleShape> rx_cicles;
+        std::vector<txvertex> txdata;
 
-				for (size_t col = 0; col < data_width; ++col)
+        sf::Font font;
 
-					lin_output[index] = lin2dB(lin_output[index]); // already filled with heat from "setup_tx" now convert
-				++index;
-			}
 
-        }
+
 
         //sf::Color monocolorgrid(const double& raw, unsigned& tx_id)
         //{
@@ -163,7 +148,14 @@ namespace graphics
             return sf::Color(r, g, b);
         }
 
-        void draw_legend(sf::RenderWindow& window) {
+        void reset_span(const Pair<float>& new_range)
+        {
+            std::swap(prev_pxl_range, curr_pxl_range);
+            curr_pxl_range[0] = new_range.first;
+            curr_pxl_range[1] = new_range.second;
+        }
+
+        void draw_legend(sf::RenderTarget& window) {
             // Legend dimensions
             const float legendWidth = 55.f;
             const float legendHeight = 1000.f;
@@ -193,12 +185,13 @@ namespace graphics
             // Labels for the legend
 
             sf::Text labelMin, labelMax, labelMid;
+            float labeloffset = -8.0f;
 
             labelMax.setFont(font);
             labelMax.setString(str(static_cast<int>(curr_pxl_range[1])) + " dB" + (debug_mode ? "m" : ""));
             labelMax.setCharacterSize(15);
             labelMax.setFillColor(sf::Color::White);
-            labelMax.setPosition(legendPos.x + legendWidth + 5.f, legendPos.y);
+            labelMax.setPosition(legendPos.x + legendWidth + 5.f, legendPos.y + labeloffset);
             window.draw(labelMax);
 
             labelMid.setFont(font);
@@ -211,7 +204,7 @@ namespace graphics
             {
                 float signal_value = curr_pxl_range[0] + i * range_steps;
                 labelMid.setString(str(static_cast<int>(signal_value)) + " dB" + (debug_mode ? "m" : ""));
-                labelMid.setPosition(legendPos.x + legendWidth + 5.f, legendPos.y + legendHeight - i * tick_interval);
+                labelMid.setPosition(legendPos.x + legendWidth + 5.f, legendPos.y + legendHeight - i * tick_interval + labeloffset);
                 window.draw(labelMid);
             }
 
@@ -221,6 +214,30 @@ namespace graphics
             labelMin.setFillColor(sf::Color::White);
             labelMin.setPosition(legendPos.x + legendWidth + 5.f, legendPos.y + legendHeight - 10.f);
             window.draw(labelMin);
+        }
+
+        void draw(sf::RenderTarget& window)
+        {
+            /* draw the grid */
+            window.draw(grid);
+
+            /* draw the receivers */
+            for (auto& circle : rx_cicles)
+            {
+                window.draw(circle);
+            }
+
+            /* draw the transmitters */
+            for (auto& data : txdata)
+            {
+                window.draw(data.transmitter);
+                for (auto& element : data.indicators)
+                {
+                    window.draw(element);
+                }
+            }
+
+            draw_legend(window);
         }
 
         void update_panning(sf::Vector2i& moved_offset)
@@ -473,9 +490,9 @@ namespace graphics
             const float& imax,
             const sf::Vector2u& iwindow_size,
             const placement_v& irx_locations,
-            const vector<State>& curr_state)
+            const vector<State>& curr_state,
+            const float padding = 30.0f)
             :
-            padding(30.0f),
             offset_height(padding),
             offset_width(padding),
             data_width(icols),
@@ -484,9 +501,9 @@ namespace graphics
             pixel_height(iwindow_size.y / irows),
             bounds_lower({0, 0}),
             bounds_upper(iwindow_size),
+            grid(sf::Quads, irows * icols * 4),
             rx_locations(irx_locations),
             txstates(curr_state),
-            grid(sf::Quads, irows * icols * 4),
             debug_mode(false)
         {
             init_thresholds[0] = 0.25; // Cyan to Green
@@ -510,6 +527,38 @@ namespace graphics
             }
 
             resize({ data_width, data_height });
+        }
+
+        HeatGrid(
+            const unsigned& icols,
+            const unsigned& irows,
+            const placement_v& irx_locations,
+            const vector<State>& curr_state,
+            const float padding = 30.0f)
+            :
+            offset_height(padding),
+            offset_width(padding),
+            data_width(icols),
+            data_height(irows),
+            pixel_width(icols / icols),
+            pixel_height(irows / irows),
+            bounds_lower({ 0, 0 }),
+            bounds_upper({ icols, irows }),
+            grid(sf::Quads, irows* icols * 4),
+            rx_locations(irx_locations),
+            txstates(curr_state),
+            debug_mode(false)
+        {
+            curr_thresholds[0] = 0.25; // Cyan to Green
+            curr_thresholds[1] = 0.50; // Green to Yellow
+            curr_thresholds[2] = 0.81; // Yellow to Red
+
+            init(bounds_lower, bounds_upper);
+
+            if (!font.loadFromFile("font/OpenSans-Light.ttf"))
+            {
+                spdlog::warn("Font file did not load for SFML library");
+            }
         }
     };
 
@@ -578,20 +627,72 @@ namespace graphics
         curr_pos += delta;
     }
 
+    void save(HeatGrid& griddata, std::vector<double_v>& signal_data, int tx_idx, sf::RenderWindow* window = nullptr)
+    {
+        int pixel_width = 1;
+        int pixel_height = 1;
+
+        sf::RenderTexture renderTexture;
+        Dimensions<unsigned> size = {
+            griddata.data_width * pixel_width + (unsigned)griddata.offset_width + 150,
+            griddata.data_height * pixel_height + 2 * (unsigned)griddata.offset_height
+        };
+
+        if (window)
+        {
+            auto window_size = window->getSize();
+            size.x = max(window_size.x * pixel_width, size.x);
+            size.y = max(window_size.y * pixel_height, size.y);
+        }
+
+        std::string name = griddata.debug_mode ? "transmitter_dbg_ " : "transmitter_int_";
+
+        if (renderTexture.create(size.x, size.y))
+        {
+            renderTexture.clear();
+
+            /* draw the grid */
+            griddata.update_heat(signal_data[tx_idx]);
+            griddata.draw(renderTexture);
+
+#ifdef CONTROLS
+            if (window)
+            {
+                ImGui::SFML::Render(renderTexture);
+            }
+#endif
+            renderTexture.display();
+
+
+            sf::Texture texture = renderTexture.getTexture();
+            sf::Image image = texture.copyToImage();
+            if (!image.saveToFile(name + str(tx_idx) + "." + timestamp() + ".png"))
+            {
+                spdlog::error("Failed to save image!");
+            }
+
+        }
+        else
+        {
+            spdlog::error("Failed to create render texture!");
+        }
+    }
+
     /*    G U I    */
     int render(
         Logger& logger,
         const placement_v& init_rx_locations,
-        const state_v& tx_states,
-        std::vector<double_v>& raw_cow_data,
-        const std::vector<double_v>& mrg_cow_data,
+        const state_v& init_states,
+        state_v& curr_states,
+        const std::vector<double_v>& raw_dbg_lin_data,
+        std::vector<double_v>& ready_dbg_dBm_data,
+        std::vector<double_v>& ready_snr_dB_data,
         const unsigned& grid_rows,
         const unsigned& grid_cols,
         DataSync& sync,
         bool& is_rendering)
     {
         std::signal(SIGINT, sig_handler);
-
 
         size_t render_width = grid_cols + 800;
         size_t render_height = grid_rows + 500;
@@ -611,27 +712,30 @@ namespace graphics
         /* init variables */
         int debounce_txid = -1;
         float debounce_timer = 0.0f;
-        float debounce_delay = 0.5f; // 100ms delay
+        float debounce_delay = 0.015f; // 15ms delay or 67 FPS
         float zoom_request = 0.0f;
         float zoomLevel = 1.0f;
-        bool state_changed = true;
         bool panning = false;
         float mouse_delta_thresh = 0.01f;
         float zoom_change_factor = 1.1f;
         long pan_adj_factor = 10;
         int render_tx_id = 0;
-        size_t tx_count = tx_states.size();
+
+        State debug_state;
+
+        size_t tx_count = init_states.size();
 
         /* set the states, current (working variable), previous (for undo), init (for reset) */
-        auto& init = tx_states;
+
+        auto& init = init_states;
+        auto& curr = curr_states;
+        curr = init;
+
+        state_v prev = init;
         txvertex* tx_dragging = nullptr;
 
-        Pair<float> min_and_max = compute_colorspan(mrg_cow_data);
-        const std::vector<std::vector<double>>* ptr_live_data = &mrg_cow_data;
-
-        state_v curr, prev;
-        curr = init;
-        prev = init;
+        Pair<float> min_and_max = compute_colorspan(ready_snr_dB_data);
+        std::vector<std::vector<double>>* ptr_live_data = &ready_snr_dB_data;
 
         HeatGrid griddata(grid_cols, grid_rows, min_and_max.first, min_and_max.second, window_size, init_rx_locations, curr);
 
@@ -651,16 +755,21 @@ namespace graphics
             tx_dir_slider.emplace_back("Direction##slider" + sidx);
             tx_dir_inp.emplace_back("Direction##input" + sidx);
             tx_scan_slider.emplace_back("Scan Angle##slider" + sidx);
-            tx_scan_inp.emplace_back("Scan Angle##input" + sidx);
+            tx_scan_inp.emplace_back("Angle##input" + sidx);
 
-            power_dBm[i] = cached::watt2dBm(init[i].settings.power);
+            power_dBm[i] = watt2dBm(init[i].settings.power);
             theta_deg[i] = rad2deg(init[i].settings.theta_c);
             scan_deg[i] = rad2deg(init[i].settings.alpha);
         }
 
+        sf::Text fpsText;
+        fpsText.setFont(griddata.font);
+        fpsText.setCharacterSize(16);       // Set a small size
+        fpsText.setFillColor(sf::Color::White); // Set text color
+        fpsText.setPosition(10.f, 10.f);    // Position at the top-left corner
 
         /* init the heatmap to display heat from TX id */
-        sync.render_tx_id = render_tx_id;
+        sync.event_render(render_tx_id);
 
 #ifdef CONTROLS
         ImGui::SFML::Init(window);
@@ -677,13 +786,28 @@ namespace graphics
                         }
                     );
 
-                    if (!is_rendering) break;
+                    if (!is_rendering)
+                    {
+                        break;
+                    }
+
+                    if (sync.is_debugging && sync.debug_interrupt)
+                    {
+                        griddata.reset_span(compute_colorspan(*ptr_live_data));
+                        sync.debug_interrupt = false;
+                    }
+
 
                     griddata.update_heat((*ptr_live_data)[sync.render_tx_id]);
                     sync.render_tx_id = -1;
                 }
             }
         );
+
+        FPSBench bench;
+        bench.bench_start();
+
+        float fps = 0;
 
         // Main loop
         while (window.isOpen() && is_rendering)
@@ -697,6 +821,7 @@ namespace graphics
 #ifdef CONTROLS
                 ImGui::SFML::ProcessEvent(event);
 #endif
+
                 switch (event.type)
                 {
                 case sf::Event::Closed:
@@ -707,20 +832,17 @@ namespace graphics
                 case sf::Event::Resized:
                 {
                     auto new_size = window.getSize();
-                    sync.event_resize(new_size.x, new_size.y, render_tx_id);
+                    sync.event_resize(new_size.x, new_size.y);
                     break;
                 }
                 case sf::Event::MouseWheelScrolled:
                 {
-
                     zoom_request = event.mouseWheelScroll.delta - mouse_delta_thresh;
-
                     break;
                 }
                 case sf::Event::MouseButtonPressed:
                 {
-                    // Mouse press: check if the click was inside the object
-                    switch (event.mouseButton.button)// == sf::Mouse::Left)
+                    switch (event.mouseButton.button)
                     {
                     case sf::Mouse::Left:
                     {
@@ -728,21 +850,30 @@ namespace graphics
                         {
                             if (tx.transmitter.getGlobalBounds().contains(event.mouseButton.x, event.mouseButton.y))
                             {   // found it
-                                tx_dragging = &tx;
 
-                                auto& id = tx_dragging->id;
+                                render_tx_id = tx.id;
 
-								auto potential_new_loc = griddata.grid_loc_2_state_loc(event.mouseButton.x, event.mouseButton.y);
-								if (potential_new_loc != curr[id].location)
-								{
-									prev[id].location = curr[id].location;
+                                if (sf::Keyboard::isKeyPressed(sf::Keyboard::Scan::LControl))
+                                {
+                                    tx_dragging = &tx;
+                                    auto& id = tx_dragging->id;
 
-									curr[id].location = potential_new_loc;
-									griddata.set_tx_position(id, event.mouseButton.x, event.mouseButton.y);
+                                    auto potential_new_loc = griddata.grid_loc_2_state_loc(event.mouseButton.x, event.mouseButton.y);
+                                    if (potential_new_loc != curr[id].location)
+                                    {
+                                        prev[id].location = curr[id].location;
 
-									debounce_timer = 0.0f;
-									debounce_txid = id;
-								}
+                                        curr[id].location = potential_new_loc;
+                                        griddata.set_tx_position(id, event.mouseButton.x, event.mouseButton.y);
+
+                                        debounce_timer = 0.0f;
+                                        debounce_txid = id;
+                                    }
+                                }
+                                else
+                                {
+                                    sync.event_render(render_tx_id);
+                                }
 
                                 break;
                             }
@@ -836,6 +967,18 @@ namespace graphics
                 {
                     switch (event.key.scancode)
                     {
+                    case sf::Keyboard::Scan::S:
+                    {
+                        if (event.key.control && event.key.shift)
+                        {
+                            save(griddata, *ptr_live_data, render_tx_id, &window);
+                        }
+                        else if (event.key.control)
+                        {
+                            save(griddata, *ptr_live_data, render_tx_id);
+                        }
+                        break;
+                    }
                     case sf::Keyboard::Scan::Z:
                     {
                         if (event.key.control)
@@ -852,10 +995,7 @@ namespace graphics
                                 curr[i] = prev[i];
                             }
 
-                            if (sync.mainq.empty())
-                            {
-                                sync.event_render(render_tx_id);
-                            }
+                            sync.event_render(render_tx_id); // moved the if statement to check for mainq->empty() and made it MT safe
 
                             /* undo the color thresholds */
                             griddata.undo();
@@ -868,18 +1008,42 @@ namespace graphics
                         {
                             if (griddata.debug_mode == false)
                             {
-                                ptr_live_data = &raw_cow_data;
+                                ptr_live_data = &ready_dbg_dBm_data;
                                 griddata.debug_mode = true;
+
+                                if (ptr_live_data->empty())
+                                {
+                                    ptr_live_data->assign(raw_dbg_lin_data.size(), double_v(griddata.data_width * griddata.data_height));
+
+                                    debug_state = curr[render_tx_id];
+                                    sync.event_debug(debug_state);
+                                }
+                                else
+                                {
+                                    if (debug_state != curr[render_tx_id])
+                                    {
+                                        debug_state = curr[render_tx_id];
+                                        sync.event_debug(debug_state);
+                                    }
+                                    else
+                                    {
+                                        sync.event_render(render_tx_id);
+                                    }
+
+                                }
+
+                                sync.debug_interrupt = true;
                             }
                             else
                             {
-                                ptr_live_data = &mrg_cow_data;
-                                griddata.debug_mode = true;
-                                griddata.curr_pxl_range[0] = min_and_max.first;
-                                griddata.curr_pxl_range[1] = min_and_max.second;
+                                ptr_live_data = &ready_snr_dB_data;
+                                griddata.debug_mode = false;
+
+                                griddata.reset_span(min_and_max);
+                                sync.event_render(render_tx_id);
                             }
 
-                            sync.event_render(render_tx_id);
+                            sync.set_debug(griddata.debug_mode);
                         }
                         break;
                     }
@@ -1006,18 +1170,42 @@ namespace graphics
                 {
                     if (griddata.debug_mode == false)
                     {
-                        ptr_live_data = &raw_cow_data;
+                        ptr_live_data = &ready_dbg_dBm_data;
                         griddata.debug_mode = true;
+
+                        if (ptr_live_data->empty())
+                        {
+                            ptr_live_data->assign(raw_dbg_lin_data.size(), double_v(griddata.data_width * griddata.data_height));
+
+                            debug_state = curr[render_tx_id];
+                            sync.event_debug(debug_state);
+                        }
+                        else
+                        {
+                            if (debug_state != curr[render_tx_id])
+                            {
+                                debug_state = curr[render_tx_id];
+                                sync.event_debug(debug_state);
+                            }
+                            else
+                            {
+                                sync.event_render(render_tx_id);
+                            }
+
+                        }
+
+                        sync.debug_interrupt = true;
                     }
                     else
                     {
-                        ptr_live_data = &mrg_cow_data;
+                        ptr_live_data = &ready_snr_dB_data;
                         griddata.debug_mode = false;
-                        griddata.curr_pxl_range[0] = min_and_max.first;
-                        griddata.curr_pxl_range[1] = min_and_max.second;
+
+                        griddata.reset_span(min_and_max);
+                        sync.event_render(render_tx_id);
                     }
 
-                    sync.event_render(render_tx_id);
+                    sync.set_debug(griddata.debug_mode);
                 }
             }
 
@@ -1119,7 +1307,7 @@ namespace graphics
 
                         if (ImGui::SliderFloat(tx_power_slider[i].c_str(), &power_dBm[i], -30.0f, +30.0f, "%.2f dBm"))
                         {
-                            curr[i].settings.power = cached::dBm2watt(power_dBm[i]);
+                            curr[i].settings.power = dBm2watt(power_dBm[i]);
 
                             debounce_timer = 0.0f;
                             debounce_txid = i;
@@ -1128,17 +1316,16 @@ namespace graphics
                         ImGui::SameLine();
                         if (ImGui::InputFloat(tx_power_inp[i].c_str(), &power_dBm[i], -30.0f, +30.0f, "%.2f", ImGuiInputTextFlags_EnterReturnsTrue))
                         {
-                            curr[i].settings.power = cached::dBm2watt(power_dBm[i]);
+                            curr[i].settings.power = dBm2watt(power_dBm[i]);
+
                             sync.emplace_state(curr[i]);
                         }
 
-                        /* antenna-power mechanism for each transmitter */
                         ImGui::Text("Antenna Direction");
 
-                        if (ImGui::SliderAngle(tx_dir_slider[i].c_str(), &theta_deg[i], 0.0f, 359.9f, "%.2f deg"))
+                        if (ImGui::SliderFloat(tx_dir_slider[i].c_str(), &theta_deg[i], 0.0f, 359.9f, "%.2f deg"))
                         {
-                            /* draw the placement direction indicators for each tower */
-                            curr[i].settings.theta_c = cached::deg2rad(theta_deg[i]);
+                            curr[i].settings.theta_c = deg2rad(theta_deg[i]);
                             griddata.rotation_update(M_PIl / 2 - curr[i].settings.theta_c, i);
 
                             debounce_timer = 0.0f;
@@ -1149,8 +1336,7 @@ namespace graphics
                         ImGui::SameLine();
                         if (ImGui::InputFloat(tx_dir_inp[i].c_str(), &theta_deg[i], 0.0f, 359.9f, "%.2f", ImGuiInputTextFlags_EnterReturnsTrue))
                         {
-                            /* draw the placement direction indicators for each tower */
-                            curr[i].settings.theta_c = cached::deg2rad(theta_deg[i]);
+                            curr[i].settings.theta_c = deg2rad(theta_deg[i]);
                             griddata.rotation_update(M_PIl / 2 - curr[i].settings.theta_c, i);
 
                             sync.emplace_state(curr[i]);
@@ -1162,7 +1348,7 @@ namespace graphics
 
                         if (ImGui::SliderFloat(tx_scan_slider[i].c_str(), &scan_deg[i], -90.0, +90.0, "%.2f deg"))
                         {
-                            curr[i].settings.alpha = cached::deg2rad(scan_deg[i]);
+                            curr[i].settings.alpha = deg2rad(scan_deg[i]);
                             griddata.scan_angle_update(i);
 
                             debounce_timer = 0.0f;
@@ -1172,7 +1358,7 @@ namespace graphics
                         ImGui::SameLine();
                         if (ImGui::InputFloat(tx_scan_inp[i].c_str(), &scan_deg[i], -90.0, +90.0, "%.2f", ImGuiInputTextFlags_EnterReturnsTrue))
                         {
-                            curr[i].settings.alpha = cached::deg2rad(scan_deg[i]);
+                            curr[i].settings.alpha = deg2rad(scan_deg[i]);
                             griddata.scan_angle_update(i);
                             sync.emplace_state(curr[i]);
                         }
@@ -1180,18 +1366,18 @@ namespace graphics
 
                     } // end TX header (if)
                 } // end TX header section (for loop)
-
-                debounce_timer += ImGui::GetIO().DeltaTime;
-                if (debounce_txid != -1 && debounce_timer >= debounce_delay)
-                {
-                    sync.emplace_state(curr[debounce_txid]);
-                    debounce_timer = 0.0f; // Reset timer after update
-                    debounce_txid = -1;
-                }
-
             }
 
-            if (zoom_request != 0 && !ImGui::IsWindowHovered())
+            debounce_timer += ImGui::GetIO().DeltaTime;
+            if (debounce_txid != -1 && debounce_timer >= debounce_delay)
+            {
+                sync.emplace_state(curr[debounce_txid]);
+
+                debounce_timer = 0.0f; // Reset timer after update
+                debounce_txid = -1;
+            }
+
+            if (zoom_request != 0 && !ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)) // menu scrolls, grid zooms.
             {
                 if (zoom_request > 0)
                     zoom_in(window, view, zoomLevel, zoom_change_factor);
@@ -1199,39 +1385,24 @@ namespace graphics
                     zoom_out(window, view, zoomLevel, zoom_change_factor);
             }
 
-            if (sync.got_updates(render_tx_id))
-            {
-                consig.notify_one(); // either have [render_tx_id] set or [compute_tx_id] set, not both
-            }
+            zoom_request = 0; // reset and forget if tried to "scroll" inside the grid
 
-            zoom_request = 0;
+            if (sync.got_updates())
+            {
+                consig.notify_one(); // either have [render_tx_id] set or [is_computing] set, not both
+            }
 
             ImGui::End();
 #endif
-
             window.clear();
+            griddata.draw(window);
 
-            /* draw the grid */
-            window.draw(griddata.grid);
+            /* show fps on the top left of the screen */
+            bench.mark();
+            fps = 1.0f / bench.get();
+            fpsText.setString("FPS: " + str(static_cast <int>(fps)));
 
-            /* draw the receivers */
-            for (auto& circle : griddata.rx_cicles)
-            {
-                window.draw(circle);
-            }
-
-            /* draw the transmitters */
-            for (auto& data : griddata.txdata)
-            {
-                window.draw(data.transmitter);
-                for (auto& element : data.indicators)
-                {
-                    window.draw(element);
-                }
-            }
-
-            /* create a legend */
-            griddata.draw_legend(window);
+            window.draw(fpsText);
 
 #ifdef CONTROLS
             ImGui::SFML::Render(window);  // Render ImGui over SFML content
@@ -1251,71 +1422,5 @@ namespace graphics
         return 0;
     }
 
-    /*    G U I    */
-    void capture_plot(
-        Logger& logger,
-        const string& filename,
-        const state_v& tx_states,
-        const placement_v& rx_locations,
-        std::vector<double_v>& raw_cow_data,
-        const unsigned& grid_rows,
-        const unsigned& grid_cols,
-        bool debug_plot = false)
-    {
-        float pixel_height = 1;
-        float pixel_width = 1;
 
-        std::vector<int> tx_ids(raw_cow_data.size());
-        iota(tx_ids.begin(), tx_ids.end(), 0);
-
-        Pair<float> min_color_span = compute_colorspan(raw_cow_data);
-        sf::RenderTexture renderTexture;
-
-        HeatGrid griddata(grid_cols, grid_rows, min_color_span.first, min_color_span.second, renderTexture.getSize(), rx_locations, tx_states);
-
-        for (auto& idx : tx_ids)
-        {
-            if (renderTexture.create(grid_cols * pixel_width, grid_rows * pixel_height))
-            {
-                renderTexture.clear();
-
-                if (debug_plot)
-                    griddata.logify_intermediate_calc(raw_cow_data[idx]);
-
-                /* draw the grid */
-                griddata.update_heat(raw_cow_data[idx]);
-                renderTexture.draw(griddata.grid);
-
-                /* draw the receivers */
-                for (auto& circle : griddata.rx_cicles)
-                {
-                    renderTexture.draw(circle);
-                }
-
-                /* draw the transmitters */
-                for (auto& data : griddata.txdata)
-                {
-                    renderTexture.draw(data.transmitter);
-                    for (auto& element : data.indicators)
-                    {
-                        renderTexture.draw(element);
-                    }
-                }
-
-                renderTexture.display();
-
-                // Save the render texture to a file
-                sf::Texture texture = renderTexture.getTexture();
-                sf::Image image = texture.copyToImage();
-                if (!image.saveToFile(filename + str(idx) + ".png"))
-                {
-                    spdlog::error("Failed to save image!");
-                }
-            }
-            else
-            {
-                spdlog::error("Failed to create render texture!");
-            }
-        }
-    }
 }

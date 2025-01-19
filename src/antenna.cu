@@ -172,31 +172,31 @@ __global__ void antenna_init_kernel(
 	double* d_gain_RX_grid,
 	Polar_Coordinates* d_polar_data)
 {
-	//size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-	//
-	//if (idx < data_size)
-	//{
-	//	const double& pioverlambda = CONSTANT_PI / current_lambda;
-	//	const double& phee_temp = 2 * current_spacing * pioverlambda;
-	//	const double& pl_temp_meters = 4 * pioverlambda;
-	//	const double& antenna_dim_factor = 10 * antenna_dims.x * antenna_dims.y / (current_lambda * current_lambda);
-	//	double m_factor = antenna_dims.x * pioverlambda;
-	//
-	//	auto& cell_polar_data = d_polar_data[idx];
-	//	double theta_minus_thetaC = cell_polar_data.theta - theta_c;
-	//	double m = m_factor * sinf(theta_minus_thetaC);
-	//	double pow_base = (1 + cached::cos(theta_minus_thetaC)) / 2;
-	//	double singleant_gain = antenna_dim_factor * pow_base * pow_base; // pow(pow_base, 2) equivalent on HOST
-	//
-	//	if (m != 0)
-	//	{
-	//		singleant_gain *= pow(cached::sin(m) / m, 2);
-	//	}
-	//
-	//	d_phee_minus_alpha_list[idx] = phee_temp * cached::sin(theta_minus_thetaC);
-	//	d_pathloss_list[idx] = pow(pl_temp_meters * cell_polar_data.hype, 2);
-	//	d_gain_RX_grid[idx] = singleant_gain * panel_count;
-	//}
+	size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (idx < data_size)
+	{
+		const double& pioverlambda = CONSTANT_PI / current_lambda;
+		const double& phee_temp = 2 * current_spacing * pioverlambda;
+		const double& pl_temp_meters = 4 * pioverlambda;
+		const double& antenna_dim_factor = 10 * antenna_dims.x * antenna_dims.y / (current_lambda * current_lambda);
+		double m_factor = antenna_dims.x * pioverlambda;
+
+		auto& cell_polar_data = d_polar_data[idx];
+		double theta_minus_thetaC = cell_polar_data.theta - theta_c;
+		double m = m_factor * sinf(theta_minus_thetaC);
+		double pow_base = (1 + cached::cos(theta_minus_thetaC)) / 2;
+		double singleant_gain = antenna_dim_factor * pow_base * pow_base; // pow(pow_base, 2) equivalent on HOST
+
+		if (m != 0)
+		{
+			singleant_gain *= pow(cached::sin(m) / m, 2);
+		}
+
+		d_phee_minus_alpha_list[idx] = phee_temp * cached::sin(theta_minus_thetaC);
+		d_pathloss_list[idx] = pow(pl_temp_meters * cell_polar_data.hype, 2);
+		d_gain_RX_grid[idx] = singleant_gain * panel_count;
+	}
 }
 
 __host__ void AAntenna::init(
@@ -206,30 +206,30 @@ __host__ void AAntenna::init(
 	double* d_gain_RX_grid,
 	const Polar_Coordinates* d_polar_data)
 {
-	//int threadsPerBlock = 256;
-	//int blocksPerGrid = (d_malloc_size + threadsPerBlock - 1) / threadsPerBlock;
-	//
-	//antenna_init_kernel <<< blocksPerGrid, threadsPerBlock >>> (
-	//	d_malloc_size, current.lambda, current.spacing, current.theta_c, current.panel_count, current.antenna_dims,
-	//	d_phee_minus_alpha_list, d_pathloss_list, d_gain_RX_grid, d_polar_data);
-	//
-	//cudaError_t cudaStatus = cudaGetLastError();
-	//
-	//if (cudaStatus != cudaSuccess)
-	//{
-	//	fprintf(stderr, "antenna_init_kernel() launch failed: %s\n", cudaGetErrorString(cudaStatus));
-	//	exit(-1);
-	//}
-	//
-	///* cudaDeviceSynchronize waits for the kernel to finish, and returns
-	// any errors encountered during the launch. */
-	//cudaStatus = cudaDeviceSynchronize();
-	//
-	//if (cudaStatus != cudaSuccess)
-	//{
-	//	fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching addKernel!\n", cudaStatus);
-	//	exit(-1);
-	//}
+	int threadsPerBlock = 256;
+	int blocksPerGrid = (d_malloc_size + threadsPerBlock - 1) / threadsPerBlock;
+
+	antenna_init_kernel <<< blocksPerGrid, threadsPerBlock >>> (
+		d_malloc_size, current.lambda, current.spacing, current.theta_c, current.panel_count, current.antenna_dims,
+		d_phee_minus_alpha_list, d_pathloss_list, d_gain_RX_grid, d_polar_data);
+
+	cudaError_t cudaStatus = cudaGetLastError();
+
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "antenna_init_kernel() launch failed: %s\n", cudaGetErrorString(cudaStatus));
+		exit(-1);
+	}
+
+	/* cudaDeviceSynchronize waits for the kernel to finish, and returns
+	 any errors encountered during the launch. */
+	cudaStatus = cudaDeviceSynchronize();
+
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching addKernel!\n", cudaStatus);
+		exit(-1);
+	}
 }
 
 /* update the antenna array from updated power and scan angle */
