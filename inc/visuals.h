@@ -712,7 +712,7 @@ namespace graphics
         /* init variables */
         int debounce_txid = -1;
         float debounce_timer = 0.0f;
-        float debounce_delay = 0.5f; // 100ms delay
+        float debounce_delay = 0.015f; // 15ms delay or 67 FPS
         float zoom_request = 0.0f;
         float zoomLevel = 1.0f;
         bool panning = false;
@@ -762,6 +762,11 @@ namespace graphics
             scan_deg[i] = rad2deg(init[i].settings.alpha);
         }
 
+        sf::Text fpsText;
+        fpsText.setFont(griddata.font);
+        fpsText.setCharacterSize(16);       // Set a small size
+        fpsText.setFillColor(sf::Color::White); // Set text color
+        fpsText.setPosition(10.f, 10.f);    // Position at the top-left corner
 
         /* init the heatmap to display heat from TX id */
         sync.event_render(render_tx_id);
@@ -798,6 +803,11 @@ namespace graphics
                 }
             }
         );
+
+        FPSBench bench;
+        bench.bench_start();
+
+        float fps = 0;
 
         // Main loop
         while (window.isOpen() && is_rendering)
@@ -840,20 +850,29 @@ namespace graphics
                         {
                             if (tx.transmitter.getGlobalBounds().contains(event.mouseButton.x, event.mouseButton.y))
                             {   // found it
-                                tx_dragging = &tx;
 
-                                auto& id = tx_dragging->id;
+                                render_tx_id = tx.id;
 
-                                auto potential_new_loc = griddata.grid_loc_2_state_loc(event.mouseButton.x, event.mouseButton.y);
-                                if (potential_new_loc != curr[id].location)
+                                if (sf::Keyboard::isKeyPressed(sf::Keyboard::Scan::LControl))
                                 {
-                                    prev[id].location = curr[id].location;
+                                    tx_dragging = &tx;
+                                    auto& id = tx_dragging->id;
 
-                                    curr[id].location = potential_new_loc;
-                                    griddata.set_tx_position(id, event.mouseButton.x, event.mouseButton.y);
+                                    auto potential_new_loc = griddata.grid_loc_2_state_loc(event.mouseButton.x, event.mouseButton.y);
+                                    if (potential_new_loc != curr[id].location)
+                                    {
+                                        prev[id].location = curr[id].location;
 
-                                    debounce_timer = 0.0f;
-                                    debounce_txid = id;
+                                        curr[id].location = potential_new_loc;
+                                        griddata.set_tx_position(id, event.mouseButton.x, event.mouseButton.y);
+
+                                        debounce_timer = 0.0f;
+                                        debounce_txid = id;
+                                    }
+                                }
+                                else
+                                {
+                                    sync.event_render(render_tx_id);
                                 }
 
                                 break;
@@ -1377,6 +1396,13 @@ namespace graphics
 #endif
             window.clear();
             griddata.draw(window);
+
+            /* show fps on the top left of the screen */
+            bench.mark();
+            fps = 1.0f / bench.get();
+            fpsText.setString("FPS: " + str(static_cast <int>(fps)));
+
+            window.draw(fpsText);
 
 #ifdef CONTROLS
             ImGui::SFML::Render(window);  // Render ImGui over SFML content
