@@ -619,7 +619,7 @@ namespace graphics
 	struct DataSync
 	{
 		/* signal the tx number */
-		int is_computing, is_debugging, render_tx_id, def_render_tx_id;
+		int is_computing, is_debugging, render_tx_id, last_render_tx_id;
 		bool resize_event, debug_interrupt;
 		std::queue<State*> mainq;
 		std::vector<std::queue<State*>> pending;
@@ -627,7 +627,7 @@ namespace graphics
 
 		void pop()
 		{
-			def_render_tx_id = mainq.front()->tx_idx;
+			last_render_tx_id = mainq.front()->tx_idx;
 			mainq.pop();
 		}
 
@@ -635,14 +635,12 @@ namespace graphics
 		{
 			std::scoped_lock<std::mutex> lock(graphics::compute_sim_mutex);  // Lock the mutex
 			mainq.emplace(&state);
-			def_render_tx_id = state.tx_idx;
 
 			is_computing = 1;
 		}
 
-		inline void event_resize(const unsigned& width, const unsigned& height, const int& def_render_id)
+		inline void event_resize(const unsigned& width, const unsigned& height)
 		{
-			def_render_tx_id = def_render_id;
 			if (width != render_space.x || height != render_space.y)
 			{
 				resize_event = true;
@@ -668,7 +666,9 @@ namespace graphics
 			if (mainq.empty())
 			{
 				std::scoped_lock<std::mutex> lock(graphics::render_mutex);  // Lock the mutex
+
 				render_tx_id = idx;
+				last_render_tx_id = render_tx_id;
 			}
 		}
 
@@ -677,7 +677,7 @@ namespace graphics
 			return is_computing > 0 || is_debugging > 0 || render_tx_id >= 0 || resize_event;
 		}
 
-		DataSync(int num_tx) : is_computing(0), is_debugging(0), render_tx_id(-1), def_render_tx_id(-1), \
+		DataSync(int num_tx) : is_computing(0), is_debugging(0), render_tx_id(-1), last_render_tx_id(-1), \
 			resize_event(false), debug_interrupt(false), pending(num_tx)
 		{
 		}

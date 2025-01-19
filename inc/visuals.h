@@ -549,9 +549,9 @@ namespace graphics
             txstates(curr_state),
             debug_mode(false)
         {
-            init_thresholds[0] = 0.25; // Cyan to Green
-            init_thresholds[1] = 0.50; // Green to Yellow
-            init_thresholds[2] = 0.81; // Yellow to Red
+            curr_thresholds[0] = 0.25; // Cyan to Green
+            curr_thresholds[1] = 0.50; // Green to Yellow
+            curr_thresholds[2] = 0.81; // Yellow to Red
 
             init(bounds_lower, bounds_upper);
 
@@ -633,8 +633,10 @@ namespace graphics
         int pixel_height = 1;
 
         sf::RenderTexture renderTexture;
-        Dimensions<unsigned> size = { griddata.data_width * pixel_width + (unsigned)griddata.offset_width + 150,
-            griddata.data_height * pixel_height + 2 * (unsigned)griddata.offset_height };
+        Dimensions<unsigned> size = {
+            griddata.data_width * pixel_width + (unsigned)griddata.offset_width + 150,
+            griddata.data_height * pixel_height + 2 * (unsigned)griddata.offset_height
+        };
 
         if (window)
         {
@@ -753,7 +755,7 @@ namespace graphics
             tx_dir_slider.emplace_back("Direction##slider" + sidx);
             tx_dir_inp.emplace_back("Direction##input" + sidx);
             tx_scan_slider.emplace_back("Scan Angle##slider" + sidx);
-            tx_scan_inp.emplace_back("Scan Angle##input" + sidx);
+            tx_scan_inp.emplace_back("Angle##input" + sidx);
 
             power_dBm[i] = watt2dBm(init[i].settings.power);
             theta_deg[i] = rad2deg(init[i].settings.theta_c);
@@ -762,7 +764,7 @@ namespace graphics
 
 
         /* init the heatmap to display heat from TX id */
-        sync.render_tx_id = render_tx_id;
+        sync.event_render(render_tx_id);
 
 #ifdef CONTROLS
         ImGui::SFML::Init(window);
@@ -820,7 +822,7 @@ namespace graphics
                 case sf::Event::Resized:
                 {
                     auto new_size = window.getSize();
-                    sync.event_resize(new_size.x, new_size.y, render_tx_id);
+                    sync.event_resize(new_size.x, new_size.y);
                     break;
                 }
                 case sf::Event::MouseWheelScrolled:
@@ -830,8 +832,7 @@ namespace graphics
                 }
                 case sf::Event::MouseButtonPressed:
                 {
-                    // Mouse press: check if the click was inside the object
-                    switch (event.mouseButton.button)// == sf::Mouse::Left)
+                    switch (event.mouseButton.button)
                     {
                     case sf::Mouse::Left:
                     {
@@ -1303,7 +1304,7 @@ namespace graphics
 
                         ImGui::Text("Antenna Direction");
 
-                        if (ImGui::SliderAngle(tx_dir_slider[i].c_str(), &theta_deg[i], 0.0f, 359.9f, "%.2f deg"))
+                        if (ImGui::SliderFloat(tx_dir_slider[i].c_str(), &theta_deg[i], 0.0f, 359.9f, "%.2f deg"))
                         {
                             curr[i].settings.theta_c = deg2rad(theta_deg[i]);
                             griddata.rotation_update(M_PIl / 2 - curr[i].settings.theta_c, i);

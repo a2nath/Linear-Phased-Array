@@ -208,7 +208,7 @@ struct GraphicsHelper
 					}
 
 					sync.is_computing = 0;
-					sync.render_tx_id = sync.def_render_tx_id;
+					sync.render_tx_id = sync.last_render_tx_id;
 
 					graphics::consig.notify_one();
 				}
