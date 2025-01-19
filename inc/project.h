@@ -96,7 +96,7 @@ struct GraphicsHelper
 		}
 	};
 
-	void generate_data_intf(const cow_v& txlist)
+	inline void generate_data_intf(const cow_v& txlist)
 	{
 		spdlog::info("Create interference data");
 		ready_snr_dB_data.assign(num_tx, double_v(known_height * known_width));
@@ -134,6 +134,7 @@ struct GraphicsHelper
 		spdlog::info("- Async - ");
 		return std::async(std::launch::async, [&]()
 			{
+				spdlog::info("Generate inf async launched");
 				generate_data_intf(txlist);
 			});
 
@@ -343,39 +344,51 @@ struct GraphicsHelper
 		const double_v& bs_theta_c,
 		const double_v& scan_alpha_list)
 	{
-		if (!ready())
+		if (curr_states.empty())
 		{
+			/* fill the TX indivisual simulation data across the entire grid */
 			setup_tx(txlist, bs_txpower, scan_alpha_list);
+
+			/* fill the overall interference simulation across the entire grid */
 			generate_data_intf(txlist);
 
-			curr_states.clear();
 			for (auto& tx : txlist)
 			{
 				curr_states.emplace_back(tx.get_state());
 			}
 		}
-		// else capture plot as it is
 
-		spdlog::info("Capturing plots\n\tDebug Plots");
+		spdlog::info("Capturing plots");
+		spdlog::info("[1/2]\tDebug Plots");
 
-		graphics::capture_plot(logger,
-			"transmitter_dbg_",
-			curr_states,
-			mobile_stations_loc,
-			raw_dbg_lin_data,
-			known_height,
-			known_width,
-			true);
+		graphics::HeatGrid griddata(known_width, known_height, mobile_stations_loc, curr_states, 0.0f);
 
-		spdlog::info("\tInterference Plots");
+		if (ready_dbg_dBm_data.empty())
+		{
+			ready_dbg_dBm_data.assign(num_tx, double_v(known_width * known_height));
+		}
+		generate_data_debug(txlist);
 
-		graphics::capture_plot(logger,
-			"transmitter_int_",
-			curr_states,
-			mobile_stations_loc,
-			ready_snr_dB_data,
-			known_height,
-			known_width);
+		griddata.reset_span(graphics::compute_colorspan(ready_dbg_dBm_data));
+		griddata.debug_mode = true;
+
+		for (auto& state : curr_states)
+		{
+			graphics::save(griddata, ready_dbg_dBm_data, state.tx_idx);
+		}
+
+		spdlog::info("[1/2]\tPlot Saved");
+		spdlog::info("[2/2]\tInterference Plots");
+
+		griddata.reset_span(graphics::compute_colorspan(ready_snr_dB_data));
+		griddata.debug_mode = false;
+
+		for (auto& state : curr_states)
+		{
+			graphics::save(griddata, ready_snr_dB_data, state.tx_idx);
+		}
+
+		spdlog::info("[2/2]\tPlot Saved");
 	}
 
 	GraphicsHelper(Logger& ilogger,
