@@ -99,7 +99,6 @@ struct GraphicsHelper
 	inline void generate_data_intf(const cow_v& txlist)
 	{
 		spdlog::info("Create interference data");
-		ready_snr_dB_data.assign(num_tx, double_v(known_height * known_width));
 
 		size_t pxl_idx = 0;
 		double num = 0;
@@ -127,6 +126,12 @@ struct GraphicsHelper
 				++pxl_idx;
 			}
 		}
+	}
+
+	void assign_generate_data_intf(const cow_v& txlist)
+	{
+		ready_snr_dB_data.assign(num_tx, double_v(known_height * known_width));
+		generate_data_intf(txlist);
 	}
 
 	inline std::future<void> async_generate_data_intf(const cow_v& txlist)
@@ -314,7 +319,7 @@ struct GraphicsHelper
 			setup_tx(txlist, lut_power_list, lut_scan_angle_list);
 
 			/* fill the overall interference simulation across the entire grid */
-			generate_data_intf(txlist);
+			assign_generate_data_intf(txlist);
 
 			for (auto& tx : txlist)
 			{
@@ -350,7 +355,7 @@ struct GraphicsHelper
 			setup_tx(txlist, bs_txpower, scan_alpha_list);
 
 			/* fill the overall interference simulation across the entire grid */
-			generate_data_intf(txlist);
+			assign_generate_data_intf(txlist);
 
 			for (auto& tx : txlist)
 			{
