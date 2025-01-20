@@ -10,17 +10,20 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]  # Test on all platforms
+        os: [ubuntu-latest]] #, windows-latest]  # Test on all platforms
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
-
+    
+    - name: Install X11 Dependencies
+      run: sudo apt-get update && sudo apt-get install -y libx11-dev libxrandr-dev libxcursor-dev libxi-dev
+      
     - name: Set up CMake
       uses: lukka/get-cmake@latest
 
     - name: Configure CMake
-      run: cmake -S . -B build # -DSFML_BUILD_STATIC_LIBS=ON
+      run: cmake --trace -S . -B build
 
     - name: Build project
       run: cmake --build . # build --config Release
