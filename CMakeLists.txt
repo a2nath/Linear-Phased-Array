@@ -50,6 +50,7 @@ FetchContent_MakeAvailable(argparse)
 
 # Add source files
 set(SOURCES
+    source/src/antenna.cpp
     source/src/project.cpp
 )
 
