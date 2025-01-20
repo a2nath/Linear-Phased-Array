@@ -5,6 +5,7 @@ project(Wireless_Systems_Design VERSION 1.0)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_VERBOSE_MAKEFILE ON)
 
 # Set optimization flags for different build types
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -24,22 +25,28 @@ include(FetchContent)
 FetchContent_Declare(
     SFML
     GIT_REPOSITORY https://github.com/SFML/SFML.git
-    GIT_TAG 2.5.1
+    GIT_TAG 3.0.0
 )
+
+# set(SFML_DIR ${sfml_SOURCE_DIR}/build)
+# file(MAKE_DIRECTORY ${SFML_DIR}) # if it doesnt't exist
+
 FetchContent_MakeAvailable(SFML)
 
 # ImGui and ImGui-SFML integration
 FetchContent_Declare(
     ImGui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG v1.89.2
+    GIT_TAG v1.91.7
 )
+FetchContent_MakeAvailable(ImGui)
+
 FetchContent_Declare(
     ImGui-SFML
     GIT_REPOSITORY https://github.com/eliasdaler/imgui-sfml.git
-    GIT_TAG v2.5
+    GIT_TAG v3.0
 )
-FetchContent_MakeAvailable(ImGui ImGui-SFML)
+FetchContent_MakeAvailable(ImGui-SFML)
 
 # argparse
 FetchContent_Declare(
@@ -72,10 +79,10 @@ target_include_directories(${PROJECT_NAME}
 )
 
 # OpenGL support for future use
-find_package(OpenGL REQUIRED)
+find_package(OpenGL)
 target_link_libraries(${PROJECT_NAME} PRIVATE OpenGL::GL)
 
-# Optionally, set compiler flags
+# Optionally, set compiler warnings
 if(MSVC)
     target_compile_options(${PROJECT_NAME} PRIVATE /W4)
 else()
