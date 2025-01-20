@@ -9,7 +9,7 @@
 
 
 #include <SFML/Graphics.hpp>
-#include <SFML/OpenGL.hpp>
+//#include <SFML/OpenGL.hpp>
 
 #define CONTROLS
 
