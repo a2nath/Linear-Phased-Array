@@ -79,8 +79,8 @@ target_include_directories(${PROJECT_NAME}
 )
 
 # OpenGL support for future use
-find_package(OpenGL)
-target_link_libraries(${PROJECT_NAME} PRIVATE OpenGL::GL)
+# find_package(OpenGL)
+# target_link_libraries(${PROJECT_NAME} PRIVATE OpenGL::GL)
 
 # Optionally, set compiler warnings
 if(MSVC)
