@@ -31,7 +31,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\antenna.cpp" />
-    <ClCompile Include="..\src\project.cpp" />
+    <ClCompile Include="..\src\main.cpp" />
+    <ClCompile Include="..\src\visuals.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
