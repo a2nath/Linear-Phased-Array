@@ -444,7 +444,7 @@ namespace rf_math
 
 	inline double pow_2(const double& base)
 	{
-		return pow(base, 2);
+		return base * base;
 	}
 
 	inline double log2lin(const double& log)
