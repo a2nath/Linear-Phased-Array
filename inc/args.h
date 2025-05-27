@@ -162,7 +162,7 @@ struct Power_Values : MultiData_Setup<double>
 				}
 			}
 
-			row = dBm2watt(row);
+			row = rf_math::dBm2watt(row);
 		}
 		return true;
 	}
@@ -187,7 +187,7 @@ struct Scan_Values : MultiData_Setup<double>
 					return false;
 				}
 			}
-			row = deg2rad(row);
+			row = rf_math::deg2rad(row);
 		}
 		return true;
 	}
@@ -394,7 +394,7 @@ struct MyArgs : public argparse::Args
 		else
 		{
 			bs_tx_power_dBm.value().data = std::vector<std::vector<double>>(timeslots,
-												std::vector<double>(base_station_count, dBm2watt(default_t::tx_power)));
+												std::vector<double>(base_station_count, rf_math::dBm2watt(default_t::tx_power)));
 		}
 
 		/* assign default values and ensure values are within range */
@@ -407,7 +407,7 @@ struct MyArgs : public argparse::Args
 		else
 		{
 			bs_scan_alpha_deg.value().data = std::vector<std::vector<double>>(timeslots,
-												std::vector<double>(base_station_count, deg2rad(default_t::scan_angle)));
+												std::vector<double>(base_station_count, rf_math::deg2rad(default_t::scan_angle)));
 		}
 
 		//assert(ms_id_selections.data.size() * ms_id_selections.data[0].size() == mobile_station_count);

@@ -88,7 +88,7 @@ struct GraphicsHelper
 
 				for (size_t col = 0; col < known_width; ++col)
 				{
-					ready_dbg_dBm_data[i][index] = watt2dBm(raw_dbg_lin_data[i][index]); // already filled with heat from "setup_tx" now convert
+					ready_dbg_dBm_data[i][index] = rf_math::watt2dBm(raw_dbg_lin_data[i][index]); // already filled with heat from "setup_tx" now convert
 					++index;
 				}
 
@@ -120,7 +120,7 @@ struct GraphicsHelper
 						c = (c + 1) % txlist.size();
 					}
 
-					ready_snr_dB_data[cow_idx][pxl_idx] = lin2dB(signal / (interference + noise_factor));
+					ready_snr_dB_data[cow_idx][pxl_idx] = rf_math::lin2dB(signal / (interference + noise_factor));
 				}
 
 				++pxl_idx;
@@ -290,7 +290,7 @@ struct GraphicsHelper
 					c = (c + 1) % txlist.size();
 				}
 
-				num = lin2dB(signal / (interference + noise_factor));
+				num = rf_math::lin2dB(signal / (interference + noise_factor));
 				ready_snr_dB_data[cow_idx][px_index] = num;
 
 				// it is not one of the RX station coordinates
@@ -718,7 +718,7 @@ public:
 		simhelper(nullptr),
 		timeslot(args.timeslot),
 		frequency(args.frequency),
-		lambda(getLambda(frequency)),
+		lambda(rf_math::getLambda(frequency)),
 		bandwidth(args.bandwidth),
 		symrate(args.symrate),
 		blockspersym(args.blockspersym),
@@ -726,8 +726,8 @@ public:
 		mobile_station_count(args.mobile_station_count),
 		base_station_count(args.base_station_count),
 		timeslot_count(args.timeslots),
-		sinr_limit_linear(log2lin(args.sinr_limit_dB)),
-		bs_theta_c(deg2rad(args.bs_theta_c)),
+		sinr_limit_linear(rf_math::log2lin(args.sinr_limit_dB)),
+		bs_theta_c(rf_math::deg2rad(args.bs_theta_c)),
 		base_stations_loc(args.tx_loc.data),
 		mobile_stations_loc(args.rx_loc.data),
 		bs_antenna_counts(args.bs_antenna_count),
@@ -735,14 +735,14 @@ public:
 		scan_angle_range(args.scan_angle_range),
 		antenna_spacing(args.antenna_spacing),
 		antenna_dims(args.antenna_dims),
-		system_noise_factor_w(dBm2watt(getThermalSystemNoise(args.bandwidth, args.system_noise))),
+		system_noise_factor_w(rf_math::dBm2watt(rf_math::getThermalSystemNoise(args.bandwidth, args.system_noise))),
 		visuals(ilogger, args.base_station_count, args.mobile_station_count,
 			args.field_size[0], args.field_size[1], system_noise_factor_w),
 		bs_tx_requested_power_watts(args.tx_powerlist().data),
 		bs_requested_scan_alpha_rad(args.tx_alphalist().data),
 		ms2bs_requested_bindings(args.ms_id_selections.binding_data)
 	{
-		setup(double_v(mobile_station_count, log2lin(args.gain_gtrx)));
+		setup(double_v(mobile_station_count, rf_math::log2lin(args.gain_gtrx)));
 
 		if (!args.nogui)
 		{
