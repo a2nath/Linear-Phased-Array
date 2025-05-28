@@ -1,11 +1,10 @@
 #pragma once
 
 #include "visuals.h"
-using namespace graphics;
 using namespace rf_math;
 
 /*    G U I    */
-int render(
+int graphics::render(
     Logger& logger,
     const placement_v& init_rx_locations,
     const state_v& init_states,
