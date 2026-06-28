@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(Wireless_Systems_Design VERSION 1.0)
+project(PhaseArray VERSION 1.0 LANGUAGES CXX)
 
 # Set C++ standard to C++17
 set(CMAKE_CXX_STANDARD 17)
@@ -9,12 +9,11 @@ set(CMAKE_VERBOSE_MAKEFILE ON)
 
 # Set optimization flags for different build types
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    # Debug build flags
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -g")  # No optimization, include debug information
+    add_compile_options(-O0 -g)
 	message(STATUS "Debug Build")
 else() #(CMAKE_BUILD_TYPE STREQUAL "Release")
     # Release build flags
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")  # Highest level of optimization
+    add_compile_options(-O3)
 	message(STATUS "Release Build")
 endif()
 
@@ -57,8 +56,9 @@ FetchContent_MakeAvailable(argparse)
 
 # Add source files
 set(SOURCES
-    source/src/antenna.cpp
-    source/src/project.cpp
+    src/main.cpp
+    src/antenna.cpp
+    src/visuals.cpp
 )
 
 # Create executable
