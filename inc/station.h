@@ -30,18 +30,13 @@ class Cow
 
 public:
 
-	const Placements& where() const
-	{
-		return location;
-	}
-
 	/* only gui calls this so "update" both [sim] and [gui] components */
 	void update(const Settings& new_settings, const Placements& new_location)
 	{
 		auto& current = antenna.settings();
 		bool ant_reinit = false;
 		bool ant_update = false;
-		bool gui_reinit = false;
+		//bool gui_reinit = false;
 
 		if (current.antenna_dims != new_settings.antenna_dims)
 		{
@@ -212,7 +207,7 @@ public:
 	}
 
 	/* return state is [true]=init done, else [false]=not called "init_gui" yet */
-	const bool gui_ready() const
+	bool gui_ready() const
 	{
 		return gui_polar_data.array_size > 0;
 	}

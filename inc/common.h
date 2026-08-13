@@ -37,6 +37,12 @@
 
 extern std::string sim_error;
 
+inline void tee_error(const char* mesg, ...)
+{
+	spdlog::error(mesg);
+	throw std::runtime_error(mesg);
+}
+
 template<typename T>
 std::string str(const T& input, int precision = std::numeric_limits<T>::digits10 + 1)
 {
@@ -369,8 +375,18 @@ struct PolarArray
 	Polar_Coordinates* data_ptr;
 	size_t array_size;
 
+	const size_t& size() const
+	{
+		return array_size;
+	}
+
 	void set(const size_t& size)
 	{
+		if (size == array_size)
+		{
+			return;
+		}
+
 		if (array_size)
 		{
 			data_ptr = (Polar_Coordinates*)realloc(data_ptr, size * sizeof(Polar_Coordinates));
@@ -382,8 +398,7 @@ struct PolarArray
 
 		if (data_ptr == NULL)
 		{
-			spdlog::error("Memory allocation failed");
-			throw std::runtime_error("Ask for less memory");
+			tee_error("Memory allocation failed with size=%u", size);
 		}
 
 		array_size = size;
@@ -422,12 +437,12 @@ namespace rf_math
 {
 	constexpr inline double rad2deg(const double& rad)
 	{
-		return rad * 180.0 / M_PIl;
+		return (long double)rad * 180.0L / M_PIl;
 	}
 
 	constexpr inline double deg2rad(const double& deg)
 	{
-		return deg * M_PIl / 180.0;
+		return (long double)deg * M_PIl / 180.0L;
 	}
 
 	inline std::vector<double> deg2rad(const std::vector<double>& deg_values)
@@ -483,7 +498,7 @@ namespace rf_math
 	{
 		if (frequency > 0)
 		{
-			return C_SPEED / frequency;
+			return C_SPEED / (long double)frequency;
 		}
 
 		throw std::invalid_argument("Divide by zero error from passing 0 frequency in getLambda call");
