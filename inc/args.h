@@ -6,9 +6,9 @@
 #include <iostream>
 #include <fstream>
 #include <optional>
-#include "common.h"
-#include "network.h"
 #include <json/json.h>
+#include "common.h"
+#include "network.cuh"
 
 #define RAPIDJSON_HAS_STDSTRING 1
 #include "rapidjson/document.h"
@@ -38,7 +38,7 @@ namespace default_t
 	const double bs_direction_theta_c_deg       = 90.0;
 
 	/* Input in hertz, default is half-wavelength */
-	const double antenna_spacing(const double& frequency)
+	double antenna_spacing(const double& frequency)
 	{
 		return C_SPEED * (1.0 / frequency) * (1.0/ 2.0);
 	}
@@ -214,7 +214,7 @@ struct Binding_Values : MultiData_Setup<unsigned>
 			{
 				for (unsigned base_station_idx = 0; base_station_idx < num_base_stations; ++base_station_idx)
 				{
-					auto ms_idx = ms_list[base_station_idx];
+					unsigned& ms_idx = ms_list[base_station_idx];
 
 					if (!(0 <= ms_idx && ms_idx <= num_clients))
 					{
@@ -262,8 +262,6 @@ struct Location_Setup
 	Location_Setup() = default;
 	Location_Setup(const std::string& location_data)
 	{
-		size_t start_idx = 0;
-		size_t index = 0;
 
 		std::istringstream ss(location_data);
 		std::string temp;
@@ -275,10 +273,10 @@ struct Location_Setup
 
 			try
 			{
-				unsigned x = atol(temp.substr(0, idx).c_str());
-				unsigned y = atol(temp.substr(idx + 1).c_str());
+				long x = atol(temp.substr(0, idx).c_str());
+				long y = atol(temp.substr(idx + 1).c_str());
 
-				if (!(x >= 0 && y >= 0))
+				if (!(x >= 0L && y >= 0L))
 					throw std::invalid_argument("argument is negative: " + location_data);
 
 				data.emplace_back(x, y);

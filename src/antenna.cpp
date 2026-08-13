@@ -137,7 +137,7 @@ void AAntenna::graphics_update()
 	if (graphic.modified)
 	{
 		spdlog::info("Antenna Graphics update");
-		update(graphic.hmatrix.size(), &graphic.phee_minus_alpha_list[0], &graphic.gain_RX_grid[0], &graphic.pathloss_list[0], dummy, &graphic.hmatrix[0]);
+		update(graphic.size(), &graphic.phee_minus_alpha_list[0], &graphic.gain_RX_grid[0], &graphic.pathloss_list[0], dummy, &graphic.hmatrix[0]);
 		graphic.modified = false;
 	}
 }
@@ -147,7 +147,7 @@ void AAntenna::numerical_update()
 	if (simulation.modified)
 	{
 		spdlog::info("Antenna Numerical update");
-		update(simulation.hmatrix.size(), &simulation.phee_minus_alpha_list[0], &simulation.gain_RX_grid[0], &simulation.pathloss_list[0], dummy, &simulation.hmatrix[0]);
+		update(simulation.size(), &simulation.phee_minus_alpha_list[0], &simulation.gain_RX_grid[0], &simulation.pathloss_list[0], dummy, &simulation.hmatrix[0]);
 		simulation.modified = false;
 	}
 }
@@ -183,4 +183,28 @@ const double& AAntenna::gcoeff(const unsigned& pixel_idx) const
 const double& AAntenna::coeff(const unsigned& rx_sta) const
 {
 	return simulation.hmatrix[rx_sta];
+}
+
+static int antenna_instance_id = 0;
+
+AAntenna::AAntenna(
+	const unsigned& init_panel_count,
+	const double& init_lambda,
+	const double& init_antenna_spacing,
+	const double& init_antenna_orientation_rads,
+	const antennadim& init_antdims)
+	:
+	instance_id(antenna_instance_id++),
+	initial {
+		0,
+		std::numeric_limits<double>::min(),
+		init_panel_count,
+		init_lambda,
+		init_antenna_spacing,
+		init_antenna_orientation_rads,
+		init_antdims
+	},
+	dummy(nullptr) // constant initial setup
+{
+
 }
