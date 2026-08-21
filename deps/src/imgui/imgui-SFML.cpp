@@ -396,13 +396,35 @@ void ProcessEvent(const sf::Window& window, const sf::Event& event)
         else if (const auto* touchBegan = event.getIf<sf::Event::TouchBegan>())
         {
             s_currWindowCtx->mouseMoved = false;
-            const unsigned int button   = touchBegan->finger;
-            if (button < 3)
-                s_currWindowCtx->touchDown[touchBegan->finger] = true;
+            const unsigned int finger   = touchBegan->finger;
+            if (finger < 3) {
+                s_currWindowCtx->touchDown[finger] = true;
+                if (finger == 0)
+                    s_currWindowCtx->touchPos = touchBegan->position;
+            }
+
         }
-        else if (event.is<sf::Event::TouchEnded>())
+        else if (const auto* touchMoved = event.getIf<sf::Event::TouchMoved>())
         {
             s_currWindowCtx->mouseMoved = false;
+
+            const unsigned int finger = touchMoved->finger;
+
+            if (finger == 0)
+                s_currWindowCtx->touchPos = touchMoved->position;
+        }
+        else if (const auto* touchEnded = event.getIf<sf::Event::TouchEnded>())
+        {
+            s_currWindowCtx->mouseMoved = false;
+
+            const unsigned int finger = touchEnded->finger;
+            if (finger < 3)
+            {
+                s_currWindowCtx->touchDown[finger] = false;
+
+                if (finger == 0)
+                    s_currWindowCtx->touchPos = touchEnded->position;
+            }
         }
         else if (const auto* mouseWheelScrolled = event.getIf<sf::Event::MouseWheelScrolled>())
         {
@@ -494,11 +516,8 @@ void Update(sf::Window& window, sf::RenderTarget& target, sf::Time dt)
         updateMouseCursor(window);
     }
 
-    if (!s_currWindowCtx->mouseMoved)
+    if (!s_currWindowCtx->mouseMoved && s_currWindowCtx->touchDown[0])
     {
-        if (sf::Touch::isDown(0))
-            s_currWindowCtx->touchPos = sf::Touch::getPosition(0, window);
-
         Update(s_currWindowCtx->touchPos, sf::Vector2f(target.getSize()), dt);
     }
     else
@@ -527,10 +546,9 @@ void Update(const sf::Vector2i& mousePos, const sf::Vector2f& displaySize, sf::T
         }
         for (unsigned int i = 0; i < 3; i++)
         {
-            io.MouseDown[i] = s_currWindowCtx->touchDown[i] || sf::Touch::isDown(i) ||
+            io.MouseDown[i] = s_currWindowCtx->touchDown[i] ||
                               s_currWindowCtx->mousePressed[i] || sf::Mouse::isButtonPressed((sf::Mouse::Button)i);
             s_currWindowCtx->mousePressed[i] = false;
-            s_currWindowCtx->touchDown[i]    = false;
         }
     }
 
