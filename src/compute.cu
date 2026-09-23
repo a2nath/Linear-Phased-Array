@@ -14,6 +14,13 @@ static int CUDA_INIT(compute_buffers_t& data, const size_t tx_count, const size_
 {
 	if (stream)
 	{
+		if (tx_count == 0 || pxl_count == 0)
+		{
+			CUDA_ERROR("cannot initialize CUDA buffers with %zu transmitters and %zu cells", tx_count, pxl_count);
+		}
+
+		data.cellcount = pxl_count;
+		data.num_tx = tx_count;
 		CUDA_CALL(cudaMalloc(&data.__device__phee_minus_alpha_list, tx_count * pxl_count * sizeof(double)), \
 			"releasing memory: __device__phee_minus_alpha_list");
 		CUDA_CALL(cudaMalloc(&data.__device__gain_RX_grid, tx_count * pxl_count * sizeof(double)), \
@@ -29,8 +36,6 @@ static int CUDA_INIT(compute_buffers_t& data, const size_t tx_count, const size_
 		CUDA_CALL(cudaMalloc(&data.__device__polar_data_hype, tx_count * pxl_count * sizeof(double)), \
 			"releasing memory: __device__polar_data_hype");
 
-		data.cellcount = pxl_count;
-		data.num_tx = tx_count;
 		return 0;
 	}
 
@@ -93,12 +98,12 @@ static __global__ void antenna_update_kernel(
 /* re-calc the signal outs to handsets only (before calling update!) */
 static __global__ void antenna_init_kernel(
 	const size_t data_size,
-	const double& current_lambda,
-	const double& current_spacing,
-	const double& theta_c,
-	const unsigned& panel_count,
-	const float& ant_dim_x,
-	const float& ant_dim_y,
+	const double current_lambda,
+	const double current_spacing,
+	const double theta_c,
+	const unsigned panel_count,
+	const float ant_dim_x,
+	const float ant_dim_y,
 	double* d_phee_minus_alpha_list,
 	double* d_pathloss_list,
 	double* d_gain_RX_grid,
@@ -161,12 +166,12 @@ static __global__ void numerical_cart2pol_kernel(
 	double* polar_theta,
 	double* polar_hype,
 	const Placements* rx_locations,
-	const size_t receiver_count,
+	const size_t rx_station_num,
 	const unsigned tx_x,
 	const unsigned tx_y)
 {
 	const size_t rx_idx = blockIdx.x * blockDim.x + threadIdx.x;
-	if (rx_idx >= receiver_count)
+	if (rx_idx >= rx_station_num)
 	{
 		return;
 	}
@@ -186,6 +191,12 @@ static void global_update(
 	const size_t tx_id,
 	const Settings& current)
 {
+	if (data.cellcount == 0 || tx_id >= data.num_tx)
+	{
+		CUDA_ERROR("invalid antenna update layout: transmitter %zu of %zu, cell count %zu",
+			tx_id, data.num_tx, data.cellcount);
+	}
+
 	int threadsPerBlock = 256;
 	int blocksPerGrid = (data.cellcount + threadsPerBlock - 1) / threadsPerBlock;
 
@@ -224,8 +235,15 @@ static void global_init(
 	const Settings& current
 	)
 {
+	if (data.cellcount == 0)
+	{
+		CUDA_ERROR("GPU memory not reserved on %s. Call the handset function",
+			data.type == SIM ? "SIM" : "GFX");
+	}
+
 	int threadsPerBlock = 256;
 	int blocksPerGrid = (data.cellcount + threadsPerBlock - 1) / threadsPerBlock;
+	const size_t offset = tx_id * data.cellcount;
 
 	antenna_init_kernel <<< blocksPerGrid, threadsPerBlock, 0, stream >>> (
 		data.cellcount,
@@ -235,14 +253,14 @@ static void global_init(
 		current.panel_count,
 		current.antenna_dims.x,
 		current.antenna_dims.y,
-		data.__device__phee_minus_alpha_list,
-		data.__device__pathloss_list,
-		data.__device__gain_RX_grid,
-		data.__device__polar_data_theta,
-		data.__device__polar_data_hype
+		data.__device__phee_minus_alpha_list + offset,
+		data.__device__pathloss_list + offset,
+		data.__device__gain_RX_grid + offset,
+		data.__device__polar_data_theta + offset,
+		data.__device__polar_data_hype + offset
 	);
 
-	CUDA_CALL(cudaGetLastError(), "antenna_init_kernel state query");
+	CUDA_CALL(cudaGetLastError(), "antenna_init_kernel() failed");
 
 	data.modified = true;
 }
@@ -430,7 +448,7 @@ void wificuda::numerical_recalc_polar(
 //	CUDA_CALL(cudaGetLastError(), "%s", "old_recalc_polar launch");
 //}
 /* hatrix with respect to pixel index (flattened from 2D) */
-double wificuda::coeff(compute_buffers_t& data, unsigned tx_id, const size_t data_idx)
+static inline double coeff(compute_buffers_t& data, unsigned tx_id, const size_t data_idx)
 {
 	if (tx_id >= data.num_tx || data_idx >= data.cellcount)
 	{
@@ -440,6 +458,18 @@ double wificuda::coeff(compute_buffers_t& data, unsigned tx_id, const size_t dat
 	}
 	const size_t index = tx_id * data.cellcount + data_idx;
 	return data.___host___hmatrix[index];
+}
+
+
+double wificuda::gcoeff(unsigned tx_id, const size_t data_idx)
+{
+	return coeff(gfx, tx_id, data_idx);
+}
+
+double wificuda::scoeff(unsigned tx_id, const size_t rx_idx)
+{
+	return coeff(sim, tx_id, rx_idx);
+
 }
 
 void wificuda::gpu_teardown()
@@ -474,13 +504,15 @@ void wificuda::gpu_teardown()
 
 void wificuda::gpu_init()
 {
-	cudaError_t err = cudaStreamCreate(&stream);
-	if (err != cudaSuccess)
+	if (!stream)
 	{
-		fprintf(stderr, "gpu_init() launch failed: %s\n", cudaGetErrorString(err));
-		exit(-1);
+		cudaError_t err = cudaStreamCreate(&stream);
+		if (err != cudaSuccess)
+		{
+			fprintf(stderr, "gpu_init() launch failed: %s\n", cudaGetErrorString(err));
+			exit(-1);
+		}
 	}
-
 	//spdlog::info("CUDA stream is now succefully initialized");
 }
 

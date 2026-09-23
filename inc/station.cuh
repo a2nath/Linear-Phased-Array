@@ -13,7 +13,7 @@ class Cow
 	unsigned power_idx;
 
 	/* antenna parameters for all calculations */
-	AAntenna   antenna;
+	AAntenna& antenna;
 
 	/* more antenna tracking for gui reset */
 	const Placements& init_location;
@@ -22,7 +22,7 @@ class Cow
 	Dimensions<unsigned> init_gui_grid_size, gui_grid_size;
 
 	const std::vector<Placements>& ms_station_loc;
-	const unsigned ms_stations;
+	const unsigned ms_stations_num;
 
 	/* each cell is a mobile station or a gui drid */
 	PolarArray polar_data, gui_polar_data;
@@ -138,22 +138,23 @@ public:
 	}
 
 	/* set the signal level in Watts (linear): second parameter */
-	inline void signal_power(const unsigned& node_id, double& signal_level_lin)
+	inline void gui_signal_power(const size_t& pidx, double& signal_level_lin, const bool& debug)
 	{
-		signal_level_lin = wificuda::coeff(sim, station_id, node_id) * antenna.get_power();
+		signal_level_lin = wificuda::gcoeff(station_id, pidx) * antenna.get_power();
 	}
 
 	/* set the signal level in Watts (linear): second parameter */
-	inline void g_signal_power(const size_t& pidx, double& signal_level_lin, const bool& debug)
+	inline void signal_power(const unsigned& node_id, double& signal_level_lin)
 	{
-		signal_level_lin = wificuda::coeff(gfx, station_id, pidx) * antenna.get_power();
+		signal_level_lin = wificuda::scoeff(station_id, node_id) * antenna.get_power();
 	}
 
 	void heatmap(std::vector<double>& output, const bool& debug = false)
 	{
-		for (size_t pixel_idx = 0; pixel_idx < gui_polar_data.array_size; ++pixel_idx)
+		const auto& cells_num = undoredo_guisize_tracker.get_current().count();
+		for (size_t pixel_idx = 0; pixel_idx < cells_num; ++pixel_idx)
 		{
-			g_signal_power(pixel_idx, output[pixel_idx], debug);
+			gui_signal_power(pixel_idx, output[pixel_idx], debug);
 		}
 	}
 
@@ -169,7 +170,7 @@ public:
 	/* polar data for simulation */
 	void set_polar_data(const Placements& new_location)
 	{
-		polar_data.set(ms_stations);
+		polar_data.set(ms_stations_num);
 
 		for (size_t idx = 0; idx < ms_station_loc.size(); ++idx)
 		{
@@ -259,9 +260,9 @@ public:
 	{
 		antenna.reset();
 		prev_location = init_location;
-			location = init_location;
+	    location = init_location;
 
-			set_polar_data(location);
+		set_polar_data(location);
 		wificuda::numerical_init(station_id, polar_data.size(), antenna.settings());
 	}
 
@@ -279,7 +280,7 @@ public:
 		station_id(id),
 		init_location(bs_location),
 		ms_station_loc(ms_pos_list),
-		ms_stations(ms_pos_list.size()),
+		ms_stations_num(ms_station_loc.size()),
 		antenna(panel_count, lambda, antenna_spacing, antenna_orientation, antenna_dim),
 		power_idx(0)
 	{
