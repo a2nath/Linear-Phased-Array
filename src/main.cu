@@ -45,12 +45,17 @@ int main(int argc, char** argv, char** envp)
     Logger logger(args.get_input_filename(), args.output_dir);
     Simulator sim(args, logger);
 
+
     /* run the simulation and get the SNR table */
+    sim.sim_run();
 
+    /* print the permutations for the outputs */
+    sim.sim_print();
 
-    sim.run();
-    sim.print();
+    /* run the gui and the render loop until user exits */
     sim.gui_run();
+
+    /* print a snapshot of the gui window */
     sim.gui_print();
 
     wificuda::gpu_teardown();

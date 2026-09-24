@@ -295,6 +295,11 @@ struct Dimensions
 		return *this;
 	}
 
+	Type count() const
+	{
+		return x * y;
+	}
+
 	const std::string str() const
 	{
 		return "{ x:" + std::to_string(x) + ",y:" + std::to_string(y) + " }";
@@ -368,43 +373,6 @@ struct Polar_Coordinates : private Coordinates<double>
 	}
 	Polar_Coordinates(double i, double j) : Coordinates(i, j), theta(x), hype(y) {}
 	Polar_Coordinates() : Coordinates(), theta(x), hype(y) {}
-};
-
-struct PolarArray
-{
-	Polar_Coordinates* data_ptr;
-	size_t array_size;
-
-	const size_t& size() const
-	{
-		return array_size;
-	}
-
-	void set(const size_t& size)
-	{
-		if (size == array_size)
-		{
-			return;
-		}
-
-		if (array_size)
-		{
-			data_ptr = (Polar_Coordinates*)realloc(data_ptr, size * sizeof(Polar_Coordinates));
-		}
-		else
-		{
-			data_ptr = (Polar_Coordinates*)malloc(size * sizeof(Polar_Coordinates));
-		}
-
-		if (data_ptr == NULL)
-		{
-			tee_error("Memory allocation failed with size=%u", size);
-		}
-
-		array_size = size;
-	}
-
-	PolarArray() : array_size(0), data_ptr(nullptr) {}
 };
 
 inline Polar_Coordinates cart2pol(const double& x, const double& y)
@@ -526,6 +494,7 @@ struct Settings
 	float     lambda;
 	float     spacing;
 	float     theta_c;
+	Placements location;
 	antennadim antenna_dims;
 
 	friend bool operator==(const Settings& settings1, const Settings& settings2)
@@ -536,6 +505,7 @@ struct Settings
 			settings1.lambda == settings2.lambda &&
 			settings1.spacing == settings2.spacing &&
 			settings1.theta_c == settings2.theta_c &&
+			settings1.location == settings2.location &&
 			settings1.antenna_dims == settings2.antenna_dims;
 	}
 
@@ -564,6 +534,7 @@ struct Settings
 		const double& ilambda,
 		const double& ispacing,
 		const double& itheta_c,
+		const Placements& ilocation,
 		const antennadim& iantenna_dims)
 		:
 		power(ipower),
@@ -572,6 +543,7 @@ struct Settings
 		lambda(ilambda),
 		spacing(ispacing),
 		theta_c(itheta_c),
+		location(ilocation),
 		antenna_dims(iantenna_dims)
 	{
 	}
@@ -583,6 +555,7 @@ struct Settings
 		lambda(std::numeric_limits<float>::max()),
 		spacing(std::numeric_limits<float>::max()),
 		theta_c(std::numeric_limits<float>::max()),
+		location(std::numeric_limits<unsigned>::max(), std::numeric_limits<unsigned>::max()),
 		antenna_dims(std::numeric_limits<float>::max(), std::numeric_limits<float>::max())
 	{
 	}
@@ -600,13 +573,11 @@ namespace graphics
 	{
 		int tx_idx;
 		Settings settings;
-		Placements location;
 
 		State& operator=(const State& b)
 		{
 			tx_idx = b.tx_idx;
 			settings = b.settings;
-			location = b.location;
 			return *this;
 		}
 
@@ -617,7 +588,7 @@ namespace graphics
 
 		friend bool operator!=(const State& a, const State& b)
 		{
-			return a.settings != b.settings || a.location != b.location;
+			return a.settings != b.settings;
 		}
 
 		State(const int& id = -1) : tx_idx(id)

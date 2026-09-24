@@ -269,7 +269,7 @@ struct Location_Setup
 		/* argument <location_data> will be "x1,y1 x2,y2 x3,y3" */
 		while (std::getline(ss, temp, ' '))
 		{
-			auto idx = temp.find(',');
+			size_t idx = temp.find(',');
 
 			try
 			{

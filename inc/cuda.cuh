@@ -72,7 +72,8 @@ struct compute_buffers_t
 	double* __device__gain_RX_grid = nullptr;
 	double* __device__pathloss_list = nullptr;
 
-	double* ___host___hmatrix = nullptr;
+	std::vector<bool> coeff_changed_arr; // host side
+	double* ___host___hmatrix = nullptr; // only sync from __device__ is changed=true
 	double* __device__hmatrix = nullptr;
 
 	double* __device__polar_data_theta = nullptr;
@@ -94,8 +95,8 @@ namespace wificuda {
 	void graphical_recalc_polar(unsigned tx_id, const Placements& placement, const Dimensions<unsigned>& grid_size, const Settings& tx_locations);
 	void numerical_recalc_polar(unsigned tx_id, const size_t tx_count, const Placements& tx_location);
 
-	double gcoeff(unsigned tx_id, const size_t rx_sta);
-	double scoeff(unsigned tx_id, const size_t rx_sta);
+	double* gcoeff_ptr(unsigned tx_id);
+	double* scoeff_ptr(unsigned tx_id);
 
 	//update_cow_rfs
 	void handset_placement_sync(const placement_v& handset_locations);

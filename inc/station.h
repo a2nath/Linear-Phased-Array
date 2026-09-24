@@ -23,7 +23,7 @@ class Cow
 	Dimensions<unsigned> init_gui_grid_size, gui_grid_size;
 
 	const std::vector<Placements>& ms_station_loc;
-	const unsigned ms_stations;
+	const unsigned ms_stations_num;
 
 	/* each cell is a mobile station or a gui drid */
 	PolarArray polar_data, gui_polar_data;
@@ -181,7 +181,7 @@ public:
 	void set_polar_data(const Placements& new_location)
 	{
 		size_t idx = 0;
-		polar_data.set(ms_stations);
+		polar_data.set(ms_stations_num);
 
 		for (auto& mstation : ms_station_loc)
 		{
@@ -289,7 +289,7 @@ public:
 		station_id(id),
 		init_location(bs_location),
 		ms_station_loc(ms_pos_list),
-		ms_stations(ms_pos_list.size()),
+		ms_stations_num(ms_pos_list.size()),
 		antenna(panel_count, lambda, antenna_spacing, antenna_orientation, antenna_dim),
 		power_idx(0)
 	{

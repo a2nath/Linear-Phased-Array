@@ -17,6 +17,7 @@
     <ClInclude Include="..\inc\network.cuh" />
     <ClInclude Include="..\inc\project.cuh" />
     <ClInclude Include="..\inc\station.cuh" />
+    <ClInclude Include="..\inc\undo.h" />
     <ClInclude Include="..\inc\visuals.h" />
   </ItemGroup>
   <ItemGroup>
@@ -79,7 +80,7 @@
       </Include>
       <Warning>Wall</Warning>
       <CudaRuntime>Shared</CudaRuntime>
-      <CodeGeneration>compute_62,sm_62</CodeGeneration>
+      <CodeGeneration>compute_61,sm_61</CodeGeneration>
       <AdditionalCompilerOptions>
       </AdditionalCompilerOptions>
       <AdditionalOptions>-std=c++17 %(AdditionalOptions)</AdditionalOptions>

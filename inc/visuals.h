@@ -399,7 +399,7 @@ namespace graphics
 
             for (int i = 0; i < txstates.size(); ++i)
             {
-                auto& loc = txstates[i].location;
+                auto& loc = txstates[i].settings.location;
 
                 txdata.emplace_back(i, Placements{ loc.x + (unsigned)offset_width, unsigned(data_height + offset_height) - loc.y }, sf::Color(90, 90, 90));
 
@@ -454,7 +454,8 @@ namespace graphics
 
         inline void set_state_2_grid_loc(const State& state)
         {
-            set_tx_position(state.tx_idx, state.location.x + offset_width, data_height + offset_height - state.location.y);
+            set_tx_position(state.tx_idx, state.settings.location.x + offset_width,
+                data_height + offset_height - state.settings.location.y);
         }
 
         inline unsigned grid_2_state_y(const unsigned& id) const

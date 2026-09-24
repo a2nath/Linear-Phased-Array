@@ -52,7 +52,7 @@ struct GraphicsHelper
 			") cols(" + str(known_width) + ")");
 			//") placement(" + str(placement) + ")");
 
-		cow.update(state.settings, state.location);
+		cow.update(state.settings);
 
 		/* update cow heat data */
 		cow.heatmap(raw_dbg_lin_data[cow.sid()]);
@@ -425,7 +425,7 @@ struct GraphicsHelper
 struct SimulationHelper
 {
 	cow_v& cows;
-	const unsigned& cow_count, ms_stations;
+	const unsigned& cow_count, ms_stations_num;
 	const std::vector<double_v>& powers_lut;                 // TX power level from base station in integer dBm lut
 	const std::vector<double_v>& alphas_lut;                 // Antenna array directions in integer rads lut
 	const std::vector<std::vector<unsigned>>& binding_station_ids_lut;  // base_station to station id binding lut
@@ -491,6 +491,7 @@ struct SimulationHelper
 		/* minimal update during start of sim or visualization */
 		for (auto& cow : cows)
 		{
+			cow.init_sim();
 			cow.update_antenna_rf(power_nums[cow.sid()], scan_angles[cow.sid()]);
 		}
 	}
@@ -518,7 +519,7 @@ struct SimulationHelper
 		:
 		cows(cowlist),
 		cow_count(cowlist.size()),
-		ms_stations(mobile_stations),
+		ms_stations_num(mobile_stations),
 		binding_station_ids_lut(station_bindings),
 		powers_lut(power_bindings),
 		alphas_lut(alpha_bindings),
@@ -533,8 +534,9 @@ class Simulator
 {
 	Logger& logger;
 	std::string sim_error;
-	cow_v cows;
+	std::vector<Cow> cows;
 	sta_v stations;
+	AAntennaTable antenna_table;
 	SimulationHelper* simhelper;
 
 	const unsigned&    timeslot;
@@ -551,7 +553,7 @@ class Simulator
 	const double_v     bs_theta_c;
 	const placement_v& base_stations_loc;
 	const placement_v& mobile_stations_loc;
-	const unsigned_v&  bs_antenna_counts;
+	const unsigned_v&  bs_panel_counts;
 	const double_v&    power_range_dBm;
 	const double_v&    scan_angle_range;
 	const double_v&    antenna_spacing;
@@ -570,19 +572,22 @@ class Simulator
 			stations.emplace_back(i, system_noise_factor_w, grxlist[i]);
 		}
 
+		wificuda::gpu_init();
+		wificuda::handset_placement_sync(mobile_stations_loc);
+
 		/* setup the system */
 		for (unsigned bs_id = 0; bs_id < base_station_count; ++bs_id)
 		{
-			cows.emplace_back(bs_id,
-				base_stations_loc[bs_id],
-				mobile_stations_loc,
-				//ms_gain_gtrx_lin,
-				bs_antenna_counts[bs_id],
+			antenna_table.emplace_back(
+				bs_panel_counts[bs_id],
 				lambda,
 				antenna_spacing[bs_id],
 				bs_theta_c[bs_id],
+				base_stations_loc[bs_id],
 				antennadim(antenna_dims[0], antenna_dims[1])
-				);
+			);
+
+			cows.emplace_back(bs_id, mobile_stations_loc, antenna_table);
 		}
 
 		/* initialize the simulation helper */
@@ -596,6 +601,7 @@ class Simulator
 			ms2bs_requested_bindings
 		);
 	}
+
 
 	/* calcalate the rx signal based on all base stations */
 	double calculate(Station& station, const unsigned& associated_bs_id)
@@ -660,7 +666,7 @@ class Simulator
 public:
 
 	/* run the simulation */
-	void run()
+	void sim_run()
 	{
 		/* setup the cows first such that the simulation is set with alphas and TX powers */
 		for (unsigned slot = 0; slot < timeslot_count; ++slot)
@@ -670,7 +676,7 @@ public:
 		}
 	}
 
-	void print()
+	void sim_print()
 	{
 		simhelper->printout();
 	}
@@ -730,7 +736,7 @@ public:
 		bs_theta_c(rf_math::deg2rad(args.bs_theta_c)),
 		base_stations_loc(args.tx_loc.data),
 		mobile_stations_loc(args.rx_loc.data),
-		bs_antenna_counts(args.bs_antenna_count),
+		bs_panel_counts(args.bs_antenna_count),
 		power_range_dBm(args.power_range_dBm),
 		scan_angle_range(args.scan_angle_range),
 		antenna_spacing(args.antenna_spacing),

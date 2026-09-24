@@ -184,11 +184,11 @@ int graphics::render(
                                 auto& id = tx_dragging->id;
 
                                 auto potential_new_loc = griddata.grid_loc_2_state_loc(event.mouseButton.x, event.mouseButton.y);
-                                if (potential_new_loc != curr[id].location)
+                                if (potential_new_loc != curr[id].settings.location)
                                 {
-                                    prev[id].location = curr[id].location;
+                                    prev[id].settings.location = curr[id].settings.location;
 
-                                    curr[id].location = potential_new_loc;
+                                    curr[id].settings.location = potential_new_loc;
                                     griddata.set_tx_position(id, event.mouseButton.x, event.mouseButton.y);
 
                                     debounce_timer = 0.0f;
@@ -231,9 +231,9 @@ int graphics::render(
                         auto& id = tx_dragging->id;
 
                         auto potential_new_loc = griddata.grid_loc_2_state_loc(event.mouseButton.x, event.mouseButton.y);
-                        if (potential_new_loc != curr[id].location)
+                        if (potential_new_loc != curr[id].settings.location)
                         {
-                            curr[id].location = potential_new_loc;
+                            curr[id].settings.location = potential_new_loc;
                             griddata.set_tx_position(id, event.mouseButton.x, event.mouseButton.y);
 
                             debounce_timer = 0.0f;
@@ -267,7 +267,7 @@ int graphics::render(
                 {
                     auto& id = tx_dragging->id;
 
-                    curr[id].location = griddata.grid_loc_2_state_loc(event.mouseMove.x, event.mouseMove.y);
+                    curr[id].settings.location = griddata.grid_loc_2_state_loc(event.mouseMove.x, event.mouseMove.y);
                     griddata.set_tx_position(id, event.mouseMove.x, event.mouseMove.y);
 
                     debounce_timer = 0.0f;
@@ -592,7 +592,7 @@ int graphics::render(
 
                     if (ImGui::SliderInt(tx_x_slider[i].c_str(), &position.x, 0, grid_cols - 1, "%d meters")) // unsigned long -> int?
                     {
-                        curr[i].location.x = griddata.grid_2_state_x(i);
+                        curr[i].settings.location.x = griddata.grid_2_state_x(i);
                         griddata.update_tx_vertex(i);
 
                         debounce_timer = 0.0f;
@@ -602,7 +602,7 @@ int graphics::render(
                     ImGui::SameLine();
                     if (ImGui::InputInt(tx_x_inp[i].c_str(), &position.x, 0, grid_cols - 1, ImGuiInputTextFlags_EnterReturnsTrue))
                     {
-                        curr[i].location.x = griddata.grid_2_state_x(i);
+                        curr[i].settings.location.x = griddata.grid_2_state_x(i);
                         griddata.update_tx_vertex(i);
 
                         sync.emplace_state(curr[i]);
@@ -611,7 +611,7 @@ int graphics::render(
                     if (ImGui::SliderInt(tx_y_slider[i].c_str(), &position.y, 0, grid_rows - 1, "%d meters"))
                     {
 
-                        curr[i].location.y = griddata.grid_2_state_y(i);
+                        curr[i].settings.location.y = griddata.grid_2_state_y(i);
                         griddata.update_tx_vertex(i);
 
                         debounce_timer = 0.0f;
@@ -621,7 +621,7 @@ int graphics::render(
                     ImGui::SameLine();
                     if (ImGui::InputInt(tx_y_inp[i].c_str(), &position.y, 0, grid_rows - 1, ImGuiInputTextFlags_EnterReturnsTrue))
                     {
-                        curr[i].location.y = griddata.grid_2_state_y(i);
+                        curr[i].settings.location.y = griddata.grid_2_state_y(i);
                         griddata.update_tx_vertex(i);
 
                         sync.emplace_state(curr[i]);
