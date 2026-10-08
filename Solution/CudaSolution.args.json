@@ -1,0 +1,98 @@
+{
+  "FileVersion": 2,
+  "Id": "919ac3a4-57a9-4f26-b09b-3ce52b75ca2d",
+  "Items": [
+    {
+      "Id": "52adbacc-3350-4b4c-93ef-e97a0fadc8f2",
+      "Command": "--timeslot 3"
+    },
+    {
+      "Id": "a3a34857-daf1-424f-b0ff-fe691b7c4a19",
+      "Command": "--frequency 1900000000.0"
+    },
+    {
+      "Id": "4b72ba4c-2333-42b2-8aa0-a5561861fe0a",
+      "Command": "--bandwidth 20000000.0"
+    },
+    {
+      "Id": "39ee8c84-8189-4ae6-9576-20e48055d9d8",
+      "Command": "--symbolrate 3840000.0"
+    },
+    {
+      "Id": "b7fa4d3e-8a43-4c30-9a4e-a754cd12ea21",
+      "Command": "--blockpersymbol 768"
+    },
+    {
+      "Id": "342c71be-b2d1-4dc1-8811-fe0188ae4749",
+      "Command": "--height 200"
+    },
+    {
+      "Id": "27d882e9-ed77-4dc1-b808-8ea429f2faa3",
+      "Command": "--ms_grx -2"
+    },
+    {
+      "Id": "e9a64845-e1e7-446d-b7e8-2add0c064116",
+      "Command": "--system_noise 5"
+    },
+    {
+      "Id": "1baf97b7-7eeb-4bde-9e92-5891cbe3bb95",
+      "Command": "--mobile_stations 15"
+    },
+    {
+      "Id": "ec674749-a6e6-491b-9c6f-2358727408d7",
+      "Command": "--base_stations 3"
+    },
+    {
+      "Id": "e1ab5b4b-058c-4bbb-94e7-4c721680b15c",
+      "Command": "--slimit 24.0"
+    },
+    {
+      "Id": "1d42e494-76f8-49e7-a893-c18d593a97cd",
+      "Command": "--base_station_theta_c 75.0,90.0,105.0"
+    },
+    {
+      "Id": "6ce534bb-dd7d-4074-a1c4-705be4a77f57",
+      "Command": "--base_station_location \"250,200 500,180 750,200\""
+    },
+    {
+      "Id": "6ac0f612-b27a-45c9-87dc-f4b7bfca3403",
+      "Command": "--mobile_station_location \"250,500 350,500 450,500 550,500 650,500 750,500 250,600 350,600 450,600 550,600 650,600 750,600 450,325 500,325 550,325\""
+    },
+    {
+      "Id": "6e7a443b-bcc0-4880-8a72-540f3aa6ca7d",
+      "Command": "--base_station_antenna_counts 5,3,5"
+    },
+    {
+      "Id": "4ab5d336-001b-472c-b570-af90e09b1a2d",
+      "Command": "--base_station_power_range_dBm -30,30"
+    },
+    {
+      "Id": "05b23fb5-887e-498a-a44a-26b6437eba3a",
+      "Command": "--base_station_scan_angle_range_deg -90,90"
+    },
+    {
+      "Id": "364d16a6-5bd1-4057-9028-4c117fc4cdd7",
+      "Command": "--antenna_spacing 0.3,0.4,0.3"
+    },
+    {
+      "Id": "e30f7a94-df3f-44f6-93aa-0cbdecabf00d",
+      "Command": "--antenna_dims 0.2,0.4"
+    },
+    {
+      "Id": "84d9453d-56ae-40d1-9d8f-8ff10832f99f",
+      "Command": "--antenna_txpower 30.0,29.0,28.0"
+    },
+    {
+      "Id": "7f8b4171-66c7-4eaa-8b95-70327e2fbf73",
+      "Command": "--scan_angle 40.0,65.0,-40.0"
+    },
+    {
+      "Id": "e7199621-c023-4b0c-89b7-d4f91294f443",
+      "Command": "--ms_selection 7,4,10"
+    },
+    {
+      "Id": "21fc1cc7-7b98-4f17-8b6d-c66cd111e215",
+      "Command": "--plot"
+    }
+  ]
+}
