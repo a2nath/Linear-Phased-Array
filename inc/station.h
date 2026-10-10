@@ -5,6 +5,7 @@
 #include "random.h"
 
 using namespace network_package;
+using AAntennaTable = std::vector<AAntenna>;
 
 ///* to update the GUI */
 //struct station_details_t;
@@ -15,18 +16,16 @@ class Cow
 	unsigned power_idx;
 
 	/* antenna parameters for all calculations */
-	AAntenna   antenna;
+	AAntennaTable& antennatable;
+	AAntenna& antenna;
 
 	/* more antenna tracking for gui reset */
-	const Placements& init_location;
+	const Placements init_location;
 	Placements prev_location, location;
 	Dimensions<unsigned> init_gui_grid_size, gui_grid_size;
 
 	const std::vector<Placements>& ms_station_loc;
 	const unsigned ms_stations_num;
-
-	/* each cell is a mobile station or a gui drid */
-	PolarArray polar_data, gui_polar_data;
 
 public:
 
@@ -41,6 +40,12 @@ public:
 		if (current.antenna_dims != new_settings.antenna_dims)
 		{
 			antenna.set_antdim(new_settings.antenna_dims);
+			ant_reinit = true;
+		}
+
+		if (location != new_location)
+		{
+			antenna.set_location(new_settings.location);
 			ant_reinit = true;
 		}
 
@@ -79,19 +84,11 @@ public:
 			antenna.set_power(new_settings.power);
 		}
 
-		if (location != new_location)
-		{
-			location = new_location;
-			ant_reinit = true;
-		}
-
 		if (ant_reinit)
 		{
-			set_polar_data(location);
-			antenna.numerical_init(polar_data);
+			antenna.numerical_init(ms_station_loc);
 
-			set_polar_data(gui_grid_size, location);
-			antenna.graphics_init(gui_polar_data);
+			antenna.graphics_init(gui_grid_size.x, gui_grid_size.y);
 		}
 
 		if (ant_reinit || ant_update)
@@ -146,49 +143,9 @@ public:
 		signal_level_lin = antenna.coeff(node_id) * antenna.get_power();
 	}
 
-	/* set the signal level in Watts (linear): second parameter */
-	inline void g_signal_power(const size_t& pidx, double& signal_level_lin, const bool& debug)
+	inline void heatmap(std::vector<double>& output, const bool& debug = false) const
 	{
-		signal_level_lin = antenna.gcoeff(pidx) * antenna.get_power();
-	}
-
-	void heatmap(std::vector<double>& output, const bool& debug = false)
-	{
-		for (size_t pixel_idx = 0; pixel_idx < gui_polar_data.array_size; ++pixel_idx)
-		{
-			g_signal_power(pixel_idx, output[pixel_idx], debug);
-		}
-	}
-
-	/* polar data for gui grid rendering */
-	void set_polar_data(const Dimensions<unsigned>& new_size, const Placements& new_location)
-	{
-		size_t idx = 0;
-		gui_polar_data.set(new_size.x * new_size.y);
-
-		for (int row = 0; row < new_size.y; ++row)
-		{
-			for (int col = 0; col < new_size.x; ++col)
-			{
-				long int diffx = col - new_location.x; // diff with respect to pixel (think of col, row has location of rx)
-				long int diffy = row - new_location.y;
-				gui_polar_data.data_ptr[idx++] = cart2pol(diffx, diffy);
-			}
-		}
-	}
-
-	/* polar data for simulation */
-	void set_polar_data(const Placements& new_location)
-	{
-		size_t idx = 0;
-		polar_data.set(ms_stations_num);
-
-		for (auto& mstation : ms_station_loc)
-		{
-			long int diffx = mstation.x - new_location.x; // diff with respect to rx
-			long int diffy = mstation.y - new_location.y;
-			polar_data.data_ptr[idx++] = cart2pol(diffx, diffy);
-		}
+		antenna.get_signal_power(output, debug);
 	}
 
 	const std::string str() const
@@ -201,7 +158,6 @@ public:
 	{
 		graphics::State state(station_id);
 		state.settings = antenna.settings();
-		state.location = location;
 
 		return state;
 	}
@@ -209,7 +165,7 @@ public:
 	/* return state is [true]=init done, else [false]=not called "init_gui" yet */
 	bool gui_ready() const
 	{
-		return gui_polar_data.array_size > 0;
+		return gui_grid_size.count() > 0;
 	}
 
 	/* resize the gui window;
@@ -219,8 +175,7 @@ public:
 		if (gui_ready() && !new_dimension.is_zero() && gui_grid_size != new_dimension)
 		{
 			gui_grid_size = new_dimension;
-			set_polar_data(gui_grid_size, location);
-			antenna.graphics_init(gui_polar_data);
+			antenna.graphics_init(gui_grid_size.x, gui_grid_size.y);
 			antenna.graphics_update();
 		}
 		else if (!gui_ready())
@@ -251,8 +206,7 @@ public:
 		init_gui_grid_size = { rows, cols };
 		gui_grid_size = init_gui_grid_size;
 
-		set_polar_data(gui_grid_size, location);
-		antenna.graphics_init(gui_polar_data);
+		antenna.graphics_init(gui_grid_size.x, gui_grid_size.y);
 	}
 
 	void undo()
@@ -260,8 +214,7 @@ public:
 		antenna.undo();
 		std::swap(prev_location, location);
 
-		set_polar_data(location);
-		antenna.numerical_init(polar_data);
+		antenna.numerical_init(ms_station_loc);
 	}
 
 	/* when user resets all the changes in the simulation */
@@ -271,27 +224,22 @@ public:
 		prev_location = init_location;
 		location = init_location;
 
-		set_polar_data(location);
-		antenna.numerical_init(polar_data);
+		antenna.numerical_init(ms_station_loc);
 	}
 
 	//antennadim dim_meters, double theta, double spacing, int antenna_count,
 	Cow(
 		unsigned& id,
-		const Placements& bs_location,
 		const std::vector<Placements>& ms_pos_list,
-		const unsigned& panel_count,
-		const double& lambda,
-		const double& antenna_spacing,
-		const double& antenna_orientation,
-		const antennadim& antenna_dim)
+		AAntennaTable& antenna_table)
 		:
 		station_id(id),
-		init_location(bs_location),
+		power_idx(0),
+		antennatable(antenna_table),
+		antenna(antenna_table.at(id)),
+		init_location(antenna.settings().location),
 		ms_station_loc(ms_pos_list),
-		ms_stations_num(ms_pos_list.size()),
-		antenna(panel_count, lambda, antenna_spacing, antenna_orientation, antenna_dim),
-		power_idx(0)
+		ms_stations_num(ms_station_loc.size())
 	{
 		init_sim();
 	}
@@ -339,7 +287,8 @@ public:
 		tnf_watt(inoise),
 		gain_rx(grx),
 		sinr(0)
-	{}
+	{
+	}
 };
 using cow_v = std::vector<Cow>;
 using sta_v = std::vector<Station>;

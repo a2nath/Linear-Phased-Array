@@ -78,39 +78,54 @@ namespace network_package
 	};
 
 
+	struct Calculations
+	{
+		/* Gtx gain for the whole grid */
+		std::vector<double> gain_RX_grid;
+		std::vector<double> phee_minus_alpha_list;
+		std::vector<double> pathloss_list;
+		std::vector<double> hmatrix;                 // hmatrix from BS pov
+		/* each cell is a mobile station or a gui drid */
+		std::vector<Polar_Coordinates> polar_data;
+		bool modified;
+
+		void resize(const size_t& size)
+		{
+			gain_RX_grid.resize(size);
+			phee_minus_alpha_list.resize(size);
+			pathloss_list.resize(size);
+			hmatrix.resize(size);
+			polar_data.resize(size);
+		}
+
+		Calculations() : modified(false) {}
+	};
+
 	/* Linear Phase Array Antenna */
 	class AAntenna
 	{
+		const int instance_id;
 		const Settings initial;
 		Settings prev, current;
 
-		struct Calculations
-		{
-			/* Gtx gain for the whole grid */
-			std::vector<double> gain_RX_grid;
-			std::vector<double> phee_minus_alpha_list;
-			std::vector<double> pathloss_list;
-			std::vector<double> hmatrix;                 // hmatrix from BS pov
-			double* host_hmatrix;
-
-			bool modified;
-
-			void resize(const size_t& size)
-			{
-				gain_RX_grid.resize(size);
-				phee_minus_alpha_list.resize(size);
-				pathloss_list.resize(size);
-				hmatrix.resize(size);
-			}
-
-			Calculations() : modified(false), host_hmatrix(nullptr) {}
-		};
-
 		/* Calculations needed to create/update the H-matrix coefficient table */
 		Calculations simulation, graphic;
-		double* dummy;
+		Dimensions<unsigned> gui_dim;
 
 	public:
+		/* GUI heatmap visualization --
+			set the signl level in Watts (linear) = channel_coefficient * power
+		*/
+		inline void get_signal_power(std::vector<double>& signal_level_lin, const bool& debug)
+		{
+			if (graphic.polar_data.size() != signal_level_lin.size())
+				throw std::runtime_error("Size not the same for output signal array");
+
+			for (size_t pixel_idx = 0; pixel_idx < graphic.polar_data.size(); ++pixel_idx)
+			{
+				signal_level_lin[pixel_idx] = graphic.hmatrix[pixel_idx] * current.power;;
+			}
+		}
 
 		const Settings& settings() const
 		{
@@ -145,6 +160,11 @@ namespace network_package
 		float& getAlpha()
 		{
 			return current.alpha;
+		}
+
+		void set_location(const Placements& new_location)
+		{
+			current.location = new_location;
 		}
 
 		/* sett panel count in the antenna array */
@@ -227,7 +247,6 @@ namespace network_package
 			double* phee_minus_alpha_list,
 			double* gain_RX_grid,
 			double* pathloss_list,
-			double* gpu_hmatrix,
 			double* host_hmatrix);
 
 		/* for bare-minimum numerical calculations needed at the mobile_stations only */
@@ -245,10 +264,10 @@ namespace network_package
 			const Polar_Coordinates* d_polar_data);
 
 		/* for GUI simulation in the whole grid */
-		void graphics_init(PolarArray& polar_info);
+		void graphics_init(size_t x, size_t y);
 
 		/* for bare-minimum numerical calculations needed at the mobile_stations only */
-		void numerical_init(PolarArray& polar_info);
+		void numerical_init(const std::vector<Placements>& size);
 
 		/* change the state back to the previous one */
 		void undo()
@@ -262,27 +281,16 @@ namespace network_package
 			current = initial;
 		}
 
-		~AAntenna();
+		~AAntenna() {}
 
 		AAntenna(
+			const unsigned station_id,
 			const unsigned& init_panel_count,
 			const double& init_lambda,
 			const double& init_antenna_spacing,
 			const double& init_antenna_orientation_rads,
-			const antennadim& init_antdims)
-			:
-			initial{ 0,
-				std::numeric_limits<double>::min(),
-				init_panel_count,
-				init_lambda,
-				init_antenna_spacing,
-				init_antenna_orientation_rads,
-				init_antdims
-			},
-			dummy(nullptr) // constant initial setup
-
-		{
-		}
+			const Placements& init_location,
+			const antennadim& init_antdims);
 	};
 
 };

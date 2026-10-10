@@ -12,7 +12,6 @@ void AAntenna::update(
 	double* phee_minus_alpha_list,
 	double* gain_RX_grid,
 	double* pathloss_list,
-	double* dummy,
 	double* host_hmatrix)
 {
 	/* update the antenna gain Gtx */
@@ -137,7 +136,7 @@ void AAntenna::graphics_update()
 	if (graphic.modified)
 	{
 		spdlog::info("Antenna Graphics update");
-		update(graphic.size(), &graphic.phee_minus_alpha_list[0], &graphic.gain_RX_grid[0], &graphic.pathloss_list[0], dummy, &graphic.hmatrix[0]);
+		update(graphic.hmatrix.size(), &graphic.phee_minus_alpha_list[0], &graphic.gain_RX_grid[0], &graphic.pathloss_list[0], &graphic.hmatrix[0]);
 		graphic.modified = false;
 	}
 }
@@ -147,31 +146,64 @@ void AAntenna::numerical_update()
 	if (simulation.modified)
 	{
 		spdlog::info("Antenna Numerical update");
-		update(simulation.size(), &simulation.phee_minus_alpha_list[0], &simulation.gain_RX_grid[0], &simulation.pathloss_list[0], dummy, &simulation.hmatrix[0]);
+		update(simulation.hmatrix.size(), &simulation.phee_minus_alpha_list[0], &simulation.gain_RX_grid[0], &simulation.pathloss_list[0], &simulation.hmatrix[0]);
 		simulation.modified = false;
 	}
 }
 
+/* set the polar coordinates (for GUI points) before doing init. Location manually set before this is called */
+static void set_polar_data(const Settings& current, const Dimensions<unsigned>& dim, Calculations& calc, size_t size, size_t x, size_t y)
+{
+	if (dim.x != x || dim.y != y)
+	{
+		calc.resize(size);
+
+		size_t idx = 0;
+		for (__int64 row = 0; row < y; ++row)
+		{
+			for (__int64 col = 0; col < x; ++col)
+			{
+				__int64 diffx = col - (__int64)current.location.x; // diff with respect to pixel (think of col, row has location of rx)
+				__int64 diffy = row - (__int64)current.location.y;
+				calc.polar_data[idx++] = cart2pol(diffx, diffy);
+			}
+		}
+	}
+}
+
+/* set the polar coordinates (for handset) before doing init. Location manually set before this is called */
+static void set_polar_data(const Settings& current, const std::vector<Placements>& ms_station_locations, Calculations& calc)
+{
+	size_t idx = 0;
+	calc.resize(ms_station_locations.size());
+
+	for (auto& mstation : ms_station_locations)
+	{
+		__int64 diffx = mstation.x - current.location.x; // diff with respect to rx
+		__int64 diffy = mstation.y - current.location.y;
+		calc.polar_data[idx++] = cart2pol(diffx, diffy);
+	}
+}
+
 /* for GUI simulation in the whole grid */
-void AAntenna::graphics_init(PolarArray& polar_data)
+void AAntenna::graphics_init(size_t x, size_t y)
 {
 	spdlog::info("Antenna Graphics Re-init");
-	graphic.resize(polar_data.array_size);
-	init(polar_data.array_size, &graphic.phee_minus_alpha_list[0], &graphic.pathloss_list[0], &graphic.gain_RX_grid[0], polar_data.data_ptr);
+	size_t size = x * y;
+	set_polar_data(current, gui_dim, graphic, size, x, y);
+
+	init(size, &graphic.phee_minus_alpha_list[0], &graphic.pathloss_list[0], &graphic.gain_RX_grid[0], &graphic.polar_data[0]);
 	graphic.modified = true;
 }
 
 /* for bare-minimum numerical calculations needed at the mobile_stations only */
-void AAntenna::numerical_init(PolarArray& polar_data)
+void AAntenna::numerical_init(const std::vector<Placements>& ms_station_locations)
 {
 	spdlog::info("Antenna Numerical Re-init");
-	simulation.resize(polar_data.array_size);
-	init(polar_data.array_size, &simulation.phee_minus_alpha_list[0], &simulation.pathloss_list[0], &simulation.gain_RX_grid[0], polar_data.data_ptr);
-	simulation.modified = true;
-}
+	set_polar_data(current, ms_station_locations, simulation);
 
-AAntenna::~AAntenna()
-{
+	init(ms_station_locations.size(), &simulation.phee_minus_alpha_list[0], &simulation.pathloss_list[0], &simulation.gain_RX_grid[0], &simulation.polar_data[0]);
+	simulation.modified = true;
 }
 
 /* hatrix with respect to pixel index (flattened from 2D) */
@@ -185,16 +217,17 @@ const double& AAntenna::coeff(const unsigned& rx_sta) const
 	return simulation.hmatrix[rx_sta];
 }
 
-static int antenna_instance_id = 0;
 
 AAntenna::AAntenna(
+	const unsigned station_id,
 	const unsigned& init_panel_count,
 	const double& init_lambda,
 	const double& init_antenna_spacing,
 	const double& init_antenna_orientation_rads,
+	const Placements& init_location,
 	const antennadim& init_antdims)
 	:
-	instance_id(antenna_instance_id++),
+	instance_id(station_id),
 	initial {
 		0,
 		std::numeric_limits<double>::min(),
@@ -202,9 +235,10 @@ AAntenna::AAntenna(
 		init_lambda,
 		init_antenna_spacing,
 		init_antenna_orientation_rads,
+		init_location,
 		init_antdims
 	},
-	dummy(nullptr) // constant initial setup
+	prev(initial),
+	current(initial)
 {
-
 }

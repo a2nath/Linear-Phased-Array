@@ -52,7 +52,7 @@ struct GraphicsHelper
 			") cols(" + str(known_width) + ")");
 			//") placement(" + str(placement) + ")");
 
-		cow.update(state.settings, state.location);
+		cow.update(state.settings, state.settings.location);
 
 		/* update cow heat data */
 		cow.heatmap(raw_dbg_lin_data[cow.sid()]);
@@ -535,6 +535,7 @@ class Simulator
 	std::string sim_error;
 	cow_v cows;
 	sta_v stations;
+	AAntennaTable antenna_table;
 	SimulationHelper* simhelper;
 
 	const unsigned&    timeslot;
@@ -573,16 +574,20 @@ class Simulator
 		/* setup the system */
 		for (unsigned bs_id = 0; bs_id < base_station_count; ++bs_id)
 		{
-			cows.emplace_back(bs_id,
-				base_stations_loc[bs_id],
-				mobile_stations_loc,
-				//ms_gain_gtrx_lin,
+			antenna_table.emplace_back(
+				bs_id,
 				bs_antenna_counts[bs_id],
 				lambda,
 				antenna_spacing[bs_id],
 				bs_theta_c[bs_id],
+				base_stations_loc[bs_id],
 				antennadim(antenna_dims[0], antenna_dims[1])
-				);
+			);
+		}
+
+		for (unsigned bs_id = 0; bs_id < base_station_count; ++bs_id)
+		{
+			cows.emplace_back(bs_id, mobile_stations_loc, antenna_table);
 		}
 
 		/* initialize the simulation helper */
