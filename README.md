@@ -283,10 +283,13 @@ The effect of antenna [3-dB gain](https://en.wikipedia.org/wiki/Half-power_point
 Default is release build with -O3 optimization
 
 ```
-mkdir build
-cd build
-cmake ..
-cmake --build .
+sudo apt install -y build-essential cmake git pkg-config ca-certificates \
+    libx11-dev libxrandr-dev libxcursor-dev libudev-dev \
+    libfreetype-dev libgl1-mesa-dev
+rm -rf -- build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release # or =Debug
+cmake --build build --parallel "$(nproc)" # if taking too ram, then try 4 instead of all CPUs
+./build/bin/PhaseArra
 ```
 
 ### Debug build w/ debug symbols 🛠️
