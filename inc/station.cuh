@@ -344,7 +344,7 @@ public:
 		station_id(id),
 		power_idx(0),
 		antennatable(antenna_table),
-		antenna(antenna_table[id]),
+		antenna(antenna_table.at(id)),
 		init_location(antenna.settings().location),
 		ms_station_loc(ms_pos_list),
 		ms_stations_num(ms_station_loc.size()),

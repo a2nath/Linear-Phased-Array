@@ -586,7 +586,10 @@ class Simulator
 				base_stations_loc[bs_id],
 				antennadim(antenna_dims[0], antenna_dims[1])
 			);
+		}
 
+		for (unsigned bs_id = 0; bs_id < base_station_count; ++bs_id)
+		{
 			cows.emplace_back(bs_id, mobile_stations_loc, antenna_table);
 		}
 
