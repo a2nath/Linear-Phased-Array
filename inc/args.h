@@ -8,7 +8,11 @@
 #include <optional>
 #include <json/json.h>
 #include "common.h"
+#ifdef __CUDACC__
 #include "network.cuh"
+#else
+#include "network.h"
+#endif
 
 #define RAPIDJSON_HAS_STDSTRING 1
 #include "rapidjson/document.h"

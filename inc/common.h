@@ -295,7 +295,7 @@ struct Dimensions
 		return *this;
 	}
 
-	Type count() const
+	size_t count() const
 	{
 		return x * y;
 	}
@@ -375,7 +375,8 @@ struct Polar_Coordinates : private Coordinates<double>
 	Polar_Coordinates() : Coordinates(), theta(x), hype(y) {}
 };
 
-inline Polar_Coordinates cart2pol(const double& x, const double& y)
+template<class T>
+inline Polar_Coordinates cart2pol(const T& x, const T& y)
 {
 	double theta = atan2(y, x);
 	double hype = hypot(x, y);
