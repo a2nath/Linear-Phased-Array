@@ -15,26 +15,26 @@
 #include <cstdio>
 #include <stdexcept>
 
-#define CUDA_ERROR(message, ...) do { \
+#define CUDA_ERROR(...) do { \
 	char cuda_message[1024]; \
 	std::snprintf(cuda_message, sizeof(cuda_message), \
-		message, __VA_ARGS__); \
+		__VA_ARGS__); \
 	fprintf(stderr, "ERROR [%s:%d]: %s\n", __FILE__, __LINE__, cuda_message); \
 	exit(-1); \
 } while(0)
 
-#define CUDA_WARN(message, ...) do { \
+#define CUDA_WARN(...) do { \
 	char cuda_message[1024]; \
 	std::snprintf(cuda_message, sizeof(cuda_message), \
-		message, __VA_ARGS__); \
+		__VA_ARGS__); \
 	printf("WARNING [%s:%d]: %s\n", __FILE__, __LINE__, cuda_message); \
 } while(0)
 
-#define CUDA_CALL(x, message, ...) do { \
+#define CUDA_CALL(x, ...) do { \
 	const cudaError_t cuda_call_status = (x); \
 	if(cuda_call_status != cudaSuccess) { \
 		fprintf(stderr, "%s\n", cudaGetErrorString(cuda_call_status)); \
-		CUDA_ERROR(message, __VA_ARGS__); \
+		CUDA_ERROR(__VA_ARGS__); \
 	} \
 } while(0)
 
@@ -44,9 +44,9 @@
 	CUDA_CALL(cudaStreamSynchronize(s), "debug sync"); \
 } while(0)
 
-#define CUDA_CALL_PRINT(x, message, ...) do { \
+#define CUDA_CALL_PRINT(x, ...) do { \
 	const cudaError_t cuda_call_status = (x); \
-	printf(message, __VA_ARGS__); \
+	printf(__VA_ARGS__); \
 	printf("\n"); \
 	if(cuda_call_status != cudaSuccess) { \
 		fprintf(stderr, "%s\n", cudaGetErrorString(cuda_call_status)); \
@@ -60,7 +60,7 @@
 
 
 /* CUDA datasize = datasize x num_tx*/
-static enum BUFFER_TYPE { GFX = 0, SIM, NONE };
+enum BUFFER_TYPE { GFX = 0, SIM, NONE };
 
 struct compute_buffers_t
 {
