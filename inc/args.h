@@ -391,7 +391,9 @@ struct MyArgs : public argparse::Args
 		{
 			assert(bs_tx_power_dBm.value().data.size() == timeslots);
 			assert(bs_tx_power_dBm.value().data[0].size() == base_station_count);
-			assert(bs_tx_power_dBm.value().is_valid_and_convert(power_range_dBm) == true); // gets converted into watts after this
+			[[maybe_unused]] const bool valid_power =
+				bs_tx_power_dBm.value().is_valid_and_convert(power_range_dBm); // gets converted into watts after this
+			assert(valid_power);
 		}
 		else
 		{
@@ -404,7 +406,9 @@ struct MyArgs : public argparse::Args
 		{
 			assert(bs_scan_alpha_deg.value().data.size() == timeslots);
 			assert(bs_scan_alpha_deg.value().data[0].size() == base_station_count);
-			assert(bs_scan_alpha_deg.value().is_valid_and_convert(scan_angle_range) == true); // gets converted into rads after this
+			[[maybe_unused]] const bool valid_scan =
+				bs_scan_alpha_deg.value().is_valid_and_convert(scan_angle_range); // gets converted into rads after this
+			assert(valid_scan);
 		}
 		else
 		{
@@ -415,7 +419,10 @@ struct MyArgs : public argparse::Args
 		//assert(ms_id_selections.data.size() * ms_id_selections.data[0].size() == mobile_station_count);
 		assert(ms_id_selections.data.size() == timeslots);
 		assert(ms_id_selections.data[0].size() == base_station_count);
-		assert(ms_id_selections.is_valid_and_convert(Pair<unsigned, unsigned>{base_station_count, mobile_station_count}) == true); // gets converted into rads after this
+		[[maybe_unused]] const bool valid_bindings =
+			ms_id_selections.is_valid_and_convert(
+				Pair<unsigned, unsigned>{base_station_count, mobile_station_count}); // gets converted into rads after this
+		assert(valid_bindings);
 
 		std::cout << "args built" << std::endl;
 	}
