@@ -348,5 +348,64 @@ Use a separate directory for each Visual Studio version because CMake caches the
 
 Successful builds verify compilation; `--help` checks basic startup.
 
+### CUDA project (GPU)
+
+The same `CMakeLists.txt` builds the CPU executable `PhaseArray` and, with `PHASEARRAY_BUILD_CUDA=ON`, the GPU executable `CudaSolution`. CUDA is optional and is not required for the default CPU build. Both targets use the same SFML 2.x and ImGui dependencies.
+
+Install [CUDA Toolkit 12.9](https://developer.nvidia.com/cuda-toolkit-archive) and a driver that supports your GPU. CUDA 12.8 is also supported. GTX 1080 uses compute capability 6.1; RTX 5070 Ti uses 12.0. [CUDA 13 drops compilation support for Pascal](https://developer.nvidia.com/blog/navigating-gpu-architecture-support-a-guide-for-nvidia-cuda-developers/), so use CUDA 12.9 and a Pascal-compatible driver such as Release 580 U5 (581.80) for GTX 1080 systems.
+
+Check the driver/GPU and the compiler separately:
+
+```text
+nvidia-smi
+nvcc --version
+```
+
+The CUDA version displayed by `nvidia-smi` describes driver compatibility; it does not confirm that the toolkit or `nvcc` is installed.
+
+#### Linux / WSL2
+
+Install the Linux prerequisites above and the Linux CUDA 12.9 toolkit, following [NVIDIA's Linux installation instructions](https://docs.nvidia.com/cuda/archive/12.9.1/cuda-installation-guide-linux/index.html). For WSL2, use the [WSL toolkit installation instructions](https://docs.nvidia.com/cuda/wsl-user-guide/index.html): install the Windows GPU driver on the host and the `cuda-toolkit-12-9` package inside WSL. Do not install a Linux display driver or the `cuda`/`cuda-drivers` meta-packages inside WSL.
+
+```bash
+cmake -S . -B build-cuda -DCMAKE_BUILD_TYPE=Release \
+    -DPHASEARRAY_BUILD_CUDA=ON \
+    -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.9/bin/nvcc
+cmake --build build-cuda --target CudaSolution --parallel "$(nproc)"
+./build-cuda/bin/CudaSolution --help
+```
+
+For Debug, reconfigure the same directory and rebuild:
+
+```bash
+cmake -S . -B build-cuda -DCMAKE_BUILD_TYPE=Debug
+cmake --build build-cuda --target CudaSolution --parallel "$(nproc)"
+./build-cuda/bin/CudaSolution --help
+```
+
+CUDA Debug builds include device debugging information; AddressSanitizer remains specific to the CPU target.
+
+#### Windows
+
+Install the VS 2019 or VS 2022 C++ prerequisites above before installing CUDA 12.9, and include CUDA's Visual Studio integration. Open **Developer PowerShell for VS 2022** and run:
+
+```powershell
+cmake -S . -B build-cuda-windows -G "Visual Studio 17 2022" -A x64 -T cuda=12.9 -DPHASEARRAY_BUILD_CUDA=ON -DBUILD_SHARED_LIBS=OFF
+cmake --build build-cuda-windows --target CudaSolution --config Release --parallel
+.\build-cuda-windows\bin\Release\CudaSolution.exe --help
+cmake --build build-cuda-windows --target CudaSolution --config Debug --parallel
+.\build-cuda-windows\bin\Debug\CudaSolution.exe --help
+```
+
+For VS 2019, use its Developer PowerShell, replace the generator with `"Visual Studio 16 2019"`, and use a separate directory such as `build-cuda-windows-2019` in all commands. CMake selects CUDA 12.9 explicitly through `-T cuda=12.9`; these instructions do not use the legacy `Solution/CudaSolution.vcxproj`.
+
+#### GPU architecture selection and verification
+
+By default, the CUDA target includes native GPU code and PTX for architectures `61;75;86;89;120`, covering Pascal through current GeForce RTX generations. To reduce compile time for a build used only on an RTX 5070 Ti, add `-DCMAKE_CUDA_ARCHITECTURES=120` to the configure command. Such a build will not support GTX 1080.
+
+`--help` verifies executable startup but does not run GPU kernels. Verify GPU execution by running an actual simulation with valid inputs. Linux/WSL and Windows Release and Debug builds and executable startup have passed with CUDA 12.9. Numerical/graphics kernel checks have passed on an RTX 5070 Ti in Linux/WSL Release and Debug and Windows Release. GTX 1080 runtime support remains unverified until tested on that hardware.
+
+GUI runtime validation remains incomplete: Debug hits an existing ImGui slider assertion, and a bounded Linux/WSL Release run produced simulation results before exiting with a segmentation fault during the GUI check.
+
 
 

@@ -11,9 +11,29 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 option(PHASEARRAY_ENABLE_ASAN "Enable AddressSanitizer in Debug builds" ON)
+option(PHASEARRAY_BUILD_CUDA "Build the CudaSolution GPU executable" OFF)
 
 include(FetchContent)
 find_package(Threads REQUIRED)
+
+if(PHASEARRAY_BUILD_CUDA)
+    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+        set(phasearray_default_cuda_architectures ON)
+    endif()
+    include(CheckLanguage)
+    check_language(CUDA)
+    if(NOT CMAKE_CUDA_COMPILER)
+        message(FATAL_ERROR "PHASEARRAY_BUILD_CUDA=ON requires a CUDA 12.8/12.9 compiler. Install CUDA 12.9 and set CMAKE_CUDA_COMPILER to nvcc if needed.")
+    endif()
+    enable_language(CUDA)
+    find_package(CUDAToolkit 12.8 REQUIRED)
+    if(CUDAToolkit_VERSION VERSION_GREATER_EQUAL 13)
+        message(FATAL_ERROR "CudaSolution requires CUDA 12.8 or 12.9 to retain GTX 1080 support; install CUDA 12.9.")
+    endif()
+    if(phasearray_default_cuda_architectures)
+        set(CMAKE_CUDA_ARCHITECTURES "61;75;86;89;120" CACHE STRING "CudaSolution GPU architectures" FORCE)
+    endif()
+endif()
 
 # The application uses the SFML 2 API. Keep the binding and ImGui versions
 # compatible with it, and build only the SFML modules used by PhaseArray.
@@ -87,14 +107,15 @@ add_executable(PhaseArray
 set_target_properties(PhaseArray PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
-target_include_directories(PhaseArray PRIVATE
+add_library(phasearray_dependencies INTERFACE)
+target_include_directories(phasearray_dependencies INTERFACE
     "${CMAKE_CURRENT_SOURCE_DIR}/inc"
     "${CMAKE_CURRENT_SOURCE_DIR}/deps"
     "${CMAKE_CURRENT_SOURCE_DIR}/deps/include"
     "${argparse_SOURCE_DIR}/include/argparse"
     "${rapidjson_SOURCE_DIR}/include"
 )
-target_link_libraries(PhaseArray PRIVATE
+target_link_libraries(phasearray_dependencies INTERFACE
     sfml-graphics
     sfml-window
     sfml-system
@@ -104,7 +125,29 @@ target_link_libraries(PhaseArray PRIVATE
     jsoncpp_static
     Threads::Threads
 )
+target_link_libraries(PhaseArray PRIVATE phasearray_dependencies)
 target_compile_definitions(PhaseArray PRIVATE "$<$<CONFIG:Debug>:_DEBUG>")
+
+if(PHASEARRAY_BUILD_CUDA)
+    add_executable(CudaSolution src/main.cu src/compute.cu src/visuals.cpp)
+    set_target_properties(CudaSolution PROPERTIES
+        CUDA_STANDARD 17
+        CUDA_STANDARD_REQUIRED ON
+        CUDA_EXTENSIONS OFF
+        CUDA_RUNTIME_LIBRARY Static
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    target_link_libraries(CudaSolution PRIVATE phasearray_dependencies CUDA::cudart_static)
+    target_compile_definitions(CudaSolution PRIVATE "$<$<CONFIG:Debug>:_DEBUG>")
+    target_compile_options(CudaSolution PRIVATE
+        "$<$<AND:$<COMPILE_LANGUAGE:CUDA>,$<CONFIG:Debug>>:-G>"
+    )
+    if(MSVC)
+        target_compile_options(CudaSolution PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:/W4>")
+    else()
+        target_compile_options(CudaSolution PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic>")
+    endif()
+endif()
 
 if(MSVC)
     target_compile_options(PhaseArray PRIVATE /W4)
