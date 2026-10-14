@@ -31,7 +31,7 @@
 #ifdef _WIN32
 #define localtime(current_time, local_time) localtime_s(local_time, current_time);
 #else
-#define localtime(current_time, local_time) localtime_r(&current_time, &local_time);
+#define localtime(current_time, local_time) localtime_r(current_time, local_time);
 #include <unistd.h>
 #endif
 

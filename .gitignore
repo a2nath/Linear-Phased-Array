@@ -34,6 +34,9 @@
 # Build
 /examples/build/*
 /build/*
+/deps/*
+/font/*
+/inc/.vs
 
 # Images
 *.png
@@ -41,3 +44,12 @@
 *.pdf
 *.eps
 *.gif
+
+# misc
+*.*_
+.clinerules
+.vscode/
+GUI_Solution/
+Solution/.vs/
+Solution/x64/
+imgui.ini

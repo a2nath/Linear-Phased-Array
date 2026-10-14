@@ -1,4 +1,5 @@
 #include "network.h"
+
 using namespace network_package;
 
 static std::vector<unsigned> indices_with_inf;
@@ -159,12 +160,12 @@ static void set_polar_data(const Settings& current, const Dimensions<unsigned>& 
 		calc.resize(size);
 
 		size_t idx = 0;
-		for (__int64 row = 0; row < y; ++row)
+		for (long long row = 0; row < y; ++row)
 		{
-			for (__int64 col = 0; col < x; ++col)
+			for (long long col = 0; col < x; ++col)
 			{
-				__int64 diffx = col - (__int64)current.location.x; // diff with respect to pixel (think of col, row has location of rx)
-				__int64 diffy = row - (__int64)current.location.y;
+				long long diffx = col - (long long)current.location.x; // diff with respect to pixel (think of col, row has location of rx)
+				long long diffy = row - (long long)current.location.y;
 				calc.polar_data[idx++] = cart2pol(diffx, diffy);
 			}
 		}
@@ -179,8 +180,8 @@ static void set_polar_data(const Settings& current, const std::vector<Placements
 
 	for (auto& mstation : ms_station_locations)
 	{
-		__int64 diffx = mstation.x - current.location.x; // diff with respect to rx
-		__int64 diffy = mstation.y - current.location.y;
+		long long diffx = mstation.x - current.location.x; // diff with respect to rx
+		long long diffy = mstation.y - current.location.y;
 		calc.polar_data[idx++] = cart2pol(diffx, diffy);
 	}
 }
