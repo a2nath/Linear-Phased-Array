@@ -280,20 +280,73 @@ The effect of antenna [3-dB gain](https://en.wikipedia.org/wiki/Half-power_point
 
 ## Building and Integrating 🛠️
 
-Default is release build with -O3 optimization
+Run these commands from the repository root. CMake 3.18 or newer and internet access are required; CMake downloads the pinned dependencies, including SFML 2.6.2, ImGui 1.89.9, and ImGui-SFML 2.6.1.
 
-```
+### Linux (Ubuntu/Debian)
+
+Install the build prerequisites:
+
+```bash
+sudo apt update
 sudo apt install -y build-essential cmake git pkg-config ca-certificates \
     libx11-dev libxrandr-dev libxcursor-dev libudev-dev \
     libfreetype-dev libgl1-mesa-dev
-rm -rf -- build
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release # or =Debug
-cmake --build build --parallel "$(nproc)" # if taking too ram, then try 4 instead of all CPUs
-./build/bin/PhaseArra
 ```
 
-### Debug build w/ debug symbols 🛠️
-Change `cmake ..` to `cmake -DCMAKE_BUILD_TYPE=Debug ..`
+Build Release with `-O3` optimization and check executable startup:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel "$(nproc)"
+./build/bin/PhaseArray --help
+```
+
+If parallel compilation uses too much memory, replace `"$(nproc)"` with `4`. For a clean build, delete the `build` directory first.
+
+For Debug with debug symbols and AddressSanitizer:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build --parallel "$(nproc)"
+./build/bin/PhaseArray --help
+```
+
+### Windows (MSVC)
+
+Visual Studio Professional is not required. Install [Visual Studio 2022 Build Tools](https://learn.microsoft.com/en-us/cpp/build/building-on-the-command-line?view=msvc-170) with the **Desktop development with C++** workload, including the Windows SDK and **C++ CMake tools for Windows**. Also install [Git for Windows](https://gitforwindows.org/) and make it available on `PATH`.
+
+Open **Developer PowerShell for VS 2022**, navigate to the repository root, and run:
+
+```powershell
+cmake -S . -B build-windows -G "Visual Studio 17 2022" -A x64 -DBUILD_SHARED_LIBS=OFF
+cmake --build build-windows --config Release --parallel
+.\build-windows\bin\Release\PhaseArray.exe --help
+```
+
+`BUILD_SHARED_LIBS=OFF` builds dependencies statically to simplify executable startup. Keep the Windows build directory separate from the Linux build directory. For a clean Windows build, delete `build-windows` first.
+
+Build and check Debug using the same configured directory:
+
+```powershell
+cmake --build build-windows --config Debug --parallel
+.\build-windows\bin\Debug\PhaseArray.exe --help
+```
+
+#### Visual Studio 2019 alternative
+
+Visual Studio 2019 supports the project's C++17 requirements. With the same C++ workload, Windows SDK, and CMake tools installed, open **Developer PowerShell for VS 2019** and run from the repository root:
+
+```powershell
+cmake -S . -B build-windows-2019 -G "Visual Studio 16 2019" -A x64 -DBUILD_SHARED_LIBS=OFF
+cmake --build build-windows-2019 --config Release --parallel
+.\build-windows-2019\bin\Release\PhaseArray.exe --help
+cmake --build build-windows-2019 --config Debug --parallel
+.\build-windows-2019\bin\Debug\PhaseArray.exe --help
+```
+
+Use a separate directory for each Visual Studio version because CMake caches the selected generator. See [CMake's Visual Studio 2019 documentation](https://cmake.org/cmake/help/latest/generator/Visual%20Studio%2016%202019.html).
+
+Successful builds verify compilation; `--help` checks basic startup.
 
 
 
