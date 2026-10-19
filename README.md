@@ -4,12 +4,28 @@
 # README #
 
 ## Table of Contents
--   [Introduction](#-introduction)
--   [Example Scenario](#-example-scenario)
--   [Parameters](#-parameters)
--   [Matlab Solution](#-solution)
--   [CPP Solution and Simulation Output](#cpp-solution-and-simulation-output-%EF%B8%8F)
--   [Building and Integrating](#building-and-integrating-%EF%B8%8F)
+
+- [Introduction](#-introduction)
+- [Example Scenario](#-example-scenario)
+- [Parameters](#-parameters)
+- [Matlab Solution](#matlab-solution)
+- [CPP Solution and Simulation Output](#cpp-solution-and-simulation-output)
+- [Plot GUI heatgraphs and example interference pattern](#plot-gui-heatgraphs-and-example-interference-pattern)
+- [Building and Integrating](#building-and-integrating)
+  - [Build configurations](#build-configurations)
+  - [Linux prerequisites and PhaseArray](#linux-ubuntudebian)
+    - [PhaseArray Linux Release](#phasearray-linux-release)
+    - [PhaseArray Linux Debug](#phasearray-linux-debug)
+  - [Windows prerequisites and PhaseArray](#windows-msvc)
+    - [PhaseArray Windows Release](#phasearray-windows-release)
+    - [PhaseArray Windows Debug](#phasearray-windows-debug)
+    - [Visual Studio 2019 alternative](#visual-studio-2019-alternative)
+  - [CUDA prerequisites and CudaSolution](#cuda-project-gpu)
+    - [CudaSolution Linux Release](#cudasolution-linux-release)
+    - [CudaSolution Linux Debug](#cudasolution-linux-debug)
+    - [CudaSolution Windows Release](#cudasolution-windows-release)
+    - [CudaSolution Windows Debug](#cudasolution-windows-debug)
+    - [GPU architecture selection and verification](#gpu-architecture-selection-and-verification)
 
 
 ## 👥 Introduction
@@ -92,6 +108,8 @@ Initial proposal and source code along with optimizations have been made. Some o
 </p>
 
 </details>
+
+<a id="cpp-solution-and-simulation-output"></a>
 
 ### CPP Solution and Simulation Output 🖥️
 
@@ -278,13 +296,32 @@ The effect of antenna [3-dB gain](https://en.wikipedia.org/wiki/Half-power_point
 </details>
 
 
+<a id="building-and-integrating"></a>
+
 ## Building and Integrating 🛠️
 
-Run these commands from the repository root. CMake 3.18 or newer and internet access are required; CMake downloads the pinned dependencies, including SFML 2.6.2, ImGui 1.89.9, and ImGui-SFML 2.6.1.
+Run these commands from the repository root. CMake 3.18 or newer and internet access are required; the VS 2022 generator requires CMake 3.21 or newer (3.31.4 was used for Windows verification). CMake downloads the pinned dependencies, including SFML 2.6.2, ImGui 1.89.9, and ImGui-SFML 2.6.1.
+
+### Build configurations
+
+Choose the project, platform, and configuration below. Each command block includes configuration, compilation of the selected executable, and a `--help` startup check; it can be used independently from a fresh checkout. `PhaseArray` is the CPU project and does not require CUDA. `CudaSolution` is the GPU project and requires the CUDA prerequisites below.
+
+| Platform | Project | Configuration | Instructions |
+|---|---|---|---|
+| Linux / WSL2 | PhaseArray (CPU) | Release | [Build commands](#phasearray-linux-release) |
+| Linux / WSL2 | PhaseArray (CPU) | Debug | [Build commands](#phasearray-linux-debug) |
+| Windows | PhaseArray (CPU) | Release | [Build commands](#phasearray-windows-release) |
+| Windows | PhaseArray (CPU) | Debug | [Build commands](#phasearray-windows-debug) |
+| Linux / WSL2 | CudaSolution (GPU) | Release | [Build commands](#cudasolution-linux-release) |
+| Linux / WSL2 | CudaSolution (GPU) | Debug | [Build commands](#cudasolution-linux-debug) |
+| Windows | CudaSolution (GPU) | Release | [Build commands](#cudasolution-windows-release) |
+| Windows | CudaSolution (GPU) | Debug | [Build commands](#cudasolution-windows-debug) |
+
+Linux uses separate build directories for Debug and Release. Windows uses one build directory per project and Visual Studio generator, with Debug and Release selected by `--config`. Keep Windows and Linux build directories separate. For a clean build, delete only the build directory used by that command block.
 
 ### Linux (Ubuntu/Debian)
 
-Install the build prerequisites:
+These commands also apply inside WSL2. Install the build prerequisites:
 
 ```bash
 sudo apt update
@@ -293,43 +330,48 @@ sudo apt install -y build-essential cmake git pkg-config ca-certificates \
     libfreetype-dev libgl1-mesa-dev
 ```
 
+#### PhaseArray Linux Release
+
 Build Release with `-O3` optimization and check executable startup:
 
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel "$(nproc)"
-./build/bin/PhaseArray --help
+cmake -S . -B build-cpu-release -DCMAKE_BUILD_TYPE=Release -DPHASEARRAY_BUILD_CUDA=OFF
+cmake --build build-cpu-release --target PhaseArray --parallel "$(nproc)"
+./build-cpu-release/bin/PhaseArray --help
 ```
 
-If parallel compilation uses too much memory, replace `"$(nproc)"` with `4`. For a clean build, delete the `build` directory first.
+If parallel compilation uses too much memory, replace `"$(nproc)"` with a smaller number of jobs, such as `4`. This applies to all Linux build commands below.
 
-For Debug with debug symbols and AddressSanitizer:
+#### PhaseArray Linux Debug
+
+Build Debug with debug symbols and AddressSanitizer:
 
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build --parallel "$(nproc)"
-./build/bin/PhaseArray --help
+cmake -S . -B build-cpu-debug -DCMAKE_BUILD_TYPE=Debug -DPHASEARRAY_BUILD_CUDA=OFF
+cmake --build build-cpu-debug --target PhaseArray --parallel "$(nproc)"
+./build-cpu-debug/bin/PhaseArray --help
 ```
 
 ### Windows (MSVC)
 
 Visual Studio Professional is not required. Install [Visual Studio 2022 Build Tools](https://learn.microsoft.com/en-us/cpp/build/building-on-the-command-line?view=msvc-170) with the **Desktop development with C++** workload, including the Windows SDK and **C++ CMake tools for Windows**. Also install [Git for Windows](https://gitforwindows.org/) and make it available on `PATH`.
 
-Open **Developer PowerShell for VS 2022**, navigate to the repository root, and run:
+Open **Developer PowerShell for VS 2022** and navigate to the repository root. `BUILD_SHARED_LIBS=OFF` builds dependencies statically to simplify executable startup.
+
+#### PhaseArray Windows Release
 
 ```powershell
-cmake -S . -B build-windows -G "Visual Studio 17 2022" -A x64 -DBUILD_SHARED_LIBS=OFF
-cmake --build build-windows --config Release --parallel
-.\build-windows\bin\Release\PhaseArray.exe --help
+cmake -S . -B build-cpu-windows -G "Visual Studio 17 2022" -A x64 -DPHASEARRAY_BUILD_CUDA=OFF -DBUILD_SHARED_LIBS=OFF
+cmake --build build-cpu-windows --target PhaseArray --config Release --parallel
+.\build-cpu-windows\bin\Release\PhaseArray.exe --help
 ```
 
-`BUILD_SHARED_LIBS=OFF` builds dependencies statically to simplify executable startup. Keep the Windows build directory separate from the Linux build directory. For a clean Windows build, delete `build-windows` first.
-
-Build and check Debug using the same configured directory:
+#### PhaseArray Windows Debug
 
 ```powershell
-cmake --build build-windows --config Debug --parallel
-.\build-windows\bin\Debug\PhaseArray.exe --help
+cmake -S . -B build-cpu-windows -G "Visual Studio 17 2022" -A x64 -DPHASEARRAY_BUILD_CUDA=OFF -DBUILD_SHARED_LIBS=OFF
+cmake --build build-cpu-windows --target PhaseArray --config Debug --parallel
+.\build-cpu-windows\bin\Debug\PhaseArray.exe --help
 ```
 
 #### Visual Studio 2019 alternative
@@ -337,10 +379,10 @@ cmake --build build-windows --config Debug --parallel
 Visual Studio 2019 supports the project's C++17 requirements. With the same C++ workload, Windows SDK, and CMake tools installed, open **Developer PowerShell for VS 2019** and run from the repository root:
 
 ```powershell
-cmake -S . -B build-windows-2019 -G "Visual Studio 16 2019" -A x64 -DBUILD_SHARED_LIBS=OFF
-cmake --build build-windows-2019 --config Release --parallel
+cmake -S . -B build-windows-2019 -G "Visual Studio 16 2019" -A x64 -DPHASEARRAY_BUILD_CUDA=OFF -DBUILD_SHARED_LIBS=OFF
+cmake --build build-windows-2019 --target PhaseArray --config Release --parallel
 .\build-windows-2019\bin\Release\PhaseArray.exe --help
-cmake --build build-windows-2019 --config Debug --parallel
+cmake --build build-windows-2019 --target PhaseArray --config Debug --parallel
 .\build-windows-2019\bin\Debug\PhaseArray.exe --help
 ```
 
@@ -367,20 +409,24 @@ The CUDA version displayed by `nvidia-smi` describes driver compatibility; it do
 
 Install the Linux prerequisites above and the Linux CUDA 12.9 toolkit, following [NVIDIA's Linux installation instructions](https://docs.nvidia.com/cuda/archive/12.9.1/cuda-installation-guide-linux/index.html). For WSL2, use the [WSL toolkit installation instructions](https://docs.nvidia.com/cuda/wsl-user-guide/index.html): install the Windows GPU driver on the host and the `cuda-toolkit-12-9` package inside WSL. Do not install a Linux display driver or the `cuda`/`cuda-drivers` meta-packages inside WSL.
 
+##### CudaSolution Linux Release
+
 ```bash
-cmake -S . -B build-cuda -DCMAKE_BUILD_TYPE=Release \
+cmake -S . -B build-cuda-release -DCMAKE_BUILD_TYPE=Release \
     -DPHASEARRAY_BUILD_CUDA=ON \
     -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.9/bin/nvcc
-cmake --build build-cuda --target CudaSolution --parallel "$(nproc)"
-./build-cuda/bin/CudaSolution --help
+cmake --build build-cuda-release --target CudaSolution --parallel "$(nproc)"
+./build-cuda-release/bin/CudaSolution --help
 ```
 
-For Debug, reconfigure the same directory and rebuild:
+##### CudaSolution Linux Debug
 
 ```bash
-cmake -S . -B build-cuda -DCMAKE_BUILD_TYPE=Debug
-cmake --build build-cuda --target CudaSolution --parallel "$(nproc)"
-./build-cuda/bin/CudaSolution --help
+cmake -S . -B build-cuda-debug -DCMAKE_BUILD_TYPE=Debug \
+    -DPHASEARRAY_BUILD_CUDA=ON \
+    -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.9/bin/nvcc
+cmake --build build-cuda-debug --target CudaSolution --parallel "$(nproc)"
+./build-cuda-debug/bin/CudaSolution --help
 ```
 
 CUDA Debug builds include device debugging information; AddressSanitizer remains specific to the CPU target.
@@ -389,10 +435,18 @@ CUDA Debug builds include device debugging information; AddressSanitizer remains
 
 Install the VS 2019 or VS 2022 C++ prerequisites above before installing CUDA 12.9, and include CUDA's Visual Studio integration. Open **Developer PowerShell for VS 2022** and run:
 
+##### CudaSolution Windows Release
+
 ```powershell
 cmake -S . -B build-cuda-windows -G "Visual Studio 17 2022" -A x64 -T cuda=12.9 -DPHASEARRAY_BUILD_CUDA=ON -DBUILD_SHARED_LIBS=OFF
 cmake --build build-cuda-windows --target CudaSolution --config Release --parallel
 .\build-cuda-windows\bin\Release\CudaSolution.exe --help
+```
+
+##### CudaSolution Windows Debug
+
+```powershell
+cmake -S . -B build-cuda-windows -G "Visual Studio 17 2022" -A x64 -T cuda=12.9 -DPHASEARRAY_BUILD_CUDA=ON -DBUILD_SHARED_LIBS=OFF
 cmake --build build-cuda-windows --target CudaSolution --config Debug --parallel
 .\build-cuda-windows\bin\Debug\CudaSolution.exe --help
 ```
@@ -403,9 +457,4 @@ For VS 2019, use its Developer PowerShell, replace the generator with `"Visual S
 
 By default, the CUDA target includes native GPU code and PTX for architectures `61;75;86;89;120`, covering Pascal through current GeForce RTX generations. To reduce compile time for a build used only on an RTX 5070 Ti, add `-DCMAKE_CUDA_ARCHITECTURES=120` to the configure command. Such a build will not support GTX 1080.
 
-`--help` verifies executable startup but does not run GPU kernels. Verify GPU execution by running an actual simulation with valid inputs. Linux/WSL and Windows Release and Debug builds and executable startup have passed with CUDA 12.9. Numerical/graphics kernel checks have passed on an RTX 5070 Ti in Linux/WSL Release and Debug and Windows Release. GTX 1080 runtime support remains unverified until tested on that hardware.
-
-GUI runtime validation remains incomplete: Debug hits an existing ImGui slider assertion, and a bounded Linux/WSL Release run produced simulation results before exiting with a segmentation fault during the GUI check.
-
-
-
+Any issues, please open a new issue
