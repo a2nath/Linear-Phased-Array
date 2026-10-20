@@ -4,6 +4,7 @@ using namespace network_package;
 static std::vector<unsigned> indices_with_inf;
 static std::vector<unsigned> indices_with_z;
 
+using namespace rf_math;
 
 /*update the antenna array from updated powerand scan angle */
 void AAntenna::update(

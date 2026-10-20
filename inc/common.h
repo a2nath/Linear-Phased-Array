@@ -31,11 +31,17 @@
 #ifdef _WIN32
 #define localtime(current_time, local_time) localtime_s(local_time, current_time);
 #else
-#define localtime(current_time, local_time) localtime_r(&current_time, &local_time);
+#define localtime(current_time, local_time) localtime_r(current_time, local_time);
 #include <unistd.h>
 #endif
 
 extern std::string sim_error;
+
+inline void tee_error(const char* mesg, ...)
+{
+	spdlog::error(mesg);
+	throw std::runtime_error(mesg);
+}
 
 template<typename T>
 std::string str(const T& input, int precision = std::numeric_limits<T>::digits10 + 1)
@@ -271,6 +277,7 @@ public:
 	}
 };
 
+
 template<class Type>
 struct Dimensions
 {
@@ -392,7 +399,8 @@ struct PolarArray
 	PolarArray() : array_size(0), data_ptr(nullptr) {}
 };
 
-inline Polar_Coordinates cart2pol(const double& x, const double& y)
+template<class T>
+inline Polar_Coordinates cart2pol(const T& x, const T& y)
 {
 	double theta = atan2(y, x);
 	double hype = hypot(x, y);
@@ -422,12 +430,12 @@ namespace rf_math
 {
 	constexpr inline double rad2deg(const double& rad)
 	{
-		return rad * 180.0 / M_PIl;
+		return (long double)rad * 180.0L / M_PIl;
 	}
 
 	constexpr inline double deg2rad(const double& deg)
 	{
-		return deg * M_PIl / 180.0;
+		return (long double)deg * M_PIl / 180.0L;
 	}
 
 	inline std::vector<double> deg2rad(const std::vector<double>& deg_values)
@@ -444,7 +452,7 @@ namespace rf_math
 
 	inline double pow_2(const double& base)
 	{
-		return pow(base, 2);
+		return base * base;
 	}
 
 	inline double log2lin(const double& log)
@@ -483,7 +491,7 @@ namespace rf_math
 	{
 		if (frequency > 0)
 		{
-			return C_SPEED / frequency;
+			return C_SPEED / (long double)frequency;
 		}
 
 		throw std::invalid_argument("Divide by zero error from passing 0 frequency in getLambda call");

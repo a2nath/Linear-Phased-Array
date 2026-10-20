@@ -7,8 +7,6 @@
 
 namespace network_package
 {
-	using namespace rf_math;
-
 	/* keep track of sinr and note the configurations and bindings in decreasing order of SINR */
 	struct dataitem_t
 	{
@@ -33,13 +31,13 @@ namespace network_package
 				<< std::setprecision(2);
 			out
 				<< "timeslot: " << item.tslot_id << "\t"
-				<< "power: " << watt2dBm(item.power) << "\t"
-				<< "alpha: " << rad2deg(item.alpha) << "\t"
+				<< "power: " << rf_math::watt2dBm(item.power) << "\t"
+				<< "alpha: " << rf_math::rad2deg(item.alpha) << "\t"
 				<< "placement: " << item.pos.x << ","
 				<< item.pos.y << "\t"
 				<< "cow_id: " << item.cow_id << "\t"
 				<< "sta_id: " << item.sta_id << "\t"
-				<< "sinr: " << lin2dB(item.sinr);
+				<< "sinr: " << rf_math::lin2dB(item.sinr);
 
 			return out;
 		}

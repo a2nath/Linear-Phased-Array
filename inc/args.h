@@ -6,9 +6,13 @@
 #include <iostream>
 #include <fstream>
 #include <optional>
-#include "common.h"
-#include "network.h"
 #include <json/json.h>
+#include "common.h"
+#ifdef __CUDACC__
+#include "network.cuh"
+#else
+#include "network.h"
+#endif
 
 #define RAPIDJSON_HAS_STDSTRING 1
 #include "rapidjson/document.h"
@@ -38,7 +42,7 @@ namespace default_t
 	const double bs_direction_theta_c_deg       = 90.0;
 
 	/* Input in hertz, default is half-wavelength */
-	const double antenna_spacing(const double& frequency)
+	double antenna_spacing(const double& frequency)
 	{
 		return C_SPEED * (1.0 / frequency) * (1.0/ 2.0);
 	}
@@ -162,7 +166,7 @@ struct Power_Values : MultiData_Setup<double>
 				}
 			}
 
-			row = dBm2watt(row);
+			row = rf_math::dBm2watt(row);
 		}
 		return true;
 	}
@@ -187,7 +191,7 @@ struct Scan_Values : MultiData_Setup<double>
 					return false;
 				}
 			}
-			row = deg2rad(row);
+			row = rf_math::deg2rad(row);
 		}
 		return true;
 	}
@@ -214,7 +218,7 @@ struct Binding_Values : MultiData_Setup<unsigned>
 			{
 				for (unsigned base_station_idx = 0; base_station_idx < num_base_stations; ++base_station_idx)
 				{
-					auto ms_idx = ms_list[base_station_idx];
+					unsigned& ms_idx = ms_list[base_station_idx];
 
 					if (!(0 <= ms_idx && ms_idx <= num_clients))
 					{
@@ -262,8 +266,6 @@ struct Location_Setup
 	Location_Setup() = default;
 	Location_Setup(const std::string& location_data)
 	{
-		size_t start_idx = 0;
-		size_t index = 0;
 
 		std::istringstream ss(location_data);
 		std::string temp;
@@ -271,14 +273,14 @@ struct Location_Setup
 		/* argument <location_data> will be "x1,y1 x2,y2 x3,y3" */
 		while (std::getline(ss, temp, ' '))
 		{
-			auto idx = temp.find(',');
+			size_t idx = temp.find(',');
 
 			try
 			{
-				unsigned x = atol(temp.substr(0, idx).c_str());
-				unsigned y = atol(temp.substr(idx + 1).c_str());
+				long x = atol(temp.substr(0, idx).c_str());
+				long y = atol(temp.substr(idx + 1).c_str());
 
-				if (!(x >= 0 && y >= 0))
+				if (!(x >= 0L && y >= 0L))
 					throw std::invalid_argument("argument is negative: " + location_data);
 
 				data.emplace_back(x, y);
@@ -389,12 +391,14 @@ struct MyArgs : public argparse::Args
 		{
 			assert(bs_tx_power_dBm.value().data.size() == timeslots);
 			assert(bs_tx_power_dBm.value().data[0].size() == base_station_count);
-			assert(bs_tx_power_dBm.value().is_valid_and_convert(power_range_dBm) == true); // gets converted into watts after this
+			[[maybe_unused]] const bool valid_power =
+				bs_tx_power_dBm.value().is_valid_and_convert(power_range_dBm); // gets converted into watts after this
+			assert(valid_power);
 		}
 		else
 		{
 			bs_tx_power_dBm.value().data = std::vector<std::vector<double>>(timeslots,
-												std::vector<double>(base_station_count, dBm2watt(default_t::tx_power)));
+												std::vector<double>(base_station_count, rf_math::dBm2watt(default_t::tx_power)));
 		}
 
 		/* assign default values and ensure values are within range */
@@ -402,18 +406,23 @@ struct MyArgs : public argparse::Args
 		{
 			assert(bs_scan_alpha_deg.value().data.size() == timeslots);
 			assert(bs_scan_alpha_deg.value().data[0].size() == base_station_count);
-			assert(bs_scan_alpha_deg.value().is_valid_and_convert(scan_angle_range) == true); // gets converted into rads after this
+			[[maybe_unused]] const bool valid_scan =
+				bs_scan_alpha_deg.value().is_valid_and_convert(scan_angle_range); // gets converted into rads after this
+			assert(valid_scan);
 		}
 		else
 		{
 			bs_scan_alpha_deg.value().data = std::vector<std::vector<double>>(timeslots,
-												std::vector<double>(base_station_count, deg2rad(default_t::scan_angle)));
+												std::vector<double>(base_station_count, rf_math::deg2rad(default_t::scan_angle)));
 		}
 
 		//assert(ms_id_selections.data.size() * ms_id_selections.data[0].size() == mobile_station_count);
 		assert(ms_id_selections.data.size() == timeslots);
 		assert(ms_id_selections.data[0].size() == base_station_count);
-		assert(ms_id_selections.is_valid_and_convert(Pair<unsigned, unsigned>{base_station_count, mobile_station_count}) == true); // gets converted into rads after this
+		[[maybe_unused]] const bool valid_bindings =
+			ms_id_selections.is_valid_and_convert(
+				Pair<unsigned, unsigned>{base_station_count, mobile_station_count}); // gets converted into rads after this
+		assert(valid_bindings);
 
 		std::cout << "args built" << std::endl;
 	}
