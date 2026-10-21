@@ -1,5 +1,3 @@
-#pragma once
-
 #include "visuals.h"
 #include "network.h"
 
