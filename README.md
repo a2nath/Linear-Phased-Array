@@ -26,6 +26,7 @@
     - [CudaSolution Windows Release](#cudasolution-windows-release)
     - [CudaSolution Windows Debug](#cudasolution-windows-debug)
     - [GPU architecture selection and verification](#gpu-architecture-selection-and-verification)
+- [Automated builds and JSON tests](#automated-builds-and-json-tests)
 
 
 ## 👥 Introduction
@@ -456,5 +457,23 @@ For VS 2019, use its Developer PowerShell, replace the generator with `"Visual S
 #### GPU architecture selection and verification
 
 By default, the CUDA target includes native GPU code and PTX for architectures `61;75;86;89;120`, covering Pascal through current GeForce RTX generations. To reduce compile time for a build used only on an RTX 5070 Ti, add `-DCMAKE_CUDA_ARCHITECTURES=120` to the configure command. Such a build will not support GTX 1080.
+
+## Automated builds and JSON tests
+
+[The GitHub Actions workflow](.github/workflows/build.yml) builds `PhaseArray` and `CudaSolution` on Ubuntu 22.04, Ubuntu 24.04, and Windows Server 2025, in both Release and Debug. CUDA jobs install toolkit 12.9.1. It runs on pushes and pull requests and can also be started from **Actions → Build and JSON tests → Run workflow**. CMake is pinned to 3.31.4; SFML remains at 2.6.2.
+
+After each successful `PhaseArray` build, [the test runner](tests/run_json_tests.py) discovers every `tests/**/*.json` scenario and runs the actual executable with `--plot`. Ubuntu uses Xvfb and software OpenGL for plot generation without a desktop. `CudaSolution` is compiled and linked without executing GPU tests.
+
+Each case has a five-minute timeout. A crash, timeout, or invalid scenario is recorded and the remaining cases still run. Scenario failures are non-blocking in CI (`--allow-failures`); configuration and compilation failures still fail the job. A passed case means the program exited with code zero, without comparing numerical results against a reference.
+
+The run summary lists the case outcomes. Download the `PhaseArray-<OS>-<configuration>` artifact for the input JSON, command, stdout/stderr logs, per-case results, any generated plots, and the CMake configure log. GitHub does not provide a CD/CI runner with NVIDIA GPU hardware, therefore `CudaSolution-<OS>-<configuration>` artifacts contain only CUDA build's CMake configure log.
+
+To run the same suite locally after compiling, for example on Linux:
+
+```bash
+python3 tests/run_json_tests.py --executable build-cpu-release/bin/PhaseArray --output-dir build/test-results
+```
+
+On a Linux machine without a display, prefix that command with `xvfb-run -a`. On Windows, use `python` and an executable path such as `build-cpu-windows/bin/Debug/PhaseArray.exe`. Omit `--allow-failures` to get a nonzero exit status when any case fails.
 
 Any issues, please open a new issue
