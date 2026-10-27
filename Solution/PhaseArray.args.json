@@ -3,6 +3,20 @@
   "Id": "f0fcce7e-702b-45d6-8568-170910d82f78",
   "Items": [
     {
+      "Id": "26b2f1f8-f6bc-4823-a1c1-d3f84c44ad7d",
+      "Command": "",
+      "Items": [
+        {
+          "Id": "2f55e1e7-4bc4-485a-b633-c8291ed564fa",
+          "Command": "-o tests/"
+        },
+        {
+          "Id": "cd1c4ce3-ade4-40cb-ad50-92d2f069d058",
+          "Command": "-f tests/init_test.json"
+        }
+      ]
+    },
+    {
       "Id": "61d24dbe-6be7-4837-81b7-973cc2fea910",
       "Command": "",
       "Items": [
