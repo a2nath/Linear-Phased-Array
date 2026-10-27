@@ -41,7 +41,7 @@ int main(int argc, char** argv, char** envp)
     cout << "arguments as follows:\n" << "-----------------------" << endl;
     args.print();
 
-    Logger logger(args.get_input_filename(), args.output_dir);
+    Logger logger(args.get_json_filename(), args.output_dir);
     Simulator sim(args, logger);
 
     /* run the simulation and get the SNR table */
@@ -50,10 +50,11 @@ int main(int argc, char** argv, char** envp)
     sim.run();
     sim.print();
 
-    if (!args.plot)
+    if (args.gui)
         sim.gui_run();
 
-    sim.gui_print();
+    if (args.plot)
+        sim.gui_print();
 
     close(logger);
     return 0;

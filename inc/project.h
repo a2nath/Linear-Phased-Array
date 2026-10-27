@@ -379,7 +379,7 @@ struct GraphicsHelper
 
 		for (auto& state : curr_states)
 		{
-			graphics::save(griddata, ready_dbg_dBm_data, state.tx_idx);
+			graphics::save(logger, griddata, ready_dbg_dBm_data, state.tx_idx);
 		}
 
 		spdlog::info("[1/2]\tPlot Saved");
@@ -390,7 +390,7 @@ struct GraphicsHelper
 
 		for (auto& state : curr_states)
 		{
-			graphics::save(griddata, ready_snr_dB_data, state.tx_idx);
+			graphics::save(logger, griddata, ready_snr_dB_data, state.tx_idx);
 		}
 
 		spdlog::info("[2/2]\tPlot Saved");
@@ -425,6 +425,7 @@ struct GraphicsHelper
 
 struct SimulationHelper
 {
+	Logger& logger;
 	cow_v& cows;
 	const unsigned& cow_count, ms_stations;
 	const std::vector<double_v>& powers_lut;                 // TX power level from base station in integer dBm lut
@@ -476,7 +477,7 @@ struct SimulationHelper
 	{
 		while (pqueue.size())
 		{
-			std::cout << pqueue.top() << std::endl;
+			logger.teeline(pqueue.top());
 			pqueue.pop();
 		}
 	}
@@ -508,7 +509,8 @@ struct SimulationHelper
 			sinr);
 	}
 
-	SimulationHelper(cow_v& cowlist,
+	SimulationHelper(Logger& ilogger,
+		cow_v& cowlist,
 		const unsigned& timeslot_num,
 		const unsigned& timeslot_count,
 		const unsigned& mobile_stations,
@@ -516,6 +518,7 @@ struct SimulationHelper
 		const std::vector<double_v>& alpha_bindings,
 		const std::vector<std::vector<unsigned>>& station_bindings)
 		:
+		logger(ilogger),
 		cows(cowlist),
 		cow_count(cowlist.size()),
 		ms_stations(mobile_stations),
@@ -592,6 +595,7 @@ class Simulator
 
 		/* initialize the simulation helper */
 		simhelper = new SimulationHelper(
+			logger,
 			cows,
 			timeslot,
 			timeslot_count,
@@ -749,11 +753,12 @@ public:
 	{
 		setup(double_v(mobile_station_count, rf_math::log2lin(args.gain_gtrx)));
 
-		if (!args.nogui)
+		if (args.gui)
 		{
 			/* initialize the visual helper */
-			spdlog::info("Visualization enabled for field size "\
-				+ str(args.field_size[0]) + "x" + str(args.field_size[1]) + " meters");
+			spdlog::info("--- VISUALIZATION ENABLED ---\n");
+			spdlog::info("    [ " + str(args.field_size[0]) + " x " + str(args.field_size[1]) + " meters ]");
+			spdlog::info("-----------------------------\n");
 		}
 	}
 };

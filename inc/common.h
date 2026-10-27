@@ -17,8 +17,6 @@
 #include <thread>
 #include <future>
 #include <condition_variable>
-
-
 #include "spdlog/spdlog.h"
 
 
@@ -36,6 +34,7 @@
 #endif
 
 extern std::string sim_error;
+using path = std::filesystem::path;
 
 inline void tee_error(const char* mesg, ...)
 {
@@ -162,11 +161,15 @@ inline std::string getcwd()
 	return std::filesystem::current_path().string();
 }
 
-template<class T, class Compare = std::less<T>>
-bool is_unique(std::vector<T>& vec, Compare comp = Compare())
+
+template<class T>
+inline bool is_unique(std::vector<T>& vec)
 {
-	std::sort(vec.begin(), vec.end(), comp);
-	return std::adjacent_find(vec.begin(), vec.end()) == vec.end();
+	std::unordered_set<T> unique_vec(vec.begin(), vec.end());
+	return unique_vec.size() == unique_vec.size();
+	// don't sort it, it changes the binding with the base station (mapping between client:cow)
+	//std::sort(vec.begin(), vec.end(), comp);
+	//return std::adjacent_find(vec.begin(), vec.end()) == vec.end();
 }
 
 namespace common
@@ -216,9 +219,11 @@ struct revmap_t
 
 class Logger
 {
-	using path = std::filesystem::path;
 	std::ofstream stream;
 public:
+	const std::string ts;
+	path results_dir;
+
 	template<class T>
 	inline void write(const T& contents)
 	{
@@ -229,13 +234,27 @@ public:
 	}
 
 	template<class T>
-	void writeline(const T& contents)
+	inline void writeline(const T& contents)
 	{
 		if (stream.is_open())
 		{
 			write(contents);
 			stream << std::endl;
 		}
+	}
+
+	template<class T>
+	inline void tee(const T& contents)
+	{
+		std::cout << contents;
+		stream << contents;
+	}
+
+	template<class T>
+	inline void teeline(const T& contents)
+	{
+		std::cout << contents << std::endl;
+		writeline(contents);
 	}
 
 	void close()
@@ -253,14 +272,21 @@ public:
 
 	}
 
-	Logger(path inputfile, path output_dirname, path output_filename = "")
+	/* Create the output dir for all the results from the simulation including stderr */
+	Logger(path json_input_file, path output_dirname, path output_filename = "")
+		:
+		ts(timestamp()),
+		results_dir(path(output_dirname / std::string("outputs_" + ts)))
 	{
-		if (std::filesystem::is_regular_file(inputfile))
+		/* create the output dir */
+		std::filesystem::create_directory(results_dir);
+
+		if (std::filesystem::is_regular_file(json_input_file))
 		{
-			copy_settings(inputfile, output_dirname);
+			copy_settings(json_input_file, results_dir);
 			if (output_filename.string().empty())
 			{
-				output_filename = inputfile.stem().string() + "." + timestamp() + ".out";
+				output_filename = json_input_file.stem().string() + "." + ts + ".output.txt";
 			}
 		}
 		else
@@ -268,12 +294,13 @@ public:
 			std::cout << "No reference input file found that could be associated to the sim outputs" << std::endl;
 			if (output_filename.string().empty())
 			{
-				output_filename = "output." + timestamp() + ".out";
+				output_filename = "output." + ts + ".output.txt";
 			}
 		}
 
 		/* open the output file stream during sim */
-		stream.open(path(output_dirname / output_filename).string());
+		path logger_filepath(results_dir / output_filename);
+		stream.open(logger_filepath.string());
 	}
 };
 

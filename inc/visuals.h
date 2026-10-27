@@ -624,7 +624,7 @@ namespace graphics
         curr_pos += delta;
     }
 
-    inline void save(HeatGrid& griddata, std::vector<double_v>& signal_data, int tx_idx, sf::RenderWindow* window = nullptr)
+    inline void save(Logger& logger, HeatGrid& griddata, std::vector<double_v>& signal_data, int tx_idx, sf::RenderWindow* window = nullptr)
     {
         int pixel_width = 1;
         int pixel_height = 1;
@@ -642,8 +642,6 @@ namespace graphics
             size.y = max(window_size.y * pixel_height, size.y);
         }
 
-        std::string name = griddata.debug_mode ? "transmitter_dbg_ " : "transmitter_int_";
-
         if (renderTexture.create(size.x, size.y))
         {
             renderTexture.clear();
@@ -660,10 +658,13 @@ namespace graphics
 #endif
             renderTexture.display();
 
-
             sf::Texture texture = renderTexture.getTexture();
             sf::Image image = texture.copyToImage();
-            if (!image.saveToFile(name + str(tx_idx) + "." + timestamp() + ".png"))
+            std::string filename = (griddata.debug_mode ? "transmitter_dbg_ " : "transmitter_int_")
+                + str(tx_idx) + "." + logger.ts + ".png";
+            path filepath(logger.results_dir / filename);
+
+            if (!image.saveToFile(filepath.string()))
             {
                 spdlog::error("Failed to save image!");
             }

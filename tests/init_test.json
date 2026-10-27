@@ -9,6 +9,7 @@
   "mobile_stations": 15,
   "base_stations": 3,
   "sinr_limit_dB": 24,
+  "timeslots": 5,
   "base_station_theta_c": [ 75, 90, 105 ],
   "base_station_location": [
     [ 250, 200 ],
