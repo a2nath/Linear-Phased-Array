@@ -166,7 +166,7 @@ template<class T>
 inline bool is_unique(std::vector<T>& vec)
 {
 	std::unordered_set<T> unique_vec(vec.begin(), vec.end());
-	return unique_vec.size() == unique_vec.size();
+	return unique_vec.size() == vec.size();
 	// don't sort it, it changes the binding with the base station (mapping between client:cow)
 	//std::sort(vec.begin(), vec.end(), comp);
 	//return std::adjacent_find(vec.begin(), vec.end()) == vec.end();

@@ -164,8 +164,8 @@ static void set_polar_data(const Settings& current, const Dimensions<unsigned>& 
 		{
 			for (long long col = 0; col < x; ++col)
 			{
-				long long diffx = col - (long long)current.location.x; // diff with respect to pixel (think of col, row has location of rx)
-				long long diffy = row - (long long)current.location.y;
+				long long diffx = col - static_cast<long long>(current.location.x); // diff with respect to pixel (think of col, row has location of rx)
+				long long diffy = row - static_cast<long long>(current.location.y);
 				calc.polar_data[idx++] = cart2pol(diffx, diffy);
 			}
 		}
@@ -180,8 +180,9 @@ static void set_polar_data(const Settings& current, const std::vector<Placements
 
 	for (auto& mstation : ms_station_locations)
 	{
-		long long diffx = mstation.x - current.location.x; // diff with respect to rx
-		long long diffy = mstation.y - current.location.y;
+		// diff with respect to rx
+		long long diffx = static_cast<long long>(mstation.x) - static_cast<long long>(current.location.x);
+		long long diffy = static_cast<long long>(mstation.y) - static_cast<long long>(current.location.y);
 		calc.polar_data[idx++] = cart2pol(diffx, diffy);
 	}
 }
