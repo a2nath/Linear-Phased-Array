@@ -1,11 +1,20 @@
-param([ValidateSet('Configure', 'Release', 'Debug', 'Help', 'HelpDebug', 'HelpRelease', 'SmokeDebug', 'SmokeRelease', 'ArchitecturesDebug', 'ArchitecturesRelease', 'ArgsDebug', 'ArgsRelease', 'CpuDebug', 'CpuRelease', 'RunCpuDebug', 'RunCpuRelease', 'RunCudaDebug', 'RunCudaRelease')][string]$Mode = 'Configure',
-    [string]$BuildDir = (Join-Path $PSScriptRoot 'verify-cuda-windows'))
+param([ValidateSet('Configure', 'Release', 'Debug', 'Help', 'HelpDebug', 'HelpRelease', 'SmokeDebug', 'SmokeRelease', 'ArchitecturesDebug', 'ArchitecturesRelease', 'ArgsDebug', 'ArgsRelease', 'CpuDebug', 'CpuRelease', 'RunCpuDebug', 'RunCpuRelease', 'RunCudaDebug', 'RunCudaRelease')]
+    [string]$Mode = 'CpuDebug',
+    [string]$BuildDir = '')
 
-$root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$cmake = 'C:\Program Files\CMake\bin\cmake.exe'
+$root = $PSScriptRoot
+if ([string]::IsNullOrWhiteSpace($BuildDir)) {
+    $directoryName = if ($Mode -like '*Cpu*') { 'build-cpu-windows' } else { 'build-cuda-windows' }
+    $BuildDir = Join-Path $root 'build' $directoryName
+}
+$cmakeCommand = Get-Command cmake -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+$cmake = if ($cmakeCommand) { $cmakeCommand.Source } else { 'C:\Program Files\CMake\bin\cmake.exe' }
+if (-not (Test-Path -LiteralPath $cmake -PathType Leaf)) {
+    throw 'CMake was not found. Install CMake or the Visual Studio CMake tools and add cmake to PATH.'
+}
 $toolkit = Join-Path $PSScriptRoot 'cuda-toolkit-12.9-windows'
 $build = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($BuildDir)
-$log = Join-Path $PSScriptRoot "verify-cuda-windows-$Mode.log"
+$log = Join-Path $BuildDir "last_run.log"
 
 if ($Mode -eq 'Configure') {
     & $cmake --version
@@ -26,8 +35,13 @@ if ($Mode -eq 'Configure') {
     $result = $LASTEXITCODE
 } elseif ($Mode -like 'Cpu*') {
     $configuration = $Mode.Substring(3)
+    # Configure every CPU build so a fresh clone needs only this script.
+    & $cmake -S $root -B $build -G 'Visual Studio 17 2022' -A x64 `
+        '-DPHASEARRAY_BUILD_CUDA=OFF' '-DBUILD_SHARED_LIBS=OFF' 2>&1 |
+        ForEach-Object { $_ | Out-Host; $_ } | Out-File -Encoding utf8 $log
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & $cmake --build $build --target PhaseArray --config $configuration --parallel 8 2>&1 |
-        Out-File -Encoding utf8 $log
+        ForEach-Object { $_ | Out-Host; $_ } | Out-File -Append -Encoding utf8 $log
     $result = $LASTEXITCODE
 } elseif ($Mode -like 'Run*') {
     $cpu = $Mode -like 'RunCpu*'

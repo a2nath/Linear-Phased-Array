@@ -1,4 +1,5 @@
 {
+  "plot": true,
   "frequency": 2500000000.0,
   "bandwidth": 20000000.0,
   "symbolrate": 3840000.0,
