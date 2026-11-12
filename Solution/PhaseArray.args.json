@@ -21,6 +21,14 @@
       "Command": "",
       "Items": [
         {
+          "Id": "26b7cbe8-9ba1-4b05-969c-8642604a481f",
+          "Command": "--base_station_location_range_meters \"0,0 200,1000\""
+        },
+        {
+          "Id": "b3b40eb2-3a99-460a-bc19-64ae1000acbf",
+          "Command": "--mobile_station_location_range_meters \"200,0 1000,1000\""
+        },
+        {
           "Id": "e6912eaf-7783-49df-84f2-936d0ef73682",
           "Command": "--timeslot 3"
         },
@@ -70,7 +78,7 @@
         },
         {
           "Id": "984a448b-c20c-49ac-abfb-35ad2af44ac6",
-          "Command": "--base_station_location \"250,200 500,180 750,200\""
+          "Command": "--base_station_location \"250,199 500,180 750,199\""
         },
         {
           "Id": "e8709b9e-6e99-4cb4-a206-c48d4a26e6c8",

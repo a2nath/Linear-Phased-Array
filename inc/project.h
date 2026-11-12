@@ -731,25 +731,25 @@ public:
 		bandwidth(args.bandwidth),
 		symrate(args.symrate),
 		blockspersym(args.blockspersym),
-		antenna_height(args.antenna_height),
+		antenna_height(args.bs_antenna_height),
 		mobile_station_count(args.mobile_station_count),
 		base_station_count(args.base_station_count),
 		timeslot_count(args.timeslots),
-		sinr_limit_linear(rf_math::log2lin(args.sinr_limit_dB)),
+		sinr_limit_linear(rf_math::log2lin(args.ms_sinr_limit_dB)),
 		bs_theta_c(rf_math::deg2rad(args.bs_theta_c)),
 		base_stations_loc(args.tx_loc.data),
 		mobile_stations_loc(args.rx_loc.data),
 		bs_antenna_counts(args.bs_antenna_count),
-		power_range_dBm(args.power_range_dBm),
-		scan_angle_range(args.scan_angle_range),
-		antenna_spacing(args.antenna_spacing),
-		antenna_dims(args.antenna_dims),
+		power_range_dBm(args.bs_power_range_dBm),
+		scan_angle_range(args.bs_scan_angle_range_deg),
+		antenna_spacing(args.bs_antenna_spacing_m),
+		antenna_dims(args.bs_antenna_dims),
 		system_noise_factor_w(rf_math::dBm2watt(rf_math::getThermalSystemNoise(args.bandwidth, args.system_noise))),
 		visuals(ilogger, args.base_station_count, args.mobile_station_count,
 			args.field_size[0], args.field_size[1], system_noise_factor_w),
 		bs_tx_requested_power_watts(args.tx_powerlist().data),
 		bs_requested_scan_alpha_rad(args.tx_alphalist().data),
-		ms2bs_requested_bindings(args.ms_id_selections.binding_data)
+		ms2bs_requested_bindings(args.ms_id_selections.data)
 	{
 		setup(double_v(mobile_station_count, rf_math::log2lin(args.gain_gtrx)));
 
