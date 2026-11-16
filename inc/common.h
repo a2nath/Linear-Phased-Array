@@ -304,6 +304,7 @@ public:
 	}
 };
 
+
 template<class Type>
 struct Dimensions
 {

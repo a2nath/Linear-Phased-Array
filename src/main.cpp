@@ -21,7 +21,6 @@ std::mutex graphics::render_mutex;
 std::condition_variable graphics::consig;
 Dimensions<unsigned> graphics::render_space;
 
-
 void close(Logger& logger)
 {
     logger.close();

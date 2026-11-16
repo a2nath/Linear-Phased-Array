@@ -101,7 +101,6 @@ struct GraphicsHelper
 		spdlog::info("Create interference data");
 
 		size_t pxl_idx = 0;
-		double num = 0;
 
 		for (unsigned row = 0; row < known_height; ++row)
 		{
@@ -114,10 +113,10 @@ struct GraphicsHelper
 					const double& signal = raw_dbg_lin_data[cow_idx][pxl_idx];
 					double interference = 0;
 
-					for (unsigned c = (cow_idx + 1) % txlist.size(); c != cow_idx;)
+					for (unsigned c = (cow_idx + 1U) % txlist.size(); c != cow_idx;)
 					{
 						interference += raw_dbg_lin_data[c][pxl_idx];
-						c = (c + 1) % txlist.size();
+						c = (c + 1U) % txlist.size();
 					}
 
 					ready_snr_dB_data[cow_idx][pxl_idx] = rf_math::lin2dB(signal / (interference + noise_factor));
@@ -224,18 +223,6 @@ struct GraphicsHelper
 	void debug_mode_max_signal_map(cow_v& txlist,
 		const placement_v& mobile_stations_loc)
 	{
-		//if (raw_dbg_lin_data[0].empty())
-		//{
-		//	spdlog::critical("Visualization not enabled, exiting render() function");
-		//	return;
-		//}
-		//
-		//
-		//rqst_secondary_mem();
-		//
-		//setup_tx(txlist, bs_txpower, scan_alpha_list, rows, cols);
-
-
 		size_t index = 0;
 
 		for (size_t row = 0; row < known_height; ++row)
@@ -261,19 +248,15 @@ struct GraphicsHelper
 			}
 		}
 
-		size_t px_index = 0;
-		size_t rx_index = 0;
-		double num = 0;
-
-
-		auto& indices_ms = rx_ids_p_idx;
-
 		std::unordered_map<size_t, std::unordered_set<size_t>> rx_coords_hash_lut;
 
 		for (auto& loc : mobile_stations_loc)
 		{
 			rx_coords_hash_lut[loc.x].emplace(loc.y);
 		}
+
+		size_t px_index = 0;
+		size_t rx_index = 0;
 
 		for (size_t row = 0; row < known_height; ++row)
 		{
@@ -290,13 +273,13 @@ struct GraphicsHelper
 					c = (c + 1) % txlist.size();
 				}
 
-				num = rf_math::lin2dB(signal / (interference + noise_factor));
-				ready_snr_dB_data[cow_idx][px_index] = num;
+				double num_dB = rf_math::lin2dB(signal / (interference + noise_factor));
+				ready_snr_dB_data[cow_idx][px_index] = num_dB;
 
 				// it is not one of the RX station coordinates
 				if (!(rx_coords_hash_lut.find(row) == rx_coords_hash_lut.end() || rx_coords_hash_lut[row].find(col) == rx_coords_hash_lut[row].end()))
 				{
-					indices_ms[rx_index++] = px_index;
+					rx_ids_p_idx[rx_index++] = px_index;
 				}
 
 				++px_index;
