@@ -30,7 +30,7 @@
         },
         {
           "Id": "e6912eaf-7783-49df-84f2-936d0ef73682",
-          "Command": "--timeslot 3"
+          "Command": "--timeslot 0"
         },
         {
           "Id": "42c5ca4e-4afa-4676-9c32-d321a39406b9",
@@ -62,7 +62,7 @@
         },
         {
           "Id": "1c2699bd-2b61-407a-85d2-ae7a39f888ff",
-          "Command": "--mobile_stations 15"
+          "Command": "--mobile_stations 3"
         },
         {
           "Id": "0a7bf718-52f4-405c-b999-b95635db6067",
@@ -82,7 +82,7 @@
         },
         {
           "Id": "e8709b9e-6e99-4cb4-a206-c48d4a26e6c8",
-          "Command": "--mobile_station_location \"250,500 350,500 450,500 550,500 650,500 750,500 250,600 350,600 450,600 550,600 650,600 750,600 450,325 500,325 550,325\""
+          "Command": "--mobile_station_location \"650,500 350,600 650,600\""
         },
         {
           "Id": "379de62d-8e40-4dd4-96e2-231cfbd08cb7",
@@ -114,7 +114,7 @@
         },
         {
           "Id": "d0bc3350-7d6c-4489-be29-bdd006175595",
-          "Command": "--ms_selection 7,4,10"
+          "Command": "--ms_selection 1,2,3"
         },
         {
           "Id": "d3c41cb8-3eb4-49b5-aff5-27449d6e5320",

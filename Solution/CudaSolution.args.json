@@ -3,96 +3,124 @@
   "Id": "919ac3a4-57a9-4f26-b09b-3ce52b75ca2d",
   "Items": [
     {
-      "Id": "52adbacc-3350-4b4c-93ef-e97a0fadc8f2",
-      "Command": "--timeslot 3"
+      "Id": "fa4d2689-dcfc-4a9e-82f4-d1dd0883c42f",
+      "Command": "",
+      "Items": [
+        {
+          "Id": "2b0a8305-fcac-480e-a9ec-443307da9d4c",
+          "Command": "-o tests/"
+        },
+        {
+          "Id": "52be1216-6b2d-4017-b224-ac014aae6554",
+          "Command": "-f tests/init_test.json"
+        }
+      ]
     },
     {
-      "Id": "a3a34857-daf1-424f-b0ff-fe691b7c4a19",
-      "Command": "--frequency 1900000000.0"
-    },
-    {
-      "Id": "4b72ba4c-2333-42b2-8aa0-a5561861fe0a",
-      "Command": "--bandwidth 20000000.0"
-    },
-    {
-      "Id": "39ee8c84-8189-4ae6-9576-20e48055d9d8",
-      "Command": "--symbolrate 3840000.0"
-    },
-    {
-      "Id": "b7fa4d3e-8a43-4c30-9a4e-a754cd12ea21",
-      "Command": "--blockpersymbol 768"
-    },
-    {
-      "Id": "342c71be-b2d1-4dc1-8811-fe0188ae4749",
-      "Command": "--height 200"
-    },
-    {
-      "Id": "27d882e9-ed77-4dc1-b808-8ea429f2faa3",
-      "Command": "--ms_grx -2"
-    },
-    {
-      "Id": "e9a64845-e1e7-446d-b7e8-2add0c064116",
-      "Command": "--system_noise 5"
-    },
-    {
-      "Id": "1baf97b7-7eeb-4bde-9e92-5891cbe3bb95",
-      "Command": "--mobile_stations 15"
-    },
-    {
-      "Id": "ec674749-a6e6-491b-9c6f-2358727408d7",
-      "Command": "--base_stations 3"
-    },
-    {
-      "Id": "e1ab5b4b-058c-4bbb-94e7-4c721680b15c",
-      "Command": "--slimit 24.0"
-    },
-    {
-      "Id": "1d42e494-76f8-49e7-a893-c18d593a97cd",
-      "Command": "--base_station_theta_c 75.0,90.0,105.0"
-    },
-    {
-      "Id": "6ce534bb-dd7d-4074-a1c4-705be4a77f57",
-      "Command": "--base_station_location \"250,200 500,180 750,200\""
-    },
-    {
-      "Id": "6ac0f612-b27a-45c9-87dc-f4b7bfca3403",
-      "Command": "--mobile_station_location \"250,500 350,500 450,500 550,500 650,500 750,500 250,600 350,600 450,600 550,600 650,600 750,600 450,325 500,325 550,325\""
-    },
-    {
-      "Id": "6e7a443b-bcc0-4880-8a72-540f3aa6ca7d",
-      "Command": "--base_station_antenna_counts 5,3,5"
-    },
-    {
-      "Id": "4ab5d336-001b-472c-b570-af90e09b1a2d",
-      "Command": "--base_station_power_range_dBm -30,30"
-    },
-    {
-      "Id": "05b23fb5-887e-498a-a44a-26b6437eba3a",
-      "Command": "--base_station_scan_angle_range_deg -90,90"
-    },
-    {
-      "Id": "364d16a6-5bd1-4057-9028-4c117fc4cdd7",
-      "Command": "--antenna_spacing 0.3,0.4,0.3"
-    },
-    {
-      "Id": "e30f7a94-df3f-44f6-93aa-0cbdecabf00d",
-      "Command": "--antenna_dims 0.2,0.4"
-    },
-    {
-      "Id": "84d9453d-56ae-40d1-9d8f-8ff10832f99f",
-      "Command": "--antenna_txpower 30.0,29.0,28.0"
-    },
-    {
-      "Id": "7f8b4171-66c7-4eaa-8b95-70327e2fbf73",
-      "Command": "--scan_angle 40.0,65.0,-40.0"
-    },
-    {
-      "Id": "e7199621-c023-4b0c-89b7-d4f91294f443",
-      "Command": "--ms_selection 7,4,10"
-    },
-    {
-      "Id": "21fc1cc7-7b98-4f17-8b6d-c66cd111e215",
-      "Command": "--plot"
+      "Id": "3867301e-0c02-428b-9560-9ff49e92bb8f",
+      "Command": "",
+      "Items": [
+        {
+          "Id": "3669d844-57b5-4a1d-ad7c-6a5a9c4a05a4",
+          "Command": "--base_station_location_range_meters \"0,0 200,1000\""
+        },
+        {
+          "Id": "8079d4b6-1cd7-4fec-8fbb-508c708b9ca6",
+          "Command": "--mobile_station_location_range_meters \"200,0 1000,1000\""
+        },
+        {
+          "Id": "6235c133-d733-49f3-87e9-e0b4aea95284",
+          "Command": "--timeslot 0"
+        },
+        {
+          "Id": "fd445516-245d-49c0-842d-edd53072cf57",
+          "Command": "--frequency 1900000000.0"
+        },
+        {
+          "Id": "733be8f2-9729-46fa-9145-0fcb2c1ec348",
+          "Command": "--bandwidth 20000000.0"
+        },
+        {
+          "Id": "34c05735-2f9c-4235-bd60-74eac0f742cc",
+          "Command": "--symbolrate 3840000.0"
+        },
+        {
+          "Id": "2f546645-4303-4427-b830-ab034584305f",
+          "Command": "--blockpersymbol 768"
+        },
+        {
+          "Id": "bff19f1a-57fe-4259-8b5c-769688a77ec3",
+          "Command": "--height 200"
+        },
+        {
+          "Id": "001bb4e2-b6a2-4906-ba5c-a29d2e45a8a6",
+          "Command": "--ms_grx -2"
+        },
+        {
+          "Id": "6200c947-8c2e-4177-9cc4-162941b5d3be",
+          "Command": "--system_noise 5"
+        },
+        {
+          "Id": "4fd32e35-a5c0-46b7-8f6a-8a9543c2ef36",
+          "Command": "--mobile_stations 3"
+        },
+        {
+          "Id": "9f01dae7-0e8d-401f-a956-08f658c3b128",
+          "Command": "--base_stations 3"
+        },
+        {
+          "Id": "7b5c236d-961e-42f0-8a5d-3e87491a70fd",
+          "Command": "--slimit 24.0"
+        },
+        {
+          "Id": "3be978a9-cf62-4821-9978-d2d0bb03078a",
+          "Command": "--base_station_theta_c 75.0,90.0,105.0"
+        },
+        {
+          "Id": "4f3e0cbd-6b22-483f-99f4-480dea1b95c9",
+          "Command": "--base_station_location \"250,199 500,180 750,199\""
+        },
+        {
+          "Id": "36f3a1c3-db24-4c23-9fce-47a89100ea84",
+          "Command": "--mobile_station_location \"650,500 350,600 650,600\""
+        },
+        {
+          "Id": "0a8c7ac3-460f-4aea-b6ce-e3cdf1ad18e4",
+          "Command": "--base_station_antenna_counts 5,3,5"
+        },
+        {
+          "Id": "8509c178-f0f2-47e0-b7b3-9143ab16e9e7",
+          "Command": "--base_station_power_range_dBm -30,30"
+        },
+        {
+          "Id": "06936883-b75f-44d6-8ebc-b095dcfc07c4",
+          "Command": "--base_station_scan_angle_range_deg -90,90"
+        },
+        {
+          "Id": "05ed62b2-3800-4192-bb2e-2405818fac3d",
+          "Command": "--antenna_spacing 0.3,0.4,0.3"
+        },
+        {
+          "Id": "3c2afb09-18df-4a5b-8142-65b55f1c391a",
+          "Command": "--antenna_dims 0.2,0.4"
+        },
+        {
+          "Id": "5796dd06-611a-4099-aca0-63756080db03",
+          "Command": "--antenna_txpower 30.0,29.0,28.0"
+        },
+        {
+          "Id": "e600a615-d5de-44b2-b68a-d2ff76910ada",
+          "Command": "--scan_angle 40.0,65.0,-40.0"
+        },
+        {
+          "Id": "822fb7ad-726c-4e7e-b1dd-7898f990b025",
+          "Command": "--ms_selection 1,2,3"
+        },
+        {
+          "Id": "81d67b12-ea3a-4164-9655-018867915981",
+          "Command": "--plot"
+        }
+      ]
     }
   ]
 }
