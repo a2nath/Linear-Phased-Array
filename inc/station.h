@@ -21,7 +21,6 @@ class Cow
 
 	/* more antenna tracking for gui reset */
 	const Placements init_location;
-	Placements prev_location, location;
 	Dimensions<unsigned> init_gui_grid_size, gui_grid_size;
 
 	const std::vector<Placements>& ms_station_loc;
@@ -43,7 +42,7 @@ public:
 			ant_reinit = true;
 		}
 
-		if (location != new_location)
+		if (current.location != new_location)
 		{
 			antenna.set_location(new_settings.location);
 			ant_reinit = true;
@@ -117,19 +116,19 @@ public:
 	}
 
 	/* return Gtx power in linear */
-	float& getxPower()
+	float& get_power()
 	{
 		return antenna.get_power();
 	}
 
 	float& alpha()
 	{
-		return antenna.getAlpha();
+		return antenna.get_alpha();
 	}
 
-	const Placements& getPosition() const
+	const Placements& get_position() const
 	{
-		return location;
+		return antenna.settings().location;
 	}
 
 	const unsigned& sid() const
@@ -150,7 +149,7 @@ public:
 
 	const std::string str() const
 	{
-		return "cow:" + std::to_string(station_id) + ", location:" + location.str() + ", antenna settings:" + antenna.settings().str();
+		return "cow:" + std::to_string(station_id) + ", location:" + get_position().str2() + ", antenna settings:" + antenna.settings().str();
 	}
 
 	/* state of the TX station */
@@ -212,8 +211,6 @@ public:
 	void undo()
 	{
 		antenna.undo();
-		std::swap(prev_location, location);
-
 		antenna.numerical_init(ms_station_loc);
 	}
 
@@ -221,9 +218,7 @@ public:
 	void init_sim()
 	{
 		antenna.reset();
-		prev_location = init_location;
-		location = init_location;
-
+		antenna.set_location(init_location); // current = prev_location
 		antenna.numerical_init(ms_station_loc);
 	}
 

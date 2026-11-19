@@ -10,10 +10,10 @@ namespace network_package
 	/* keep track of sinr and note the configurations and bindings in decreasing order of SINR */
 	struct dataitem_t
 	{
-		unsigned tslot_id;
-		double power;
-		double alpha;
-		Placements pos;
+		unsigned ts_idx;
+		double tx_power;
+		double tx_alpha;
+		Placements tx_pos, rx_pos;
 		unsigned cow_id;
 		unsigned sta_id;
 		double sinr;
@@ -30,14 +30,13 @@ namespace network_package
 				<< std::fixed
 				<< std::setprecision(2);
 			out
-				<< "timeslot: " << item.tslot_id << "\t"
-				<< "power: " << rf_math::watt2dBm(item.power) << "\t"
-				<< "alpha: " << rf_math::rad2deg(item.alpha) << "\t"
-				<< "placement: " << item.pos.x << ","
-				<< item.pos.y << "\t"
-				<< "cow_id: " << item.cow_id << "\t"
-				<< "sta_id: " << item.sta_id << "\t"
-				<< "sinr: " << rf_math::lin2dB(item.sinr);
+				<< "timeslot: " << item.ts_idx << "\t"
+				<< "TX:" << item.cow_id << "->RX:" << item.sta_id << "\t"
+				<< "power: " << rf_math::watt2dBm(item.tx_power) << "\t"
+				<< "alpha: " << rf_math::rad2deg(item.tx_alpha) << "\t"
+				<< "TX_placement: " << item.tx_pos.str2() << "\t"
+				<< "RX_placement: " << item.rx_pos.str2() << "\t"
+				<< "sinr: " << rf_math::lin2dB(item.sinr) << " dB";
 
 			return out;
 		}
@@ -51,20 +50,22 @@ namespace network_package
 		dataitem_t& operator=(dataitem_t&& other) noexcept = default;
 
 		dataitem_t(
-			const unsigned& itslot_id,
-			const double& ipower,
-			const double& ialpha,
-			const Placements& ipos,
+			const unsigned& ts_idx,
 			const unsigned& icow_id,
-			const unsigned& ista_id,
+			const double& tx_ipower,
+			const double& tx_alpha,
+			const Placements& tx_pos,
+			const unsigned& rx_id,
+			const Placements& rx_pos,
 			const double& isinr)
 			:
-			tslot_id(itslot_id),
-			power(ipower),
-			alpha(ialpha),
-			pos(ipos),
+			ts_idx(ts_idx),
+			tx_power(tx_ipower),
+			tx_alpha(tx_alpha),
+			tx_pos(tx_pos),
+			rx_pos(rx_pos),
 			cow_id(icow_id),
-			sta_id(ista_id),
+			sta_id(rx_id),
 			sinr(isinr)
 		{}
 	};
@@ -157,13 +158,14 @@ namespace network_package
 		}
 
 		/* get alpha in rads */
-		float& getAlpha()
+		float& get_alpha()
 		{
 			return current.alpha;
 		}
 
 		void set_location(const Placements& new_location)
 		{
+			prev.location = current.location;
 			current.location = new_location;
 		}
 

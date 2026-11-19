@@ -392,6 +392,8 @@ struct MyArgs : public argparse::Args
 
 	void print() const
 	{
+		spdlog::info(timestamp() + ": arguments as follows:\n" + "-----------------------");
+
 		if (i_json_file.empty())
 		{
 			argparse::Args::print();

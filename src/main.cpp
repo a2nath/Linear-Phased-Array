@@ -37,7 +37,6 @@ int main(int argc, char** argv, char** envp)
     /* setup the simulation runtime parameters */
     args.init();
 
-    cout << "arguments as follows:\n" << "-----------------------" << endl;
     args.print();
 
     Logger logger(args.get_json_filename(), args.output_dir);

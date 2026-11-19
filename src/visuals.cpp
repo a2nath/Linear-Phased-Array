@@ -6,6 +6,7 @@ using namespace rf_math;
 /*    G U I    */
 int graphics::render(
     Logger& logger,
+    const unsigned& timeslot,
     const placement_v& init_rx_locations,
     const state_v& init_states,
     state_v& curr_states,
@@ -296,11 +297,11 @@ int graphics::render(
                 {
                     if (event.key.control && event.key.shift)
                     {
-                        save(logger, griddata, *ptr_live_data, render_tx_id, &window);
+                        save(logger, griddata, *ptr_live_data, timeslot, render_tx_id, &window);
                     }
                     else if (event.key.control)
                     {
-                        save(logger, griddata, *ptr_live_data, render_tx_id);
+                        save(logger, griddata, *ptr_live_data, timeslot, render_tx_id);
                     }
                     break;
                 }

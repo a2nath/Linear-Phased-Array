@@ -24,7 +24,7 @@
 
 #define C_SPEED 3e8L /* speed of light */
 #define M_PIl   3.141592653589793238462643383279502884L /* pi */
-
+#define SUCCESS 0
 
 #ifdef _WIN32
 #define localtime(current_time, local_time) localtime_s(local_time, current_time);
@@ -331,6 +331,11 @@ struct Dimensions
 	const std::string str() const
 	{
 		return "{ x:" + std::to_string(x) + ",y:" + std::to_string(y) + " }";
+	}
+
+	const std::string str2() const
+	{
+		return "{ " + std::to_string(x) + "," + std::to_string(y) + " }";
 	}
 
 	bool operator==(const Dimensions& ref)
