@@ -10,6 +10,22 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
+# Bundle the runtime font without downloading assets during configuration/build.
+set(phasearray_runtime_dir "${CMAKE_BINARY_DIR}/bin")
+set(phasearray_font_source "${CMAKE_CURRENT_SOURCE_DIR}/font/OpenSans-Light.ttf")
+set(phasearray_font_dir "${phasearray_runtime_dir}")
+if(CMAKE_CONFIGURATION_TYPES)
+    string(APPEND phasearray_font_dir "/$<CONFIG>")
+endif()
+string(APPEND phasearray_font_dir "/font")
+add_custom_target(phasearray_font
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${phasearray_font_dir}"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${phasearray_font_source}" "${phasearray_font_dir}/"
+    DEPENDS "${phasearray_font_source}"
+    VERBATIM
+)
+
 option(PHASEARRAY_ENABLE_ASAN "Enable AddressSanitizer in Debug builds" ON)
 option(PHASEARRAY_BUILD_CUDA "Build the CudaSolution GPU executable" OFF)
 
@@ -105,7 +121,7 @@ add_executable(PhaseArray
     src/visuals.cpp
 )
 set_target_properties(PhaseArray PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    RUNTIME_OUTPUT_DIRECTORY "${phasearray_runtime_dir}"
 )
 add_library(phasearray_dependencies INTERFACE)
 target_include_directories(phasearray_dependencies INTERFACE
@@ -126,6 +142,7 @@ target_link_libraries(phasearray_dependencies INTERFACE
     Threads::Threads
 )
 target_link_libraries(PhaseArray PRIVATE phasearray_dependencies)
+add_dependencies(PhaseArray phasearray_font)
 target_compile_definitions(PhaseArray PRIVATE "$<$<CONFIG:Debug>:_DEBUG>")
 
 if(PHASEARRAY_BUILD_CUDA)
@@ -135,9 +152,10 @@ if(PHASEARRAY_BUILD_CUDA)
         CUDA_STANDARD_REQUIRED ON
         CUDA_EXTENSIONS OFF
         CUDA_RUNTIME_LIBRARY Static
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+        RUNTIME_OUTPUT_DIRECTORY "${phasearray_runtime_dir}"
     )
     target_link_libraries(CudaSolution PRIVATE phasearray_dependencies CUDA::cudart_static)
+    add_dependencies(CudaSolution phasearray_font)
     target_compile_definitions(CudaSolution PRIVATE "$<$<CONFIG:Debug>:_DEBUG>")
     target_compile_options(CudaSolution PRIVATE
         "$<$<AND:$<COMPILE_LANGUAGE:CUDA>,$<CONFIG:Debug>>:-G>"

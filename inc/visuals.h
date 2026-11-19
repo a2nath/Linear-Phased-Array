@@ -1,15 +1,10 @@
 #pragma once
 #include <iostream>
 #include <csignal>
-#include "common.h"
-#include <deque>
-#include <tuple>
-#include <future>
-//#include <limits>
-
-
 #include <SFML/Graphics.hpp>
-#include <SFML/OpenGL.hpp>
+#include "common.h"
+//#include <SFML/OpenGL.hpp>
+//#include <limits>
 
 #define CONTROLS
 
@@ -155,7 +150,8 @@ namespace graphics
             curr_pxl_range[1] = new_range.second;
         }
 
-        void draw_legend(sf::RenderTarget& window) {
+        void draw_legend(sf::RenderTarget& window)
+        {
             // Legend dimensions
             const float legendWidth = 55.f;
             const float legendHeight = 1000.f;
@@ -403,7 +399,7 @@ namespace graphics
 
             for (int i = 0; i < txstates.size(); ++i)
             {
-                auto& loc = txstates[i].location;
+                auto& loc = txstates[i].settings.location;
 
                 txdata.emplace_back(i, Placements{ loc.x + (unsigned)offset_width, unsigned(data_height + offset_height) - loc.y }, sf::Color(90, 90, 90));
 
@@ -458,7 +454,8 @@ namespace graphics
 
         inline void set_state_2_grid_loc(const State& state)
         {
-            set_tx_position(state.tx_idx, state.location.x + offset_width, data_height + offset_height - state.location.y);
+            set_tx_position(state.tx_idx, state.settings.location.x + offset_width,
+                data_height + offset_height - state.settings.location.y);
         }
 
         inline unsigned grid_2_state_y(const unsigned& id) const
@@ -499,9 +496,9 @@ namespace graphics
             data_height(irows),
             pixel_width(iwindow_size.x / icols),
             pixel_height(iwindow_size.y / irows),
-            bounds_lower({0, 0}),
+            bounds_lower({ 0, 0 }),
             bounds_upper(iwindow_size),
-            grid(sf::Quads, irows * icols * 4),
+            grid(sf::Quads, irows* icols * 4),
             rx_locations(irx_locations),
             txstates(curr_state),
             debug_mode(false)
@@ -523,7 +520,10 @@ namespace graphics
 
             if (!font.loadFromFile("font/OpenSans-Light.ttf"))
             {
-                spdlog::warn("Font file did not load for SFML library");
+                spdlog::error("Font file did not load for SFML library");
+                throw std::runtime_error(
+                    "Failed to load font/OpenSans-Light.ttf; working directory: "
+                    + std::filesystem::current_path().string());
             }
 
             resize({ data_width, data_height });
@@ -557,7 +557,10 @@ namespace graphics
 
             if (!font.loadFromFile("font/OpenSans-Light.ttf"))
             {
-                spdlog::warn("Font file did not load for SFML library");
+                spdlog::error("Font file did not load for SFML library");
+                throw std::runtime_error(
+                    "Failed to load font/OpenSans-Light.ttf; working directory: "
+                    + std::filesystem::current_path().string());
             }
         }
     };
@@ -627,7 +630,7 @@ namespace graphics
         curr_pos += delta;
     }
 
-    inline void save(HeatGrid& griddata, std::vector<double_v>& signal_data, int tx_idx, sf::RenderWindow* window = nullptr)
+    inline int save(Logger& logger, HeatGrid& griddata, std::vector<double_v>& signal_data, int timeslot, int tx_idx, sf::RenderWindow* window = nullptr)
     {
         int pixel_width = 1;
         int pixel_height = 1;
@@ -645,8 +648,6 @@ namespace graphics
             size.y = max(window_size.y * pixel_height, size.y);
         }
 
-        std::string name = griddata.debug_mode ? "transmitter_dbg_ " : "transmitter_int_";
-
         if (renderTexture.create(size.x, size.y))
         {
             renderTexture.clear();
@@ -663,24 +664,47 @@ namespace graphics
 #endif
             renderTexture.display();
 
-
             sf::Texture texture = renderTexture.getTexture();
             sf::Image image = texture.copyToImage();
-            if (!image.saveToFile(name + str(tx_idx) + "." + timestamp() + ".png"))
+            std::string subdir(griddata.debug_mode ? "_dbg_" : "_int_");
+            std::string filename = "ts_" + std::to_string(timeslot) + "_transmitter" + subdir
+                + std::to_string(tx_idx) + "." + logger.ts + ".png";
+            path filepath(logger.results_dir / subdir / filename);
+
+            std::error_code ec;
+            std::filesystem::create_directories(filepath.parent_path(), ec);
+            if (ec)
             {
-                spdlog::error("Failed to save image!");
+                spdlog::error("Failed to create directory '{}': {}",
+                    filepath.parent_path().string(), ec.message());
+                return -1;
             }
 
+            std::stringstream errBuffer;
+            std::streambuf* oldBuf = sf::err().rdbuf(errBuffer.rdbuf());
+            const bool saved = image.saveToFile(filepath.string());
+            sf::err().rdbuf(oldBuf);
+
+            if (!saved)
+            {
+                spdlog::error("Failed to save image '{}': {}",
+                    filepath.string(), errBuffer.str());
+                return -1;
+            }
         }
         else
         {
             spdlog::error("Failed to create render texture!");
+            return 1;
         }
+
+        return 0;
     }
 
     /*    G U I    */
     int render(
         Logger& logger,
+        const unsigned& timeslot,
         const placement_v& init_rx_locations,
         const state_v& init_states,
         state_v& curr_states,
@@ -691,6 +715,6 @@ namespace graphics
         const unsigned& grid_cols,
         DataSync& sync,
         bool& is_rendering);
-
-
 }
+
+

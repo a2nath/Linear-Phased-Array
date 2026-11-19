@@ -52,7 +52,7 @@ struct GraphicsHelper
 			") cols(" + str(known_width) + ")");
 			//") placement(" + str(placement) + ")");
 
-		cow.update(state.settings, state.location);
+		cow.update(state.settings, state.settings.location);
 
 		/* update cow heat data */
 		cow.heatmap(raw_dbg_lin_data[cow.sid()]);
@@ -101,7 +101,6 @@ struct GraphicsHelper
 		spdlog::info("Create interference data");
 
 		size_t pxl_idx = 0;
-		double num = 0;
 
 		for (unsigned row = 0; row < known_height; ++row)
 		{
@@ -224,18 +223,6 @@ struct GraphicsHelper
 	void debug_mode_max_signal_map(cow_v& txlist,
 		const placement_v& mobile_stations_loc)
 	{
-		//if (raw_dbg_lin_data[0].empty())
-		//{
-		//	spdlog::critical("Visualization not enabled, exiting render() function");
-		//	return;
-		//}
-		//
-		//
-		//rqst_secondary_mem();
-		//
-		//setup_tx(txlist, bs_txpower, scan_alpha_list, rows, cols);
-
-
 		size_t index = 0;
 
 		for (size_t row = 0; row < known_height; ++row)
@@ -261,19 +248,15 @@ struct GraphicsHelper
 			}
 		}
 
-		size_t px_index = 0;
-		size_t rx_index = 0;
-		double num = 0;
-
-
-		auto& indices_ms = rx_ids_p_idx;
-
 		std::unordered_map<size_t, std::unordered_set<size_t>> rx_coords_hash_lut;
 
 		for (auto& loc : mobile_stations_loc)
 		{
 			rx_coords_hash_lut[loc.x].emplace(loc.y);
 		}
+
+		size_t px_index = 0;
+		size_t rx_index = 0;
 
 		for (size_t row = 0; row < known_height; ++row)
 		{
@@ -290,13 +273,13 @@ struct GraphicsHelper
 					c = (c + 1) % txlist.size();
 				}
 
-				num = rf_math::lin2dB(signal / (interference + noise_factor));
-				ready_snr_dB_data[cow_idx][px_index] = num;
+				double num_dB = rf_math::lin2dB(signal / (interference + noise_factor));
+				ready_snr_dB_data[cow_idx][px_index] = num_dB;
 
 				// it is not one of the RX station coordinates
 				if (!(rx_coords_hash_lut.find(row) == rx_coords_hash_lut.end() || rx_coords_hash_lut[row].find(col) == rx_coords_hash_lut[row].end()))
 				{
-					indices_ms[rx_index++] = px_index;
+					rx_ids_p_idx[rx_index++] = px_index;
 				}
 
 				++px_index;
@@ -306,6 +289,7 @@ struct GraphicsHelper
 	}
 
 	void render(cow_v& txlist,
+		const unsigned timeslot,
 		graphics::DataSync& sync,
 		const placement_v& mobile_stations_loc,
 		const double_v& lut_power_list,
@@ -330,6 +314,7 @@ struct GraphicsHelper
 		spdlog::info("Beginning Visualization from Initial TX states");
 
 		graphics::render(logger,
+			timeslot,
 			mobile_stations_loc,
 			init_states,
 			curr_states,
@@ -343,6 +328,7 @@ struct GraphicsHelper
 	}
 
 	void plot(cow_v& txlist,
+		const unsigned timeslot,
 		const placement_v& mobile_stations_loc,
 		const placement_v& base_stations_loc,
 		const double_v& bs_txpower,
@@ -379,7 +365,7 @@ struct GraphicsHelper
 
 		for (auto& state : curr_states)
 		{
-			graphics::save(griddata, ready_dbg_dBm_data, state.tx_idx);
+			graphics::save(logger, griddata, ready_dbg_dBm_data, timeslot, state.tx_idx);
 		}
 
 		spdlog::info("[1/2]\tPlot Saved");
@@ -388,9 +374,14 @@ struct GraphicsHelper
 		griddata.reset_span(graphics::compute_colorspan(ready_snr_dB_data));
 		griddata.debug_mode = false;
 
+
+
 		for (auto& state : curr_states)
 		{
-			graphics::save(griddata, ready_snr_dB_data, state.tx_idx);
+			if (graphics::save(logger, griddata, ready_snr_dB_data, timeslot, state.tx_idx) != SUCCESS)
+			{
+				return;
+			}
 		}
 
 		spdlog::info("[2/2]\tPlot Saved");
@@ -425,6 +416,7 @@ struct GraphicsHelper
 
 struct SimulationHelper
 {
+	Logger& logger;
 	cow_v& cows;
 	const unsigned& cow_count, ms_stations;
 	const std::vector<double_v>& powers_lut;                 // TX power level from base station in integer dBm lut
@@ -432,30 +424,19 @@ struct SimulationHelper
 	const std::vector<std::vector<unsigned>>& binding_station_ids_lut;  // base_station to station id binding lut
 	std::priority_queue<dataitem_t, std::vector<dataitem_t>, data_comparator> pqueue;
 
-	unsigned timeslot_idx;   // timeslot in the schedule
-	unsigned timeslots;      // total timeslots
+	const unsigned& timeslot_idx;   // timeslot in the schedule
 	unsigned nodes_rem;
-
-	void inc_timeslot()
-	{
-		++timeslot_idx;
-	}
-
-	const unsigned& get_timeslots() const
-	{
-		return timeslots;
-	}
 
 	/* gets called to get BS to MS bindings for a single timeslot. Output size: #bs */
 	inline void get_bindings(std::vector<unsigned>& output) const
 	{
-		output = binding_station_ids_lut[timeslot_idx % timeslots];
+		output = binding_station_ids_lut[timeslot_idx];
 	}
 
 	/* get antenna array power level in each timeslot */
 	inline void get_lut_tx_power(double_v& output) const
 	{
-		output = powers_lut[timeslot_idx % timeslots];
+		output = powers_lut[timeslot_idx];
 	}
 
 	/* get permutations of some simulation property */
@@ -468,7 +449,7 @@ struct SimulationHelper
 	/* set antenna array directivity before starting each simulation */
 	inline void get_lut_scan_angle(double_v& output) const
 	{
-		output = alphas_lut[timeslot_idx % timeslots];
+		output = alphas_lut[timeslot_idx];
 	}
 
 	/* output into console */
@@ -476,7 +457,7 @@ struct SimulationHelper
 	{
 		while (pqueue.size())
 		{
-			std::cout << pqueue.top() << std::endl;
+			logger.teeline(pqueue.top());
 			pqueue.pop();
 		}
 	}
@@ -485,6 +466,7 @@ struct SimulationHelper
 	void setup_tx()
 	{
 		spdlog::info("Initializating " + str(cows.size()) + " transmitters for simulation");
+
 		double_v scan_angles, power_nums;
 		get_lut_scan_angle(scan_angles);
 		get_lut_tx_power(power_nums);
@@ -496,19 +478,21 @@ struct SimulationHelper
 	}
 
 	/* performance logging and analysis latter */
-	void update_results(const unsigned& bs_id, const unsigned& ms_id, const double& sinr, const Placements& mx_location)
+	void update_results(const unsigned bs_idx, const unsigned ms_idx, const Placements& rx_loc, const double& sinr)
 	{
 		pqueue.emplace(
 			timeslot_idx,
-			cows[bs_id].getxPower(),
-			cows[bs_id].alpha(),
-			mx_location,
-			cows[bs_id].sid(),
-			ms_id,
+			cows[bs_idx].sid(),
+			cows[bs_idx].get_power(),
+			cows[bs_idx].alpha(),
+			cows[bs_idx].get_position(),
+			ms_idx,
+			rx_loc,
 			sinr);
 	}
 
-	SimulationHelper(cow_v& cowlist,
+	SimulationHelper(Logger& ilogger,
+		cow_v& cowlist,
 		const unsigned& timeslot_num,
 		const unsigned& timeslot_count,
 		const unsigned& mobile_stations,
@@ -516,6 +500,7 @@ struct SimulationHelper
 		const std::vector<double_v>& alpha_bindings,
 		const std::vector<std::vector<unsigned>>& station_bindings)
 		:
+		logger(ilogger),
 		cows(cowlist),
 		cow_count(cowlist.size()),
 		ms_stations(mobile_stations),
@@ -523,7 +508,6 @@ struct SimulationHelper
 		powers_lut(power_bindings),
 		alphas_lut(alpha_bindings),
 		timeslot_idx(timeslot_num),
-		timeslots(timeslot_count),
 		nodes_rem(mobile_stations)
 	{
 	}
@@ -535,9 +519,10 @@ class Simulator
 	std::string sim_error;
 	cow_v cows;
 	sta_v stations;
+	AAntennaTable antenna_table;
 	SimulationHelper* simhelper;
 
-	const unsigned&    timeslot;
+	unsigned           curr_timeslot;
 	const double&      frequency;
 	const double       lambda;
 	const double&      bandwidth;
@@ -573,22 +558,27 @@ class Simulator
 		/* setup the system */
 		for (unsigned bs_id = 0; bs_id < base_station_count; ++bs_id)
 		{
-			cows.emplace_back(bs_id,
-				base_stations_loc[bs_id],
-				mobile_stations_loc,
-				//ms_gain_gtrx_lin,
+			antenna_table.emplace_back(
+				bs_id,
 				bs_antenna_counts[bs_id],
 				lambda,
 				antenna_spacing[bs_id],
 				bs_theta_c[bs_id],
+				base_stations_loc[bs_id],
 				antennadim(antenna_dims[0], antenna_dims[1])
-				);
+			);
+		}
+
+		for (unsigned bs_id = 0; bs_id < base_station_count; ++bs_id)
+		{
+			cows.emplace_back(bs_id, mobile_stations_loc, antenna_table);
 		}
 
 		/* initialize the simulation helper */
 		simhelper = new SimulationHelper(
+			logger,
 			cows,
-			timeslot,
+			curr_timeslot,
 			timeslot_count,
 			mobile_station_count,
 			bs_tx_requested_power_watts,
@@ -647,7 +637,7 @@ class Simulator
 					auto& rx_loc = mobile_stations_loc[rx_idx];
 
 					auto sinr = calculate(rx_station, bs_id); // reassociate with a new tx if possible
-					simhelper->update_results(bs_id, rx_idx, sinr, mobile_stations_loc[rx_idx]);
+					simhelper->update_results(bs_id, rx_idx, mobile_stations_loc[rx_idx], sinr);
 				}
 
 				permutation_state_power = simhelper->get_perm(power_list);
@@ -657,16 +647,43 @@ class Simulator
 		}
 	}
 
+	/* Set the appropriate timeslot number first
+	 (for the current timeslot) */
+	void run_a_slot()
+	{
+		/* IMPORTANT need to set this before iterating over cows again */
+		simhelper->setup_tx();
+
+		/* set the selected stations as per bindings */
+		std::vector<unsigned> select_stations;
+		simhelper->get_bindings(select_stations);
+
+		for (auto& cow : cows)
+		{
+			auto& bs_idx = cow.sid();
+			auto& bs_loc = cow.get_position();
+			auto& rx_idx = select_stations[bs_idx];
+			auto& rx_loc = mobile_stations_loc[rx_idx];
+
+			auto& rx_station = stations[rx_idx];
+			auto sinr = calculate(rx_station, bs_idx); // reassociate with a new tx if possible
+
+			simhelper->update_results(bs_idx, rx_idx, rx_loc, sinr);
+		}
+	}
+
 public:
 
 	/* run the simulation */
 	void run()
 	{
+		curr_timeslot = 0;
+
 		/* setup the cows first such that the simulation is set with alphas and TX powers */
 		for (unsigned slot = 0; slot < timeslot_count; ++slot)
 		{
-			run_single_timelot();
-			simhelper->inc_timeslot(); // increment the timeslot to get the next parameters
+			run_a_slot();
+			curr_timeslot++; // increment the timeslot to get the next parameters
 		}
 	}
 
@@ -687,7 +704,7 @@ public:
 
 		auto queue_thread = visuals.gui_change_detect(cows, sync);
 
-		visuals.render(cows, sync, mobile_stations_loc, init_ant_power, init_scan_angle);
+		visuals.render(cows, curr_timeslot, sync, mobile_stations_loc, init_ant_power, init_scan_angle);
 
 		queue_thread.join();
 #endif
@@ -698,11 +715,19 @@ public:
 	{
 #ifdef GRAPHICS
 		double_v antenna_power, scan_angles;
+		curr_timeslot = 0;
 
-		simhelper->get_lut_tx_power(antenna_power);
-		simhelper->get_lut_scan_angle(scan_angles);
+		for (unsigned slot = 0; slot < timeslot_count; ++slot)
+		{
+			spdlog::info("Saving plot for Timeslot " + std::to_string(slot));
+			simhelper->get_lut_tx_power(antenna_power);
+			simhelper->get_lut_scan_angle(scan_angles);
 
-		visuals.plot(cows, mobile_stations_loc, base_stations_loc, antenna_power, bs_theta_c, scan_angles);
+			visuals.plot(cows, curr_timeslot, mobile_stations_loc, base_stations_loc, antenna_power, bs_theta_c, scan_angles);
+
+			curr_timeslot++; // increment the timeslot to get the next parameters
+		}
+
 #endif
 	}
 
@@ -716,39 +741,40 @@ public:
 		logger(ilogger),
 		sim_error(""),
 		simhelper(nullptr),
-		timeslot(args.timeslot),
+		curr_timeslot(args.timeslot),
 		frequency(args.frequency),
 		lambda(rf_math::getLambda(frequency)),
 		bandwidth(args.bandwidth),
 		symrate(args.symrate),
 		blockspersym(args.blockspersym),
-		antenna_height(args.antenna_height),
+		antenna_height(args.bs_antenna_height),
 		mobile_station_count(args.mobile_station_count),
 		base_station_count(args.base_station_count),
 		timeslot_count(args.timeslots),
-		sinr_limit_linear(rf_math::log2lin(args.sinr_limit_dB)),
+		sinr_limit_linear(rf_math::log2lin(args.ms_sinr_limit_dB)),
 		bs_theta_c(rf_math::deg2rad(args.bs_theta_c)),
 		base_stations_loc(args.tx_loc.data),
 		mobile_stations_loc(args.rx_loc.data),
 		bs_antenna_counts(args.bs_antenna_count),
-		power_range_dBm(args.power_range_dBm),
-		scan_angle_range(args.scan_angle_range),
-		antenna_spacing(args.antenna_spacing),
-		antenna_dims(args.antenna_dims),
+		power_range_dBm(args.bs_power_range_dBm),
+		scan_angle_range(args.bs_scan_angle_range_deg),
+		antenna_spacing(args.bs_antenna_spacing_m),
+		antenna_dims(args.bs_antenna_dims),
 		system_noise_factor_w(rf_math::dBm2watt(rf_math::getThermalSystemNoise(args.bandwidth, args.system_noise))),
 		visuals(ilogger, args.base_station_count, args.mobile_station_count,
 			args.field_size[0], args.field_size[1], system_noise_factor_w),
 		bs_tx_requested_power_watts(args.tx_powerlist().data),
 		bs_requested_scan_alpha_rad(args.tx_alphalist().data),
-		ms2bs_requested_bindings(args.ms_id_selections.binding_data)
+		ms2bs_requested_bindings(args.ms_id_selections.data)
 	{
 		setup(double_v(mobile_station_count, rf_math::log2lin(args.gain_gtrx)));
 
-		if (!args.nogui)
+		if (args.gui)
 		{
 			/* initialize the visual helper */
-			spdlog::info("Visualization enabled for field size "\
-				+ str(args.field_size[0]) + "x" + str(args.field_size[1]) + " meters");
+			spdlog::info("--- VISUALIZATION ENABLED ---\n");
+			spdlog::info("    [ " + str(args.field_size[0]) + " x " + str(args.field_size[1]) + " meters ]");
+			spdlog::info("-----------------------------\n");
 		}
 	}
 };

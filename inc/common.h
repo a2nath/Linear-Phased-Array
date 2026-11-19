@@ -17,8 +17,6 @@
 #include <thread>
 #include <future>
 #include <condition_variable>
-
-
 #include "spdlog/spdlog.h"
 
 
@@ -26,7 +24,7 @@
 
 #define C_SPEED 3e8L /* speed of light */
 #define M_PIl   3.141592653589793238462643383279502884L /* pi */
-
+#define SUCCESS 0
 
 #ifdef _WIN32
 #define localtime(current_time, local_time) localtime_s(local_time, current_time);
@@ -36,6 +34,7 @@
 #endif
 
 extern std::string sim_error;
+using path = std::filesystem::path;
 
 inline void tee_error(const char* mesg, ...)
 {
@@ -162,11 +161,15 @@ inline std::string getcwd()
 	return std::filesystem::current_path().string();
 }
 
-template<class T, class Compare = std::less<T>>
-bool is_unique(std::vector<T>& vec, Compare comp = Compare())
+
+template<class T>
+inline bool is_unique(std::vector<T>& vec)
 {
-	std::sort(vec.begin(), vec.end(), comp);
-	return std::adjacent_find(vec.begin(), vec.end()) == vec.end();
+	std::unordered_set<T> unique_vec(vec.begin(), vec.end());
+	return unique_vec.size() == vec.size();
+	// don't sort it, it changes the binding with the base station (mapping between client:cow)
+	//std::sort(vec.begin(), vec.end(), comp);
+	//return std::adjacent_find(vec.begin(), vec.end()) == vec.end();
 }
 
 namespace common
@@ -216,9 +219,11 @@ struct revmap_t
 
 class Logger
 {
-	using path = std::filesystem::path;
 	std::ofstream stream;
 public:
+	const std::string ts;
+	path results_dir;
+
 	template<class T>
 	inline void write(const T& contents)
 	{
@@ -229,13 +234,27 @@ public:
 	}
 
 	template<class T>
-	void writeline(const T& contents)
+	inline void writeline(const T& contents)
 	{
 		if (stream.is_open())
 		{
 			write(contents);
 			stream << std::endl;
 		}
+	}
+
+	template<class T>
+	inline void tee(const T& contents)
+	{
+		std::cout << contents;
+		stream << contents;
+	}
+
+	template<class T>
+	inline void teeline(const T& contents)
+	{
+		std::cout << contents << std::endl;
+		writeline(contents);
 	}
 
 	void close()
@@ -253,14 +272,21 @@ public:
 
 	}
 
-	Logger(path inputfile, path output_dirname, path output_filename = "")
+	/* Create the output dir for all the results from the simulation including stderr */
+	Logger(path json_input_file, path output_dirname, path output_filename = "")
+		:
+		ts(timestamp()),
+		results_dir(path(output_dirname / std::string("outputs_" + ts)))
 	{
-		if (std::filesystem::is_regular_file(inputfile))
+		/* create the output dir */
+		std::filesystem::create_directory(results_dir);
+
+		if (std::filesystem::is_regular_file(json_input_file))
 		{
-			copy_settings(inputfile, output_dirname);
+			copy_settings(json_input_file, results_dir);
 			if (output_filename.string().empty())
 			{
-				output_filename = inputfile.stem().string() + "." + timestamp() + ".out";
+				output_filename = json_input_file.stem().string() + "." + ts + ".output.txt";
 			}
 		}
 		else
@@ -268,12 +294,13 @@ public:
 			std::cout << "No reference input file found that could be associated to the sim outputs" << std::endl;
 			if (output_filename.string().empty())
 			{
-				output_filename = "output." + timestamp() + ".out";
+				output_filename = "output." + ts + ".output.txt";
 			}
 		}
 
 		/* open the output file stream during sim */
-		stream.open(path(output_dirname / output_filename).string());
+		path logger_filepath(results_dir / output_filename);
+		stream.open(logger_filepath.string());
 	}
 };
 
@@ -296,9 +323,19 @@ struct Dimensions
 		return *this;
 	}
 
+	size_t count() const
+	{
+		return x * y;
+	}
+
 	const std::string str() const
 	{
 		return "{ x:" + std::to_string(x) + ",y:" + std::to_string(y) + " }";
+	}
+
+	const std::string str2() const
+	{
+		return "{ " + std::to_string(x) + "," + std::to_string(y) + " }";
 	}
 
 	bool operator==(const Dimensions& ref)
@@ -369,34 +406,6 @@ struct Polar_Coordinates : private Coordinates<double>
 	}
 	Polar_Coordinates(double i, double j) : Coordinates(i, j), theta(x), hype(y) {}
 	Polar_Coordinates() : Coordinates(), theta(x), hype(y) {}
-};
-
-struct PolarArray
-{
-	Polar_Coordinates* data_ptr;
-	size_t array_size;
-
-	void set(const size_t& size)
-	{
-		if (array_size)
-		{
-			data_ptr = (Polar_Coordinates*)realloc(data_ptr, size * sizeof(Polar_Coordinates));
-		}
-		else
-		{
-			data_ptr = (Polar_Coordinates*)malloc(size * sizeof(Polar_Coordinates));
-		}
-
-		if (data_ptr == NULL)
-		{
-			spdlog::error("Memory allocation failed");
-			throw std::runtime_error("Ask for less memory");
-		}
-
-		array_size = size;
-	}
-
-	PolarArray() : array_size(0), data_ptr(nullptr) {}
 };
 
 template<class T>
@@ -519,6 +528,7 @@ struct Settings
 	float     lambda;
 	float     spacing;
 	float     theta_c;
+	Placements location;
 	antennadim antenna_dims;
 
 	friend bool operator==(const Settings& settings1, const Settings& settings2)
@@ -529,6 +539,7 @@ struct Settings
 			settings1.lambda == settings2.lambda &&
 			settings1.spacing == settings2.spacing &&
 			settings1.theta_c == settings2.theta_c &&
+			settings1.location == settings2.location &&
 			settings1.antenna_dims == settings2.antenna_dims;
 	}
 
@@ -557,6 +568,7 @@ struct Settings
 		const double& ilambda,
 		const double& ispacing,
 		const double& itheta_c,
+		const Placements& ilocation,
 		const antennadim& iantenna_dims)
 		:
 		power(ipower),
@@ -565,6 +577,7 @@ struct Settings
 		lambda(ilambda),
 		spacing(ispacing),
 		theta_c(itheta_c),
+		location(ilocation),
 		antenna_dims(iantenna_dims)
 	{
 	}
@@ -576,6 +589,7 @@ struct Settings
 		lambda(std::numeric_limits<float>::max()),
 		spacing(std::numeric_limits<float>::max()),
 		theta_c(std::numeric_limits<float>::max()),
+		location(std::numeric_limits<unsigned>::max(), std::numeric_limits<unsigned>::max()),
 		antenna_dims(std::numeric_limits<float>::max(), std::numeric_limits<float>::max())
 	{
 	}
@@ -593,13 +607,11 @@ namespace graphics
 	{
 		int tx_idx;
 		Settings settings;
-		Placements location;
 
 		State& operator=(const State& b)
 		{
 			tx_idx = b.tx_idx;
 			settings = b.settings;
-			location = b.location;
 			return *this;
 		}
 
@@ -610,7 +622,7 @@ namespace graphics
 
 		friend bool operator!=(const State& a, const State& b)
 		{
-			return a.settings != b.settings || a.location != b.location;
+			return a.settings != b.settings;
 		}
 
 		State(const int& id = -1) : tx_idx(id)
